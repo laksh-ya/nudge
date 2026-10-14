@@ -408,12 +408,12 @@ export async function seedUser(ctx: MutationCtx, userId: Id<"users">) {
   const events: Array<["payment" | "security" | "agent" | "import" | "setting", string, string | undefined, "neutral" | "good" | "warn" | "bad"]> = [
     ["agent", "OpenClaw frozen", "Tried to pay an address from a forwarded message", "bad"],
     ["payment", "Paid Blue Tokai $8.40", "Your assistant, within its daily limit", "good"],
-    ["import", "Imported 214 transactions", "HDFC statement, Sep to Oct", "neutral"],
+    ["import", "Imported your HDFC statement", "September and October", "neutral"],
     ["agent", "Claude connected", "Read, prepare and spend up to $15 a day", "neutral"],
-    ["security", "New passkey added", "iPhone 16", "neutral"],
+    ["security", "Signed in on a new device", "Chrome on Mac", "neutral"],
     ["setting", "Protected $50 in your wallet", "Agents can't spend it", "neutral"],
   ];
-  for (const [kind, title, detail, tone] of events) {
+  for (const [kind, title, detail, tone] of events.reverse()) {
     await ctx.db.insert("activity", { userId, kind, title, detail, tone });
   }
 }
