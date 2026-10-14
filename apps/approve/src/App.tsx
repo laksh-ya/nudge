@@ -146,6 +146,14 @@ export function App() {
         </dl>
 
         <div className="border-t border-line p-4">
+          {open && data.rail === "handoff" && data.payee && /@/.test(data.payee.handle) && (
+            <a
+              href={`upi://pay?pa=${encodeURIComponent(data.payee.handle)}&pn=${encodeURIComponent(data.payee.name)}&am=${(data.amountMinor / 100).toFixed(2)}&cu=INR&tn=${encodeURIComponent(data.title)}`}
+              className="press mb-2 flex h-11 items-center justify-center rounded-[10px] bg-sky text-body font-semibold text-navy"
+            >
+              Open in UPI app
+            </a>
+          )}
           {open ? (
             <div className="grid grid-cols-[1fr_2fr] gap-2">
               <button

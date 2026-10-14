@@ -51,13 +51,34 @@ The interface is built against Convex with sample data. Payments are simulated; 
 ## Layout
 
 ```text
-apps/web          dashboard (Next.js, Clerk, Convex)
+apps/web          dashboard and onboarding (Next.js, Clerk, Convex)
 apps/approve      approval site (Vite, separate host)
-packages/backend  Convex schema and functions
-packages/domain   money formatting, payment states
+packages/backend  Convex: ledger, imports, sandbox feeds, crypto reads, rates, MCP gateway, Telegram
+packages/domain   money, currencies, directory of banks/apps/chains, statement parsing (tested)
 ```
 
 Still to add: `apps/executor` (agent keys only), `apps/watcher`, `contracts/` (Foundry), `evals/`.
+
+## Connect an outside assistant (MCP)
+
+Agents screen → Connect → copy the key (shown once). Then, for Claude Code:
+
+```bash
+claude mcp add --transport http agent-wallet https://ceaseless-raven-960.convex.site/mcp --header "Authorization: Bearer aw_…"
+```
+
+Tools: `get_overview`, `can_afford`, `list_bills`, `spending_this_month`, `list_contacts`, `propose_payment`, `get_task_status`, `cancel_task`. `convex/gateway.ts` decides pay, ask or refuse in code (per-payment and daily limits, wallet ceiling, protected amount, new contacts, freeze).
+
+## Turn on Telegram
+
+Create a bot with @BotFather, then:
+
+```bash
+npx convex env set --prod TELEGRAM_BOT_TOKEN <token>
+npx convex env set --prod TELEGRAM_WEBHOOK_SECRET <random string>
+npx convex env set --prod TELEGRAM_BOT_USERNAME <bot username without @>
+npx convex run --prod telegram:setWebhook
+```
 
 ## Run locally
 
