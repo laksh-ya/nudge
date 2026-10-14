@@ -53,6 +53,7 @@ export default function AgentsPage() {
 
 function AgentCard({ agent: a, onToggle }: { agent: Doc<"agents">; onToggle: () => void }) {
   const frozen = a.status === "frozen";
+  const pending = a.status === "pending";
   const canSpend = a.scopes.includes("spend");
   const daysLeft = Math.max(0, Math.round((a.expiresAt - Date.now()) / DAY));
   return (
@@ -68,6 +69,8 @@ function AgentCard({ agent: a, onToggle }: { agent: Doc<"agents">; onToggle: () 
               <Chip tone="red">
                 <Snowflake className="size-3" /> Frozen
               </Chip>
+            ) : pending ? (
+              <Chip tone="amber">Waiting to connect</Chip>
             ) : (
               <Chip tone="green">Active</Chip>
             )}
@@ -115,9 +118,11 @@ function AgentCard({ agent: a, onToggle }: { agent: Doc<"agents">; onToggle: () 
         <span className={cn("text-label", daysLeft <= 7 ? "text-amber" : "text-mute")}>
           Access ends in {daysLeft} {daysLeft === 1 ? "day" : "days"}
         </span>
-        <Button size="sm" tone={frozen ? "primary" : "danger"} icon={Snowflake} onClick={onToggle}>
-          {frozen ? "Unfreeze" : "Freeze"}
-        </Button>
+        {!pending && (
+          <Button size="sm" tone={frozen ? "primary" : "danger"} icon={Snowflake} onClick={onToggle}>
+            {frozen ? "Unfreeze" : "Freeze"}
+          </Button>
+        )}
       </div>
     </Card>
   );

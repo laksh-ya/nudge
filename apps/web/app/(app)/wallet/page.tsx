@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Check, Clock, Copy, Lock, ShieldCheck, Snowflake, Store, User } from "lucide-react";
 import { api } from "@/lib/api";
@@ -18,7 +19,24 @@ export default function WalletPage() {
     if (current?.wallet) store.setQuery(api.wallet.get, {}, { ...current, wallet: { ...current.wallet, frozen } });
   });
   const [copied, setCopied] = useState(false);
+  const setStep = useMutation(api.onboarding.setStep);
+  const fund = useMutation(api.onboarding.addTestFunds);
+  const router = useRouter();
 
+  if (data && !data.wallet) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-4">
+        <PageTitle>Wallet</PageTitle>
+        <Card>
+          <h2 className="text-title font-semibold">Set up the agent wallet</h2>
+          <p className="mt-1 text-body text-ink-2">The one place agents can pay from, with a daily ceiling and a protected amount you choose.</p>
+          <Button className="mt-4" onClick={async () => { await setStep({ step: "wallet" }); router.push("/onboarding"); }}>
+            Set up
+          </Button>
+        </Card>
+      </div>
+    );
+  }
   if (!data?.wallet || !home) {
     return (
       <div className="mx-auto max-w-3xl space-y-4">
@@ -51,17 +69,26 @@ export default function WalletPage() {
             )}
           </div>
           <div className="figure mt-1 text-hero">{formatMoney(wallet.balanceMinor, "USDC", { cents: true })}</div>
-          <button
-            onClick={() => {
-              void navigator.clipboard?.writeText(wallet.address);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 1400);
-            }}
-            className="press mt-2 flex items-center gap-1.5 text-label text-white/70 hover:text-white"
-          >
-            <span className="num">{shortAddress(wallet.address)}</span>
-            {copied ? <Check className="size-3.5 text-cyan" /> : <Copy className="size-3.5" />}
-          </button>
+          {wallet.address ? (
+            <button
+              onClick={() => {
+                void navigator.clipboard?.writeText(wallet.address);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1400);
+              }}
+              className="press mt-2 flex items-center gap-1.5 text-label text-white/70 hover:text-white"
+            >
+              <span className="num">{shortAddress(wallet.address)}</span>
+              {copied ? <Check className="size-3.5 text-cyan" /> : <Copy className="size-3.5" />}
+            </button>
+          ) : (
+            <div className="mt-2 flex items-center gap-2 text-label text-white/70">
+              Contract not deployed yet
+              <button onClick={() => fund()} className="press rounded-md bg-white/10 px-2 py-0.5 font-semibold text-cyan">
+                + $100 test
+              </button>
+            </div>
+          )}
         </div>
         <div className="grid grid-cols-2 border-t border-white/10">
           <div className="border-r border-white/10 px-5 py-3">

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useConvexAuth, useMutation } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { api } from "@/lib/api";
@@ -87,10 +88,16 @@ export function Gate({ children }: { children: React.ReactNode }) {
   const { isLoading, isAuthenticated } = useConvexAuth();
   const { demo, loaded } = useDemo();
   const ensure = useMutation(api.users.ensure);
+  const me = useQuery(api.users.me);
+  const router = useRouter();
 
   useEffect(() => {
     if (isAuthenticated) void ensure();
   }, [isAuthenticated, ensure]);
+
+  useEffect(() => {
+    if (me && !me.onboarded) router.replace("/onboarding");
+  }, [me, router]);
 
   if (isLoading || !loaded) return <Splash />;
   if (isAuthenticated) return <Shell>{children}</Shell>;

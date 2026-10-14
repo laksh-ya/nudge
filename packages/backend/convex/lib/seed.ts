@@ -29,6 +29,10 @@ export async function seedUser(ctx: MutationCtx, userId: Id<"users">) {
     syncedAt: now - 2 * HOUR,
     source: "statement",
     can: ["read"],
+    providerId: "bank:IN:hdfc-bank",
+    country: "IN",
+    status: "ok",
+    uses: ["Everyday", "Bills"],
   });
   const card = await ctx.db.insert("accounts", {
     userId,
@@ -36,6 +40,10 @@ export async function seedUser(ctx: MutationCtx, userId: Id<"users">) {
     name: "Amazon Pay Credit Card",
     institution: "ICICI Bank",
     last4: "1093",
+    network: "Visa",
+    expiry: "08/29",
+    status: "ok",
+    uses: ["Shopping"],
     currency: "INR",
     balanceMinor: -1_248_000,
     syncedAt: now - 5 * HOUR,
@@ -44,15 +52,40 @@ export async function seedUser(ctx: MutationCtx, userId: Id<"users">) {
   });
   const upi = await ctx.db.insert("accounts", {
     userId,
-    kind: "upi",
+    kind: "payment_app",
     name: "UPI Lite",
     institution: "Paytm",
+    providerId: "app:paytm",
     currency: "INR",
     balanceMinor: 214_000,
     syncedAt: now - DAY,
     source: "manual",
     can: ["read", "handoff"],
+    status: "ok",
+    uses: ["Everyday"],
   });
+  const coinbase = await ctx.db.insert("accounts", {
+    userId,
+    kind: "crypto",
+    name: "Coinbase",
+    institution: "Coinbase",
+    providerId: "exchange:coinbase",
+    currency: "USD",
+    balanceMinor: 41_250,
+    syncedAt: now - 3 * DAY,
+    source: "statement",
+    can: ["read"],
+    status: "ok",
+    uses: ["Crypto"],
+  });
+  await ctx.db.insert("holdings", { userId, accountId: coinbase, chain: "bitcoin", asset: "BTC", amount: 0.003, usdMinor: 24_478, updatedAt: now - 3 * DAY });
+  await ctx.db.insert("holdings", { userId, accountId: coinbase, chain: "ethereum", asset: "ETH", amount: 0.0691, usdMinor: 16_772, updatedAt: now - 3 * DAY });
+  for (const [accountId, fileName, rows] of [
+    [hdfc, "HDFC_Statement_Sep-Oct.csv", 214],
+    [card, "ICICI_Card_Oct.pdf", 38],
+  ] as const) {
+    await ctx.db.insert("imports", { userId, accountId, kind: fileName.endsWith(".pdf") ? "pdf" : "csv", fileName, rows, added: rows, duplicates: 0, transfers: 2, fromAt: now - 45 * DAY, toAt: now - DAY });
+  }
 
   const spends: Array<[number, number, string, string, Id<"accounts">, "pending" | "posted"]> = [
     [0, 2, "Swiggy", "Food", upi, "pending"],
@@ -201,15 +234,31 @@ export async function seedUser(ctx: MutationCtx, userId: Id<"users">) {
       status: "active",
       autopayLimitMinor: b.autopayLimitMinor,
       payeeId: b.payeeId,
+      source: "manual",
     });
   }
+  await ctx.db.insert("obligations", {
+    userId,
+    name: "Google One",
+    kind: "subscription",
+    amountMinor: 13_000,
+    currency: "INR",
+    cadence: "monthly",
+    nextDueAt: now + 17 * DAY,
+    status: "suggested",
+    merchantKey: "google one",
+    source: "detected",
+    occurrences: 3,
+    lastPaidAt: now - 13 * DAY,
+    accountId: card,
+  });
 
   await ctx.db.insert("goals", { userId, name: "Goa in December", icon: "palmtree", targetMinor: 2_500_000, savedMinor: 950_000, currency: "INR", dueAt: now + 60 * DAY });
   await ctx.db.insert("goals", { userId, name: "New laptop", icon: "laptop", targetMinor: 9_000_000, savedMinor: 4_100_000, currency: "INR" });
 
   await ctx.db.insert("wallets", {
     userId,
-    address: "0x7a3c5e19b0d4f2a8c61e9b3d05f7a2c4e8d1b96f",
+    address: "",
     chain: "base-sepolia",
     asset: "USDC",
     balanceMinor: 25_000,

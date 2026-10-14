@@ -8,6 +8,12 @@ export const currency = v.union(
   v.literal("USDC"),
   v.literal("EUR"),
   v.literal("GBP"),
+  v.literal("SGD"),
+  v.literal("AED"),
+  v.literal("JPY"),
+  v.literal("HKD"),
+  v.literal("AUD"),
+  v.literal("CAD"),
 );
 
 export const paymentState = v.union(
@@ -32,37 +38,83 @@ export const channel = v.union(
   v.literal("family"),
 );
 
+export const sourceKind = v.union(
+  v.literal("bank"),
+  v.literal("card"),
+  v.literal("payment_app"),
+  v.literal("crypto"),
+  v.literal("transfer"),
+  v.literal("cash"),
+);
+
+export const capability = v.union(v.literal("read"), v.literal("prepare"), v.literal("handoff"), v.literal("execute"));
+
+export const importKind = v.union(
+  v.literal("csv"),
+  v.literal("xlsx"),
+  v.literal("pdf"),
+  v.literal("scan"),
+  v.literal("sandbox"),
+  v.literal("manual"),
+);
+
 // All money fields are integers in the currency's minor unit.
 export default defineSchema({
   users: defineTable({
     tokenIdentifier: v.string(),
     name: v.string(),
     email: v.optional(v.string()),
+    /** ISO country code. */
     country: v.string(),
+    /** Reporting currency. */
     currency,
+    timezone: v.optional(v.string()),
     monthlyBudgetMinor: v.number(),
     emergencyMinor: v.number(),
     nextIncomeAt: v.number(),
+    incomeDay: v.optional(v.number()),
+    priorities: v.optional(v.array(v.string())),
+    autonomy: v.optional(v.union(v.literal("draft"), v.literal("approve"), v.literal("limited"))),
+    reminderChannel: v.optional(v.union(v.literal("app"), v.literal("telegram"), v.literal("whatsapp"))),
+    quietFrom: v.optional(v.string()),
+    quietTo: v.optional(v.string()),
+    reminderLeadDays: v.optional(v.number()),
+    onboardingStep: v.optional(v.string()),
+    onboardedAt: v.optional(v.number()),
   }).index("by_token", ["tokenIdentifier"]),
 
   accounts: defineTable({
     userId: v.id("users"),
-    kind: v.union(
-      v.literal("bank"),
-      v.literal("card"),
-      v.literal("upi"),
-      v.literal("wallet"),
-      v.literal("manual"),
-    ),
+    kind: sourceKind,
     name: v.string(),
     institution: v.string(),
+    providerId: v.optional(v.string()),
+    country: v.optional(v.string()),
     last4: v.optional(v.string()),
+    network: v.optional(v.string()),
+    expiry: v.optional(v.string()),
     currency,
     balanceMinor: v.number(),
     syncedAt: v.number(),
-    source: v.union(v.literal("statement"), v.literal("connected"), v.literal("manual")),
-    can: v.array(v.union(v.literal("read"), v.literal("handoff"), v.literal("execute"))),
+    source: v.union(v.literal("sandbox"), v.literal("statement"), v.literal("onchain"), v.literal("manual")),
+    can: v.array(capability),
+    uses: v.optional(v.array(v.string())),
+    status: v.optional(v.union(v.literal("ok"), v.literal("syncing"), v.literal("empty"), v.literal("error"))),
+    statusNote: v.optional(v.string()),
+    chain: v.optional(v.union(v.literal("evm"), v.literal("bitcoin"), v.literal("solana"))),
+    address: v.optional(v.string()),
+    verified: v.optional(v.boolean()),
   }).index("by_user", ["userId"]),
+
+  holdings: defineTable({
+    userId: v.id("users"),
+    accountId: v.id("accounts"),
+    chain: v.string(),
+    asset: v.string(),
+    amount: v.number(),
+    usdMinor: v.number(),
+    updatedAt: v.number(),
+  }).index("by_account", ["accountId"]),
 
   transactions: defineTable({
     userId: v.id("users"),
@@ -73,15 +125,41 @@ export default defineSchema({
     merchant: v.string(),
     category: v.string(),
     status: v.union(v.literal("pending"), v.literal("posted")),
-    kind: v.union(
-      v.literal("spend"),
-      v.literal("income"),
-      v.literal("transfer"),
-      v.literal("refund"),
-    ),
+    kind: v.union(v.literal("spend"), v.literal("income"), v.literal("transfer"), v.literal("refund")),
+    importId: v.optional(v.id("imports")),
+    fingerprint: v.optional(v.string()),
+    duplicateOf: v.optional(v.id("transactions")),
+    pairId: v.optional(v.string()),
+    note: v.optional(v.string()),
+    categoryLocked: v.optional(v.boolean()),
+    receiptId: v.optional(v.id("_storage")),
+    raw: v.optional(v.string()),
   })
     .index("by_user_at", ["userId", "at"])
-    .index("by_user_category_at", ["userId", "category", "at"]),
+    .index("by_user_category_at", ["userId", "category", "at"])
+    .index("by_account_at", ["accountId", "at"]),
+
+  imports: defineTable({
+    userId: v.id("users"),
+    accountId: v.id("accounts"),
+    kind: importKind,
+    fileName: v.optional(v.string()),
+    fileId: v.optional(v.id("_storage")),
+    rows: v.number(),
+    added: v.number(),
+    duplicates: v.number(),
+    transfers: v.number(),
+    fromAt: v.optional(v.number()),
+    toAt: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_account", ["accountId"]),
+
+  rules: defineTable({
+    userId: v.id("users"),
+    key: v.string(),
+    category: v.string(),
+  }).index("by_user_key", ["userId", "key"]),
 
   obligations: defineTable({
     userId: v.id("users"),
@@ -92,9 +170,20 @@ export default defineSchema({
     currency,
     cadence: v.union(v.literal("weekly"), v.literal("monthly"), v.literal("yearly")),
     nextDueAt: v.number(),
-    status: v.union(v.literal("active"), v.literal("paused"), v.literal("cancelled")),
+    status: v.union(
+      v.literal("active"),
+      v.literal("paused"),
+      v.literal("cancelled"),
+      v.literal("suggested"),
+      v.literal("dismissed"),
+    ),
     autopayLimitMinor: v.optional(v.number()),
     payeeId: v.optional(v.id("payees")),
+    merchantKey: v.optional(v.string()),
+    source: v.optional(v.union(v.literal("detected"), v.literal("manual"))),
+    occurrences: v.optional(v.number()),
+    lastPaidAt: v.optional(v.number()),
+    accountId: v.optional(v.id("accounts")),
   }).index("by_user_due", ["userId", "nextDueAt"]),
 
   goals: defineTable({
@@ -109,12 +198,14 @@ export default defineSchema({
 
   wallets: defineTable({
     userId: v.id("users"),
+    /** Empty until the vault contract is deployed for this user. */
     address: v.string(),
     chain: v.literal("base-sepolia"),
     asset: v.literal("USDC"),
     balanceMinor: v.number(),
     protectedMinor: v.number(),
     dailyCeilingMinor: v.number(),
+    perPaymentMinor: v.optional(v.number()),
     frozen: v.boolean(),
   }).index("by_user", ["userId"]),
 
@@ -138,10 +229,8 @@ export default defineSchema({
       v.literal("hermes"),
       v.literal("poke"),
     ),
-    status: v.union(v.literal("active"), v.literal("frozen"), v.literal("revoked")),
-    scopes: v.array(
-      v.union(v.literal("read"), v.literal("prepare"), v.literal("spend"), v.literal("request")),
-    ),
+    status: v.union(v.literal("active"), v.literal("frozen"), v.literal("revoked"), v.literal("pending")),
+    scopes: v.array(v.union(v.literal("read"), v.literal("prepare"), v.literal("spend"), v.literal("request"))),
     dailyCapMinor: v.number(),
     perPaymentMinor: v.number(),
     spentTodayMinor: v.number(),
@@ -149,7 +238,10 @@ export default defineSchema({
     connectedAt: v.number(),
     lastUsedAt: v.optional(v.number()),
     expiresAt: v.number(),
-  }).index("by_user", ["userId"]),
+    tokenHash: v.optional(v.string()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_token_hash", ["tokenHash"]),
 
   tasks: defineTable({
     userId: v.id("users"),
@@ -223,4 +315,24 @@ export default defineSchema({
     detail: v.optional(v.string()),
     tone: v.union(v.literal("neutral"), v.literal("good"), v.literal("warn"), v.literal("bad")),
   }).index("by_user", ["userId"]),
+
+  rates: defineTable({
+    date: v.string(),
+    /** Units of each fiat currency per 1 USD. */
+    fiat: v.record(v.string(), v.number()),
+    /** USD price per coin, keyed by CoinGecko id. */
+    crypto: v.record(v.string(), v.number()),
+    fetchedAt: v.number(),
+  }).index("by_fetched", ["fetchedAt"]),
+
+  chatLinks: defineTable({
+    userId: v.id("users"),
+    channel: v.union(v.literal("telegram"), v.literal("whatsapp")),
+    code: v.string(),
+    externalId: v.optional(v.string()),
+    linkedAt: v.optional(v.number()),
+  })
+    .index("by_code", ["code"])
+    .index("by_user", ["userId"])
+    .index("by_external", ["channel", "externalId"]),
 });

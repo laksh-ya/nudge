@@ -155,3 +155,19 @@
     transition-duration: 1ms !important;
   }
 }
+
+@keyframes pop {
+  0% {
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@utility pop {
+  animation: pop 360ms var(--ease-snap) both;
+}

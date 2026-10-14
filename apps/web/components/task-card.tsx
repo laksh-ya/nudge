@@ -2,7 +2,7 @@
 
 import { useMutation } from "convex/react";
 import { Landmark, LoaderCircle, MessageCircle, Plug, Send, Users } from "lucide-react";
-import type { PaymentState } from "@agent-wallet/domain";
+import type { Currency, PaymentState } from "@agent-wallet/domain";
 import { api, type Id } from "@/lib/api";
 import { approvalLink } from "@/lib/config";
 import { cn } from "@/lib/cn";
@@ -13,7 +13,7 @@ export type TaskView = {
   title: string;
   state: PaymentState;
   amountMinor?: number;
-  currency?: "INR" | "CNY" | "USD" | "USDC" | "EUR" | "GBP";
+  currency?: Currency;
   payee?: string;
   agent?: string;
   reason?: string;

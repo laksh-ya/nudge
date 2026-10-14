@@ -5,7 +5,26 @@ export const CURRENCIES = {
   USDC: { symbol: "$", decimals: 2, locale: "en-US" },
   EUR: { symbol: "€", decimals: 2, locale: "en-IE" },
   GBP: { symbol: "£", decimals: 2, locale: "en-GB" },
+  SGD: { symbol: "S$", decimals: 2, locale: "en-SG" },
+  AED: { symbol: "AED ", decimals: 2, locale: "en-AE" },
+  JPY: { symbol: "¥", decimals: 0, locale: "ja-JP" },
+  HKD: { symbol: "HK$", decimals: 2, locale: "en-HK" },
+  AUD: { symbol: "A$", decimals: 2, locale: "en-AU" },
+  CAD: { symbol: "C$", decimals: 2, locale: "en-CA" },
 } as const;
+
+export const CURRENCY_CODES = Object.keys(CURRENCIES) as Currency[];
+export const FIAT_CODES = CURRENCY_CODES.filter((c) => c !== "USDC");
+
+/** Convert between currencies with USD-based rates (units of currency per 1 USD). */
+export function convert(minor: number, from: Currency, to: Currency, usdRates: Record<string, number>): number {
+  if (from === to) return minor;
+  const f = from === "USDC" ? 1 : usdRates[from];
+  const t = to === "USDC" ? 1 : usdRates[to];
+  if (!f || !t) return 0;
+  const major = minor / 10 ** CURRENCIES[from].decimals;
+  return Math.round((major / f) * t * 10 ** CURRENCIES[to].decimals);
+}
 
 export type Currency = keyof typeof CURRENCIES;
 
@@ -28,6 +47,26 @@ export function formatMoney(
   return `${sign}${meta.symbol}${body}`;
 }
 
+export function decimalsOf(currency: Currency) {
+  return CURRENCIES[currency].decimals;
+}
+
 export function toMinor(major: number, currency: Currency): number {
   return Math.round(major * 10 ** CURRENCIES[currency].decimals);
 }
+
+/** Used until the first live rate fetch. ECB reference rates, 14 Oct 2026; AED is pegged. */
+export const FALLBACK_USD_RATES: Record<string, number> = {
+  USD: 1,
+  USDC: 1,
+  INR: 95.16,
+  CNY: 6.6927,
+  EUR: 0.89326,
+  GBP: 0.75377,
+  SGD: 1.2826,
+  AED: 3.6725,
+  JPY: 158.45,
+  HKD: 7.8481,
+  AUD: 1.4266,
+  CAD: 1.4219,
+};

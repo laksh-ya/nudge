@@ -42,3 +42,10 @@ export function time(at: number) {
 export function shortAddress(address: string) {
   return address.length > 12 ? `${address.slice(0, 6)}…${address.slice(-4)}` : address;
 }
+
+/** Token amounts: whole numbers when large, three decimals when small. */
+export function fmtAmount(n: number) {
+  if (n >= 1000) return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  if (n >= 1) return n.toFixed(3).replace(/\.?0+$/, "");
+  return n.toPrecision(3);
+}

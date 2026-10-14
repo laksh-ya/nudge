@@ -25,6 +25,7 @@ import { approvalLink } from "@/lib/config";
 import { ago, dueLabel, formatMoney } from "@/lib/format";
 import { AgentMark } from "@/components/brand";
 import { ActivityIcon } from "@/components/activity-icon";
+import { SetupCard } from "@/components/setup-card";
 import { ButtonLink, Card, Chip, Divided, IconTile, Meter, Money, Row, Skeleton, TextLink } from "@/components/ui";
 
 const ACTIONS = [
@@ -66,7 +67,7 @@ export default function Home() {
   const o = data.overview;
   const { attention } = data;
   const attentionCount =
-    attention.approvals.length + attention.unknown.length + attention.familyRequests + attention.priceRises.length;
+    attention.approvals.length + attention.unknown.length + attention.familyRequests + attention.priceRises.length + (o.suggested > 0 ? 1 : 0);
   const maxCategory = o.categories[0]?.amount ?? 1;
 
   return (
@@ -86,7 +87,16 @@ export default function Home() {
                 {hidden ? <EyeOff className="size-[18px]" /> : <Eye className="size-[18px]" />}
               </button>
             </div>
-            <div className="figure mt-0.5 text-hero">{hidden ? "₹ ••••••" : formatMoney(o.available, o.currency)}</div>
+            {o.accountCount === 0 ? (
+              <>
+                <div className="mt-1 text-[22px] leading-[28px] font-semibold">Add an account to see what's safe to spend</div>
+                <Link href="/money?tab=accounts" className="press mt-4 inline-flex h-10 items-center rounded-btn bg-white px-4 text-body font-semibold text-navy">
+                  Add accounts
+                </Link>
+              </>
+            ) : (
+            <>
+            <div className="figure mt-0.5 text-hero">{hidden ? "••••••" : formatMoney(o.available, o.currency)}</div>
             <div className="mt-1 text-body text-white/75">
               <span className="num">{hidden ? "••••" : formatMoney(o.perDay, o.currency)}</span> a day ·{" "}
               {o.daysToIncome} days to payday
@@ -120,6 +130,8 @@ export default function Home() {
                 <div className="pt-1 text-label text-white/50">Account data from {ago(o.oldestSync)}</div>
               </dl>
             </div>
+            </>
+            )}
           </div>
           <Link href="/agents" className="press flex items-center justify-between gap-3 bg-navy-soft px-5 py-3 text-body">
             <span className="text-white/75">Agents can spend now</span>
@@ -129,6 +141,8 @@ export default function Home() {
             </span>
           </Link>
         </section>
+
+        <SetupCard />
 
         <section className="card rise grid grid-cols-4 gap-y-4 px-2 py-4">
           {ACTIONS.map(({ href, label, icon }) => (
@@ -182,6 +196,15 @@ export default function Home() {
                   title={`${attention.familyRequests} family ${attention.familyRequests === 1 ? "request" : "requests"}`}
                   sub="Quote expires soon"
                   trailing={<span className="text-label font-semibold text-cyan-ink">Open</span>}
+                />
+              )}
+              {o.suggested > 0 && (
+                <Row
+                  href="/money?tab=bills"
+                  leading={<IconTile icon={Repeat} tone="sky" />}
+                  title={`${o.suggested} regular ${o.suggested === 1 ? "payment" : "payments"} found`}
+                  sub="Keep the real bills and subscriptions"
+                  trailing={<span className="text-label font-semibold text-cyan-ink">Review</span>}
                 />
               )}
               {attention.priceRises.map((p) => (
