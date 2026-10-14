@@ -18,3 +18,4 @@ evals/results/tmp/
 next-env.d.ts
 .claude/
 .vercel/
+.clerk/
