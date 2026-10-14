@@ -14,3 +14,7 @@ contracts/broadcast/*/84532/run-latest.json
 evals/results/tmp/
 .DS_Store
 *.log
+*.tsbuildinfo
+next-env.d.ts
+.claude/
+.vercel/
