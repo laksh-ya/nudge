@@ -81,7 +81,7 @@ export default function Assistant() {
                 {showChannel && (
                   <div className="mb-2 flex w-full items-center gap-2 text-micro font-semibold text-mute uppercase">
                     <span className="h-px flex-1 bg-line" />
-                    From {m.channel === "telegram" ? "Telegram" : m.channel}
+                    {{ telegram: "From Telegram", whatsapp: "From WhatsApp", mcp: "From connected assistants", family: "From family", app: "" }[m.channel]}
                     <span className="h-px flex-1 bg-line" />
                   </div>
                 )}

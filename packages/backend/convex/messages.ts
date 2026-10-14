@@ -78,13 +78,23 @@ async function createPayment(
  * comes from the same overview the dashboard shows.
  */
 export const reply = internalMutation({
-  args: { userId: v.id("users"), text: v.string() },
-  handler: async (ctx, { userId, text }) => {
+  args: { userId: v.id("users"), text: v.string(), channel: v.optional(v.union(v.literal("app"), v.literal("telegram"))) },
+  handler: async (ctx, { userId, text, channel = "app" }) => {
     const user = await ctx.db.get(userId);
     if (!user) return;
     const t = text.toLowerCase();
-    const say = (reply: string, taskId?: Id<"tasks">) =>
-      ctx.db.insert("messages", { userId, role: "assistant", text: reply, channel: "app", taskId });
+    const say = async (reply: string, taskId?: Id<"tasks">) => {
+      await ctx.db.insert("messages", { userId, role: "assistant", text: reply, channel, taskId });
+      if (channel === "telegram") {
+        const task = taskId ? await ctx.db.get(taskId) : null;
+        const base = process.env.APPROVE_URL ?? "https://agent-wallet-approve.vercel.app";
+        await ctx.scheduler.runAfter(0, internal.telegram.send, {
+          userId,
+          text: reply,
+          approvalUrl: task?.approvalToken ? `${base}/a/${task.approvalToken}` : undefined,
+        });
+      }
+    };
 
     if (/\b(freeze|stop|lock|panic)\b/.test(t)) {
       const agents = await ctx.db.query("agents").withIndex("by_user", (q) => q.eq("userId", userId)).take(50);

@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { own, requireViewer, viewer } from "./lib/auth";
 
 export const list = query({
@@ -7,7 +7,8 @@ export const list = query({
   handler: async (ctx) => {
     const user = await viewer(ctx);
     if (!user) return [];
-    return await ctx.db.query("agents").withIndex("by_user", (q) => q.eq("userId", user._id)).take(50);
+    const agents = await ctx.db.query("agents").withIndex("by_user", (q) => q.eq("userId", user._id)).take(50);
+    return agents.filter((a) => a.status !== "revoked").map(({ tokenHash, ...a }) => ({ ...a, hasKey: Boolean(tokenHash) }));
   },
 });
 
@@ -45,5 +46,14 @@ export const freezeAll = mutation({
       tone: "warn",
     });
     return count;
+  },
+});
+
+/** Midnight in India (18:30 UTC). Per-agent daily allowances start again. */
+export const resetDaily = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const agents = await ctx.db.query("agents").take(5000);
+    for (const a of agents) if (a.spentTodayMinor > 0) await ctx.db.patch(a._id, { spentTodayMinor: 0 });
   },
 });

@@ -1,5 +1,6 @@
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
+import { sha256 } from "./hash";
 
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
@@ -285,6 +286,7 @@ export async function seedUser(ctx: MutationCtx, userId: Id<"users">) {
     userId,
     name: "Claude",
     provider: "claude",
+    tokenHash: await sha256(token()),
     status: "active",
     scopes: ["read", "prepare", "spend", "request"],
     dailyCapMinor: 1_500,
@@ -299,6 +301,7 @@ export async function seedUser(ctx: MutationCtx, userId: Id<"users">) {
     userId,
     name: "ChatGPT",
     provider: "chatgpt",
+    tokenHash: await sha256(token()),
     status: "active",
     scopes: ["read", "prepare"],
     dailyCapMinor: 0,
@@ -313,6 +316,7 @@ export async function seedUser(ctx: MutationCtx, userId: Id<"users">) {
     userId,
     name: "OpenClaw",
     provider: "openclaw",
+    tokenHash: await sha256(token()),
     status: "frozen",
     scopes: ["read", "prepare", "spend"],
     dailyCapMinor: 1_000,
