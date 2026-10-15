@@ -161,6 +161,21 @@ async function agentOutcome(ctx: ActionCtx, taskId: Id<"tasks">, r: TransactionR
   if (selfFrozen) await ctx.runMutation(internal.vault.onStruckOut, { walletId, agentAddress: selfFrozen.args.agent });
 }
 
+/**
+ * A release that went through either paid the contact or, on v3, cancelled the hold because its
+ * agent was removed or expired, its contact changed, or it was settled more than a day late.
+ */
+async function releaseOutcome(ctx: ActionCtx, taskId: Id<"tasks">, r: TransactionReceipt) {
+  const released = parseEventLogs({ abi: policyVaultAbi, logs: r.logs as Log[], eventName: "PaymentReleased" }).length > 0;
+  const cancelled = parseEventLogs({ abi: policyVaultAbi, logs: r.logs as Log[], eventName: "PaymentCancelled" }).length > 0;
+  await ctx.runMutation(internal.vault.onAgentResult, {
+    taskId,
+    txHash: r.transactionHash,
+    ok: r.status === "success" && released,
+    note: r.status !== "success" ? "Reverted" : cancelled ? "Not sent: the agent or contact changed while it was held" : released ? undefined : "Not sent",
+  });
+}
+
 // ---------------------------------------------------------------- deploy
 
 export const deployVault = internalAction({
@@ -347,9 +362,11 @@ export const releaseHeld = internalAction({
       const why = reason(e);
       if (why === "NotReady") {
         await relayer.enqueueAction(ctx, internal.chain.releaseHeld, { taskId }, { runAt: Date.now() + RECHECK_MS });
-      } else if (why === "AgentFrozen" || why === "BadAction") {
-        // Frozen since, or the contact changed: don't send. Cancel so the money is free again.
-        await ctx.runMutation(internal.vault.onAgentResult, { taskId, ok: false, note: why === "AgentFrozen" ? "Not sent: frozen while it was held" : "Not sent: the contact changed" });
+      } else if (why === "AgentFrozen" || why === "BadAction" || why === "BreachesProtected") {
+        // Frozen since, the contact changed, or it would now dip into the protected amount: don't
+        // send. Cancel so the money is free again.
+        const note = { AgentFrozen: "Not sent: frozen while it was held", BadAction: "Not sent: the contact changed", BreachesProtected: "Not sent: it would dip into the protected amount" }[why];
+        await ctx.runMutation(internal.vault.onAgentResult, { taskId, ok: false, note });
         await relayer.enqueueAction(ctx, internal.chain.cancelHeld, { taskId, quiet: true });
       } else {
         await ctx.runMutation(internal.vault.onAgentResult, { taskId, ok: false, note: why === "NotQueued" ? "Cancelled" : why });
@@ -359,7 +376,7 @@ export const releaseHeld = internalAction({
     await ctx.runMutation(internal.vault.onSubmitted, { taskId, txHash: hash, keepState: true });
     const r = await receipt(ctx, pub, taskId, hash, "release");
     if (!r) return;
-    await ctx.runMutation(internal.vault.onAgentResult, { taskId, txHash: hash, ok: r.status === "success", note: r.status === "success" ? undefined : "Reverted" });
+    await releaseOutcome(ctx, taskId, r);
     await readVaultTwice(ctx, pub, t.walletId);
   },
 });
@@ -448,7 +465,7 @@ export const reconcile = internalAction({
     if (kind === "owner") await ownerOutcome(ctx, taskId, r);
     else if (kind === "agent") await agentOutcome(ctx, taskId, r, t.walletId);
     else if (kind === "finalize") await ctx.runMutation(internal.vault.onOwnerResult, { taskId, txHash: r.transactionHash, ok: r.status === "success", note: r.status === "success" ? undefined : "Reverted" });
-    else await ctx.runMutation(internal.vault.onAgentResult, { taskId, txHash: r.transactionHash, ok: r.status === "success", note: r.status === "success" ? undefined : "Reverted" });
+    else await releaseOutcome(ctx, taskId, r);
     await readVaultTwice(ctx, pub, t.walletId);
   },
 });

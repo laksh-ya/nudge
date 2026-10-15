@@ -105,7 +105,8 @@ contract PolicyVaultTest is Passkey {
     function test_ownerPaysWithPasskey() public {
         sign(PolicyVault.Op.Pay, abi.encode(shop, 120e6, bytes32("invoice-1")));
         assertEq(token.balanceOf(shop), 120e6);
-        assertTrue(vault.paymentUsed(bytes32("invoice-1")));
+        assertTrue(vault.ownerPaid(bytes32("invoice-1")));
+        assertFalse(vault.paymentUsed(bytes32("invoice-1")), "owner and agent payment ids are separate");
     }
 
     function test_tamperedActionIsRejected() public {

@@ -208,6 +208,101 @@ contract PolicyVaultV3Test is PolicyVaultTest {
         assertFalse(vault.agentPay(shopId, 2e6, "over-cap", 0), "8 + 2 passes the new 9 cap");
     }
 
+    // ------------------------------------------- found by the test lane (#23, F6-F8)
+
+    function test_laterTighteningVoidsAnOlderQueuedPolicy() public {
+        policy(50e6, 40e6, 1 days, 120, 0, 0);
+        bytes memory looser = abi.encode(uint256(50e6), uint256(100e6), uint64(1 days), uint64(120), uint256(0), uint64(0));
+        sign(PolicyVault.Op.SetPolicy, looser);
+        uint256 n = nonce;
+        policy(200e6, 40e6, 1 days, 120, 0, 0);
+        vm.warp(block.timestamp + 121);
+        vm.expectRevert(PolicyVault.Stale.selector);
+        vault.finalize(PolicyVault.Op.SetPolicy, looser, n);
+        assertEq(vault.protectedAmount(), 200e6);
+    }
+
+    function test_laterAgentChangeVoidsAnOlderQueuedGrant() public {
+        policy(50e6, 40e6, 1 days, 120, 0, 0);
+        bytes memory raise = abi.encode(claude, uint128(20e6), uint128(30e6), uint64(block.timestamp + 30 days));
+        sign(PolicyVault.Op.SetAgent, raise);
+        uint256 n = nonce;
+        sign(PolicyVault.Op.SetAgent, abi.encode(claude, uint128(1e6), uint128(2e6), uint64(block.timestamp + 30 days)));
+        vm.warp(block.timestamp + 121);
+        vm.expectRevert(PolicyVault.Stale.selector);
+        vault.finalize(PolicyVault.Op.SetAgent, raise, n);
+        (uint128 perPayment,,,,,,) = vault.agents(claude);
+        assertEq(perPayment, 1e6);
+    }
+
+    function test_unrelatedChangeLeavesAQueuedGrantValid() public {
+        policy(50e6, 40e6, 1 days, 120, 0, 0);
+        bytes memory raise = abi.encode(claude, uint128(20e6), uint128(30e6), uint64(block.timestamp + 30 days));
+        sign(PolicyVault.Op.SetAgent, raise);
+        uint256 n = nonce;
+        sign(PolicyVault.Op.SetAgent, abi.encode(chatgpt, uint128(1e6), uint128(2e6), uint64(block.timestamp + 30 days)));
+        vm.warp(block.timestamp + 121);
+        vault.finalize(PolicyVault.Op.SetAgent, raise, n);
+        (uint128 perPayment,,,,,,) = vault.agents(claude);
+        assertEq(perPayment, 20e6);
+    }
+
+    function test_agentCannotBurnTheOwnersPaymentId() public {
+        bytes32 id = keccak256("task:needs-owner");
+        pay(claude, 1, id);
+        sign(PolicyVault.Op.Pay, abi.encode(shop, uint256(12e6), id));
+        assertEq(token.balanceOf(shop), 12e6 + 1);
+    }
+
+    function test_heldOutflowStaysUnderTheCeilingInAny24Hours() public {
+        policy(50e6, 40e6, 1 days, 0, 5e6, 2 minutes);
+        uint256 t0 = block.timestamp;
+        pay(chatgpt, 10e6, "h1");
+        pay(chatgpt, 10e6, "h2");
+        pay(chatgpt, 10e6, "h3");
+        pay(claude, 10e6, "h4");
+        vm.warp(t0 + 121);
+        vault.release("h1");
+        vault.release("h2");
+        vault.release("h3");
+        vault.release("h4");
+        vm.warp(t0 + 24 hours + 1);
+        vm.prank(chatgpt);
+        assertFalse(vault.agentPay(shopId, 5e6, "too-soon", 0), "the window runs from the release");
+        vm.warp(t0 + 121 + 24 hours + 1);
+        vm.prank(chatgpt);
+        assertTrue(vault.agentPay(shopId, 5e6, "next-day", 0));
+    }
+
+    function test_lateReleaseCountsFromWhenMoneyLeaves() public {
+        policy(50e6, 40e6, 1 days, 0, 5e6, 2 minutes);
+        uint256 t0 = block.timestamp;
+        pay(chatgpt, 10e6, "l1");
+        pay(chatgpt, 10e6, "l2");
+        pay(chatgpt, 10e6, "l3");
+        pay(claude, 10e6, "l4");
+        vm.warp(t0 + 10 hours); // nobody settled them for ten hours
+        vault.release("l1");
+        vault.release("l2");
+        vault.release("l3");
+        vault.release("l4");
+        vm.warp(t0 + 121 + 24 hours + 1); // a day after releaseAt, but 14 hours after the money left
+        vm.prank(chatgpt);
+        assertFalse(vault.agentPay(shopId, 5e6, "too-soon", 0));
+        vm.warp(t0 + 10 hours + 24 hours + 1);
+        vm.prank(chatgpt);
+        assertTrue(vault.agentPay(shopId, 5e6, "next-day", 0));
+    }
+
+    function test_releaseMoreThanADayLateIsCancelled() public {
+        policy(50e6, 40e6, 1 days, 0, 5e6, 2 minutes);
+        pay(claude, 8e6, "stale");
+        vm.warp(block.timestamp + 121 + 24 hours);
+        vault.release("stale");
+        assertEq(token.balanceOf(shop), 0);
+        assertEq(vault.heldTotal(), 0);
+    }
+
     function test_version() public view {
         assertEq(vault.VERSION(), 3);
     }
