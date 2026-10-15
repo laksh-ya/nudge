@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@agent-wallet/domain": "workspace:*",
+    "@anthropic-ai/sdk": "0.131.0",
     "@convex-dev/workpool": "0.4.12",
     "convex": "1.46.0",
     "viem": "2.57.7"

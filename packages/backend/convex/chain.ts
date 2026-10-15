@@ -43,6 +43,8 @@ const chain = {
 const AGENT_GAS = parseEther("0.00002");
 const AGENT_GAS_FLOOR = parseEther("0.00001");
 const RECEIPT_TIMEOUT = 60_000;
+/** How long to wait for a receipt before calling the outcome unknown. Tests shorten it to force that path. */
+const receiptTimeout = () => Number(process.env.CHAIN_RECEIPT_TIMEOUT_MS ?? RECEIPT_TIMEOUT);
 const RECHECK_MS = 30_000;
 const MAX_CHECKS = 20;
 
@@ -112,7 +114,7 @@ async function send(pub: Pub, wallet: ReturnType<typeof clients>["wallet"], call
 /** After broadcast, a lost receipt is "unknown", never "failed": the transaction may still land. */
 async function receipt(ctx: ActionCtx, pub: Pub, taskId: Id<"tasks">, hash: Hex, kind: "owner" | "agent" | "finalize" | "release") {
   try {
-    return await pub.waitForTransactionReceipt({ hash, timeout: RECEIPT_TIMEOUT });
+    return await pub.waitForTransactionReceipt({ hash, timeout: receiptTimeout() });
   } catch (e) {
     await ctx.runMutation(internal.vault.onUnknown, { taskId, txHash: hash, note: reason(e) });
     await relayer.enqueueAction(ctx, internal.chain.reconcile, { taskId, kind }, { runAt: Date.now() + RECHECK_MS });

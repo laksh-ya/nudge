@@ -37,7 +37,7 @@ export const send = mutation({
     const clean = text.trim().slice(0, 500);
     if (!clean) return;
     await ctx.db.insert("messages", { userId: user._id, role: "user", text: clean, channel: "app" });
-    await ctx.scheduler.runAfter(450, internal.messages.reply, { userId: user._id, text: clean });
+    await ctx.scheduler.runAfter(0, internal.assistant.respond, { userId: user._id, text: clean });
   },
 });
 

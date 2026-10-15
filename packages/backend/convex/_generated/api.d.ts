@@ -11,6 +11,7 @@
 import type * as activity from "../activity.js";
 import type * as agents from "../agents.js";
 import type * as approvals from "../approvals.js";
+import type * as assistant from "../assistant.js";
 import type * as chain from "../chain.js";
 import type * as connections from "../connections.js";
 import type * as crons from "../crons.js";
@@ -54,6 +55,7 @@ declare const fullApi: ApiFromModules<{
   activity: typeof activity;
   agents: typeof agents;
   approvals: typeof approvals;
+  assistant: typeof assistant;
   chain: typeof chain;
   connections: typeof connections;
   crons: typeof crons;

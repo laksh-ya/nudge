@@ -9,6 +9,7 @@ evm_version = "prague"
 optimizer = true
 optimizer_runs = 2000
 via_ir = false
+fs_permissions = [{ access = "read-write", path = "../evals/results" }]
 remappings = [
   "@openzeppelin/contracts/=node_modules/@openzeppelin/contracts/",
   "forge-std/=lib/forge-std/src/",

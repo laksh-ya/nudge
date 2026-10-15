@@ -79,7 +79,7 @@ export const inbound = internalMutation({
       return;
     }
     await ctx.db.insert("messages", { userId: link.userId, role: "user", text, channel: "telegram" });
-    await ctx.scheduler.runAfter(0, internal.messages.reply, { userId: link.userId, text, channel: "telegram" });
+    await ctx.scheduler.runAfter(0, internal.assistant.respond, { userId: link.userId, text, channel: "telegram" });
   },
 });
 

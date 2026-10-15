@@ -221,6 +221,15 @@ export const contacts = internalQuery({
   },
 });
 
+/** Agent payments sent (or being sent) to the vault whose receipt hasn't been counted yet. */
+async function paymentsInFlight(ctx: QueryCtx, userId: Id<"users">) {
+  const states = ["reserved", "submitted", "unknown"] as const;
+  const rows = await Promise.all(
+    states.map((state) => ctx.db.query("tasks").withIndex("by_user_state", (q) => q.eq("userId", userId).eq("state", state)).take(100)),
+  );
+  return rows.flat().filter((t) => t.rail === "base-sepolia" && t.agentId && t.action === undefined);
+}
+
 type Decision =
   | { outcome: "paid"; taskId: Id<"tasks">; message: string }
   | { outcome: "duplicate"; taskId: Id<"tasks">; state: string; message: string }
@@ -262,15 +271,21 @@ export const proposePayment = internalMutation({
     const perPayment = Math.min(agent.perPaymentMinor, agentVault?.perPaymentMinor ?? Infinity);
     const dailyCap = Math.min(agent.dailyCapMinor, agentVault?.dailyCapMinor ?? Infinity);
     const agents = await ctx.db.query("agents").withIndex("by_user", (q) => q.eq("userId", user._id)).take(50);
-    const spentToday = vault ? vault.spentMinor : agents.reduce((s, a) => s + a.spentTodayMinor, 0);
+    // Payments already on their way to the vault count now, before any receipt. Reading them here
+    // makes simultaneous requests conflict and run one after another, so a burst can't all pass.
+    const inFlight = vault ? await paymentsInFlight(ctx, user._id) : [];
+    const pendingAll = inFlight.reduce((s, t) => s + (t.amountMinor ?? 0), 0);
+    const pendingAgent = inFlight.filter((t) => t.agentId === agent._id).reduce((s, t) => s + (t.amountMinor ?? 0), 0);
+    const agentSpent = agent.spentTodayMinor + pendingAgent;
+    const spentToday = (vault ? vault.spentMinor : agents.reduce((s, a) => s + a.spentTodayMinor, 0)) + pendingAll;
     const ceiling = Math.min(wallet.dailyCeilingMinor, vault?.ceilingMinor ?? Infinity);
     const protectedMinor = Math.max(wallet.protectedMinor, vault?.protectedMinor ?? 0);
-    const free = vault ? vault.balanceMinor - vault.heldMinor : wallet.balanceMinor;
+    const free = (vault ? vault.balanceMinor - vault.heldMinor : wallet.balanceMinor) - pendingAll;
     const blockers: { code: string; why: string }[] = [];
     if (wallet.frozen || vault?.frozen) blockers.push({ code: "1002", why: "The wallet is frozen" });
     if (!agent.scopes.includes("spend")) blockers.push({ code: "2002", why: `${agent.name} can prepare payments but not send them` });
     if (minor > perPayment) blockers.push({ code: "2003", why: `Above ${agent.name}'s ${formatMoney(perPayment, "USDC")} per-payment limit` });
-    if (agent.spentTodayMinor + minor > dailyCap) blockers.push({ code: "2003", why: `Above ${agent.name}'s daily limit` });
+    if (agentSpent + minor > dailyCap) blockers.push({ code: "2003", why: `Above ${agent.name}'s daily limit` });
     if (spentToday + minor > ceiling) blockers.push({ code: "2004", why: "Above the wallet's daily ceiling for all agents" });
     if (free - minor < protectedMinor) blockers.push({ code: "2005", why: "Would dip into the protected amount" });
     if (!payee.trusted || (payee.holdUntil && payee.holdUntil > Date.now())) blockers.push({ code: "2006", why: `${payee.name} is a new contact` });

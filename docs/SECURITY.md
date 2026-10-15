@@ -35,9 +35,9 @@ We do not claim resistance to prompt injection as such. A tricked agent can stil
 | Every freeze, disconnect and limit change acts on the vault, from every route | `convex/lib/control.ts` | End-to-end: chat "freeze" confirmed by reading the vault, then the old key reverts `AgentFrozen`; disconnect removes the key [`0x569ff396…`](https://sepolia.basescan.org/tx/0x569ff39695b5c1a1fe62275302f584f2a67f1c7a286520d82d95657266d31979) |
 | Freeze shown as done only after reading the vault back | `guardianFreeze` | Agents screen shows "Freezing in vault…" until confirmed |
 | Passkey enrolment: server challenge, origin, site hash, user verification and the key itself checked; counts only after the signed-in owner types the code the phone shows | `vault.completeEnrol`, `vault.confirmEnrol` | End-to-end: wrong challenge refused, used link refused, wrong code refused |
-| Lost receipts are "unknown", reconciled by hash, never "failed" | `chain.receipt`, `chain.reconcile` | Code path; a forced-timeout test is still to do |
+| Lost receipts are "unknown", reconciled by hash, never "failed" | `chain.receipt`, `chain.reconcile` | `resilience.e2e.test.ts` on Base Sepolia: receipt forced lost, retry refused as a duplicate, settled once [`0xc42f6499…`](https://sepolia.basescan.org/tx/0xc42f64997e96461b36fbd27016f7ce0cd30a5b45488322db2514bdbb3a0d6770) |
 | Retries never pay twice: caller `requestId` maps to one on-chain payment id | `gateway.proposePayment`, `paymentIdFor` | End-to-end: the same `requestId` returns the first task instead of a second payment |
-| One serial queue for every transaction we send | Convex Workpool, parallelism 1 | Design; concurrency test still to do |
+| One serial queue for every transaction we send; payments in flight count against limits before any receipt | Convex Workpool, parallelism 1; `gateway.paymentsInFlight` | `resilience.e2e.test.ts`: four simultaneous $6 requests against $15, two paid, two sent for approval, vault count $12 |
 | Agent keys sealed (AES-256-GCM, bound to the agent id) | `lib/secrets.ts` | End-to-end checks stored keys start `enc:v1:` |
 | Demo isolation: per-visitor sandboxes; judge account only with its key | `api/demo/token`, `auth.config.ts` | Manual check; two-browser test still to do |
 | Rate limits: MCP 60/min per assistant; vault deployments 6/hour, sandbox 3/day; code entry 5 per 15 min | `lib/limits.ts` | Code |
@@ -58,9 +58,12 @@ We do not claim resistance to prompt injection as such. A tricked agent can stil
 | Unaudited contract | Prototype | 45 forge tests including fuzz and invariants; no admin or upgrade path |
 | Strikes can be tripped deliberately to freeze an agent | Only that agent's own key can strike it | A stolen key freezing itself is the intended outcome |
 
+## Attack suite
+
+`evals/` runs the same attacks against a hot wallet, a capped wallet (the common hackathon design) and PolicyVault; results and how to rerun are in [evals/README.md](../evals/README.md). With stolen agent keys and our server bypassed, PolicyVault lost $0 where the attacker needed a new address, a replay, a substituted approval or our server's keys, and at most its published bounds ($10 to $20 a day, never the protected $50) where the attacker controlled a saved contact. The capped wallet lost $200 to $242 in the server and approval cases.
+
 ## Not covered yet
 
-- A forced receipt timeout plus worker restart, and two agents racing near the shared ceiling, as automated tests.
+- Prompt injection with a real model in the loop: the evaluation is written (`agent.eval.test.ts`, seven attacks and six legitimate tasks, model alone versus the full system) and needs an Anthropic API key to run.
 - Two real signed-in users side by side.
-- The assistant inside the app is rule-based, so there is no model-in-the-loop injection evaluation yet.
 - OAuth for MCP clients; WhatsApp.

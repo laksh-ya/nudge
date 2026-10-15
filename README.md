@@ -12,7 +12,7 @@ Entry for FinTechathon 2026, Topic F (Agent Wallet). Product spec: `reports/Full
 | Passkey approval and enrolment | Live: browser WebAuthn on the approval site, verified by the contract |
 | Freeze, unfreeze, disconnect, limit changes | Live: every route acts on the vault and is confirmed by reading it back |
 | Claude and other assistants over MCP | Live: JSON-RPC over HTTP with per-assistant bearer keys (OAuth not yet) |
-| Built-in assistant | Rule-based replies; no language model inside the app yet |
+| Built-in assistant | Claude (`claude-opus-5-5`) with the same tools outside assistants get over MCP, so the gateway and vault decide every payment; rule-based replies when `ANTHROPIC_API_KEY` isn't set on the deployment |
 | Bank feeds | Sandbox data per country; statement import (CSV, Excel, PDF, receipts) is real |
 | Family transfers and quotes | Simulated |
 | UPI | Hands the payment to your UPI app; no bank settlement confirmation |
@@ -38,9 +38,10 @@ Entry for FinTechathon 2026, Topic F (Agent Wallet). Product spec: `reports/Full
 | Contracts | Solidity 0.8.30, Foundry, OpenZeppelin WebAuthn/P256 | OZ 5.6.1 | Fuzz and invariant tests; P-256 precompile on Base Sepolia |
 | Chain client | viem | 2.57 | Typed calls, receipts, event decoding |
 | Chain | Base Sepolia (84532) | – | Testnet prototype |
-| Tests | forge test, Vitest (unit, local-chain, Base Sepolia end to end) | – | Contract, encoding and full-path suites |
+| Assistant model | Anthropic SDK, Claude Opus 5.5, server-side refusal fallback | @anthropic-ai/sdk 0.131 | Same tools as MCP; never decides what is allowed |
+| Tests | forge test, Vitest (unit, local-chain, Base Sepolia end to end), attack and injection evals in `evals/` | – | Contract, encoding, full-path and adversarial suites |
 
-Planned, not in the code: an LLM-backed assistant, OAuth for MCP clients, WhatsApp, object storage for files, structured log redaction and an audit table, Playwright journeys.
+Planned, not in the code: OAuth for MCP clients, WhatsApp, object storage for files, structured log redaction and an audit table, Playwright journeys.
 
 ## Not using
 
