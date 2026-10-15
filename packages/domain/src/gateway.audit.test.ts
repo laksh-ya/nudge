@@ -269,8 +269,8 @@ describe("finding: properties missing today", () => {
     expect(uncertainty, `hidden "safe to spend" pinned to $${lo}-$${hi} in ${calls} calls`).toBeGreaterThan(0.1);
   });
 
-  // G4. Amounts under half a cent round to 0 minor units, pass every check, and go to the chain as a
-  // $0 agentPay, which the vault refuses and counts as a strike (five freeze the agent).
+  // G4. Amounts under half a cent round to 0 minor units, pass every check and are reported as paid.
+  // The chain job then skips a task with no amount, so it stays "reserved" and is never sent.
   it("G4: a sub-cent amount is refused before it reaches the chain", async () => {
     const { ctx } = world();
     const out = await call(proposePayment, ctx, { agentId: "agents-1", contactId: "payees-1", amount: 0.004, reason: "dust" });
