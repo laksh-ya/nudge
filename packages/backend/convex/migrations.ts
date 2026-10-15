@@ -84,3 +84,27 @@ export const agentKeyRow = internalQuery({
   args: { agentId: v.id("agents") },
   handler: async (ctx, { agentId }) => await ctx.db.query("agentKeys").withIndex("by_agent", (q) => q.eq("agentId", agentId)).unique(),
 });
+
+/** 15 Oct 2026: label the judge account's seeded history, which predates sample labels. */
+export const labelJudgeSamples = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const judge = await ctx.db.query("users").withIndex("by_token", (q) => q.eq("tokenIdentifier", JUDGE)).unique();
+    if (!judge) return 0;
+    const seeded = new Set(["OpenClaw frozen", "Paid Blue Tokai $8.40", "Imported your HDFC statement", "Claude connected", "Signed in on a new device", "Protected $50 in your wallet"]);
+    let n = 0;
+    for (const t of await ctx.db.query("tasks").withIndex("by_user_updated", (q) => q.eq("userId", judge._id)).take(300)) {
+      if (t.rail !== "base-sepolia" && !t.sample) {
+        await ctx.db.patch(t._id, { sample: true });
+        n++;
+      }
+    }
+    for (const a of await ctx.db.query("activity").withIndex("by_user", (q) => q.eq("userId", judge._id)).take(500)) {
+      if (seeded.has(a.title) && !a.sample) {
+        await ctx.db.patch(a._id, { sample: true });
+        n++;
+      }
+    }
+    return n;
+  },
+});
