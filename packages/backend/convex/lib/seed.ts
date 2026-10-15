@@ -265,6 +265,7 @@ export async function seedUser(ctx: MutationCtx, userId: Id<"users">) {
     balanceMinor: 25_000,
     protectedMinor: 5_000,
     dailyCeilingMinor: 4_000,
+    perPaymentMinor: 1_500,
     frozen: false,
   });
 
