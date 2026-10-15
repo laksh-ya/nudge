@@ -311,9 +311,16 @@ run("Base Sepolia, end to end (contract v2)", () => {
       return fields[4] === true;
     });
     const thief = createWalletClient({ chain, transport: http(), account: privateKeyToAccount(leaked) });
-    await expect(
-      thief.writeContract({ address: vault, abi: policyVaultAbi, functionName: "agentPay", args: [contactIdOf(shopId), toTokenUnits(100), paymentIdOf("after-freeze"), `0x${"00".repeat(32)}`] }),
-    ).rejects.toThrow(/AgentFrozen/);
+    // Either the node refuses it up front or it is mined and reverts; either way no money moves.
+    const before = await pub.readContract({ address: vault, abi: policyVaultAbi, functionName: "spentToday", args: [privateKeyToAccount(leaked).address] });
+    const sent = await thief
+      .writeContract({ address: vault, abi: policyVaultAbi, functionName: "agentPay", args: [contactIdOf(shopId), toTokenUnits(100), paymentIdOf("after-freeze"), `0x${"00".repeat(32)}`], gas: 300_000n })
+      .catch((e: Error) => {
+        expect(e.message).toMatch(/AgentFrozen|reverted/);
+        return null;
+      });
+    if (sent) expect((await pub.waitForTransactionReceipt({ hash: sent })).status).toBe("reverted");
+    expect(await pub.readContract({ address: vault, abi: policyVaultAbi, functionName: "spentToday", args: [privateKeyToAccount(leaked).address] })).toBe(before);
   }, 200_000);
 
   it("disconnects Claude and removes its key from the vault", async () => {
@@ -327,7 +334,10 @@ run("Base Sepolia, end to end (contract v2)", () => {
     const done = await approve(approvalToken);
     expect(done.state).toBe("confirmed");
     log("Owner removes Claude's key", done.txHash);
-    const fields = (await pub.readContract({ address: vault, abi: policyVaultAbi, functionName: "agents", args: [privateKeyToAccount(leaked).address] })) as readonly unknown[];
+    const fields = await until("the removal", async () => {
+      const f = (await pub.readContract({ address: vault, abi: policyVaultAbi, functionName: "agents", args: [privateKeyToAccount(leaked).address] })) as readonly unknown[];
+      return f[3] === false ? f : null;
+    });
     expect(fields[3]).toBe(false);
   }, 200_000);
 });
