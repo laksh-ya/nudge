@@ -22,6 +22,8 @@ const backend = (args: string[]) => execFileSync("npx", ["convex", ...args], { c
 
 run("Base Sepolia: races and lost receipts", () => {
   const h = harness("resilience");
+  // Request ids are unique per run: a reused sandbox still holds the last run's tasks.
+  const stamp = Date.now().toString(36);
   let vault: Address;
   let key: string;
   let shop: string;
@@ -41,7 +43,7 @@ run("Base Sepolia: races and lost receipts", () => {
 
   it("never pays more than the limit when four requests race", async () => {
     const results = await Promise.all(
-      [1, 2, 3, 4].map((i) => mcp<{ outcome: string; taskId: string }>(key, "propose_payment", { contactId: shop, amount: 6, reason: `Race ${i}`, requestId: `race-${i}` })),
+      [1, 2, 3, 4].map((i) => mcp<{ outcome: string; taskId: string }>(key, "propose_payment", { contactId: shop, amount: 6, reason: `Race ${i}`, requestId: `race-${stamp}-${i}` })),
     );
     const outcomes = results.map((r) => r.value.outcome);
     const paid = results.filter((r) => r.value.outcome === "submitted");
@@ -62,11 +64,11 @@ run("Base Sepolia: races and lost receipts", () => {
   it("keeps a payment with a lost receipt as unknown, never pays it twice, and settles it from the chain", async () => {
     backend(["env", "set", "CHAIN_RECEIPT_TIMEOUT_MS", "1"]);
     try {
-      const first = (await mcp<{ outcome: string; taskId: string }>(key, "propose_payment", { contactId: shop, amount: 2, reason: "Lost receipt", requestId: "lost-1" })).value;
+      const first = (await mcp<{ outcome: string; taskId: string }>(key, "propose_payment", { contactId: shop, amount: 2, reason: "Lost receipt", requestId: `lost-${stamp}` })).value;
       expect(first.outcome).toBe("submitted");
       const unknown = await taskState(key, first.taskId, ["unknown", "confirmed", "failed"]);
       expect(unknown.state).toBe("unknown");
-      const retry = (await mcp<{ outcome: string; taskId: string }>(key, "propose_payment", { contactId: shop, amount: 2, reason: "Lost receipt", requestId: "lost-1" })).value;
+      const retry = (await mcp<{ outcome: string; taskId: string }>(key, "propose_payment", { contactId: shop, amount: 2, reason: "Lost receipt", requestId: `lost-${stamp}` })).value;
       expect(retry).toMatchObject({ outcome: "duplicate", taskId: first.taskId });
     } finally {
       backend(["env", "remove", "CHAIN_RECEIPT_TIMEOUT_MS"]);
