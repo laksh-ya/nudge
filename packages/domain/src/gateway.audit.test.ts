@@ -7,7 +7,8 @@
  * Two groups:
  *  - "holds": controls the gateway already enforces. These pass.
  *  - "finding": properties found missing in the 16 Oct review (docs/TESTING.md, G1-G6). They state
- *    the intended behaviour, so they fail today and pass once fixed.
+ *    the intended behaviour, so they fail on 680daf9 and pass once fixed. Issues: G1 and G2 #6,
+ *    G4 and G5 #9, G3 and G6 #7.
  *
  *   pnpm --filter @agent-wallet/domain exec vitest run gateway.audit
  *
@@ -112,7 +113,8 @@ function world(opts: { live?: boolean; hidesBalances?: boolean; scopes?: string[
   });
 }
 
-const tokenOf = (url: string) => url.split("/a/")[1]!;
+/** The owner's approval token, read from the database: an agent should never be handed it. */
+const tokenOf = (tables: Record<string, Doc[]>, taskId: string) => tables.tasks!.find((t) => t._id === taskId)!.approvalToken as string;
 
 beforeEach(() => {
   sent.length = 0;
@@ -149,9 +151,10 @@ describe("holds: what the gateway already enforces", () => {
   });
 
   it("an owner-passkey payment cannot be approved without the passkey", async () => {
-    const { ctx } = world();
+    const { ctx, tables } = world();
     const out = await call(proposePayment, ctx, { agentId: "agents-1", contactId: "payees-1", amount: 12, reason: "beans" });
-    await expect(call(approvals.decide, ctx, { token: tokenOf(out.approvalUrl), approve: true })).rejects.toThrow(/passkey/i);
+    await expect(call(approvals.decide, ctx, { token: tokenOf(tables, out.taskId), approve: true })).rejects.toThrow();
+    expect(tables.tasks!.find((t) => t._id === out.taskId)!.state).toBe("awaiting_approval");
   });
 
   it("counts payments in flight, so a burst can't pass the daily limit", async () => {
@@ -224,9 +227,12 @@ describe("finding: properties missing today", () => {
     const { ctx, tables } = world({ live: false });
     const out = await call(proposePayment, ctx, { agentId: "agents-1", contactId: "payees-1", amount: 50, reason: "invoice" });
     expect(out.outcome).toBe("needs_approval");
+    const token = tokenOf(tables, out.taskId);
+    expect(JSON.stringify(out), "the agent was handed the owner's approval token").not.toContain(token);
+    // Even a leaked token must not approve without the owner signed in (the mock has no identity).
     let state: string | undefined;
     try {
-      state = await call(approvals.decide, ctx, { token: tokenOf(out.approvalUrl), approve: true });
+      state = await call(approvals.decide, ctx, { token, approve: true });
     } catch {
       state = "refused";
     }
@@ -238,9 +244,9 @@ describe("finding: properties missing today", () => {
   // vault balance and the address of every saved contact, even for an assistant the owner set to
   // "hide balances" and whose list_contacts deliberately omits addresses.
   it("G2: the approval link doesn't reveal hidden balances or contact addresses to the agent", async () => {
-    const { ctx } = world({ hidesBalances: true });
+    const { ctx, tables } = world({ hidesBalances: true });
     const out = await call(proposePayment, ctx, { agentId: "agents-1", contactId: "payees-1", amount: 12, reason: "beans" });
-    const page = await call(approvals.get, ctx, { token: tokenOf(out.approvalUrl) });
+    const page = await call(approvals.get, ctx, { token: tokenOf(tables, out.taskId) });
     const text = JSON.stringify(page).toLowerCase();
     expect(page.wallet?.balanceMinor, "vault balance visible to an agent with hidden balances").toBeUndefined();
     expect(text, "another contact's address visible to the agent").not.toContain("00000000000000000000000000000000000000b2");
