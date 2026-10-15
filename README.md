@@ -91,6 +91,14 @@ One run of `packages/domain/src/onchain.e2e.test.ts` through the real backend (p
 | Guardian freezes Claude in the vault | relayer (can only tighten) | [`0x676a0fc2…`](https://sepolia.basescan.org/tx/0x676a0fc216a827a04f2102aae61f8aec54ea124883974c847ed23bb11e5b7a4e) |
 | Owner unfreezes Claude | passkey | [`0x8e27c5a2…`](https://sepolia.basescan.org/tx/0x8e27c5a2fb9e57142c21d09ead9fd25b40acbfb730c02150ec94385b2f91e12a) |
 
+On the live app with a real phone passkey (Android, Chrome), vault [`0xd71b81a1…`](https://sepolia.basescan.org/address/0xd71b81a157Ce1D4651D2B1CF0CCb59bea789Ae40):
+
+| Step | Who signs | Transaction |
+|---|---|---|
+| Setup: agents and contacts in one approval | phone passkey | [`0xbebb2061…`](https://sepolia.basescan.org/tx/0xbebb20616a80f3e49f175a46f53ec1d6596d2b02913457bc5f1a224b64abd7c5) |
+| Claude pays Blue Tokai $8 over MCP, within its limits | Claude's agent key | [`0x4bc75942…`](https://sepolia.basescan.org/tx/0x4bc75942fb9e9498c64f504932486966975d29047d2e7aedc05cd6bbba70e774) |
+| Claude asks for $18, over its limit; owner approves on the phone | phone passkey | [`0x8f32ad0b…`](https://sepolia.basescan.org/tx/0x8f32ad0ba0bfdc65a1c8625b2fb5365edbd36c949a55983c9b3042eb8a3d8d47) |
+
 Deploy your own: put `RELAYER_PRIVATE_KEY` and `RELAYER_ADDRESS` in `contracts/.env`, fund the address with Base Sepolia ETH (0.0001 covers the contracts and a few vaults), then run `contracts/deploy.sh`. It deploys both contracts and points the Convex deployments at them.
 
 Tests:

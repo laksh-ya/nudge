@@ -291,7 +291,8 @@ export default defineSchema({
   })
     .index("by_user_updated", ["userId", "updatedAt"])
     .index("by_user_state", ["userId", "state"])
-    .index("by_approval_token", ["approvalToken"]),
+    .index("by_approval_token", ["approvalToken"])
+    .index("by_state_expires", ["state", "expiresAt"]),
 
   messages: defineTable({
     userId: v.id("users"),

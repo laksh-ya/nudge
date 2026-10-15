@@ -7,4 +7,6 @@ crons.daily("exchange rates and prices", { hourUTC: 2, minuteUTC: 15 }, internal
 
 crons.daily("reset agent daily spend", { hourUTC: 18, minuteUTC: 30 }, internal.agents.resetDaily, {});
 
+crons.interval("expire unanswered approvals", { minutes: 5 }, internal.tasks.expireStale, {});
+
 export default crons;

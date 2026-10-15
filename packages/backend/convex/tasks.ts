@@ -37,6 +37,19 @@ export const cancel = mutation({
   },
 });
 
+/** Approvals nobody answered in time stop asking for attention. The vault would refuse them anyway. */
+export const expireStale = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const stale = await ctx.db
+      .query("tasks")
+      .withIndex("by_state_expires", (q) => q.eq("state", "awaiting_approval").gt("expiresAt", 0).lt("expiresAt", Date.now()))
+      .take(200);
+    for (const t of stale) await ctx.db.patch(t._id, { state: "expired", updatedAt: Date.now() });
+    return stale.length;
+  },
+});
+
 /** Simulated rail: settles a submitted payment and records its effect. */
 export const settle = internalMutation({
   args: { taskId: v.id("tasks") },

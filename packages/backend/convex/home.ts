@@ -11,6 +11,7 @@ export const overview = query({
     const waiting = await ctx.db
       .query("tasks")
       .withIndex("by_user_state", (q) => q.eq("userId", user._id).eq("state", "awaiting_approval"))
+      .order("desc")
       .take(10);
     const unknown = await ctx.db
       .query("tasks")
@@ -44,7 +45,10 @@ export const overview = query({
       name: user.name,
       overview,
       attention: {
-        approvals: waiting.map(named),
+        // Live on-chain requests first, then newest.
+        approvals: waiting
+          .sort((a, b) => Number(Boolean(b.action)) - Number(Boolean(a.action)) || b._creationTime - a._creationTime)
+          .map(named),
         unknown: unknown.map(named),
         familyRequests: requests.length,
         priceRises: priceRises.map((o) => ({ name: o.name, from: o.previousAmountMinor!, to: o.amountMinor, currency: o.currency })),
