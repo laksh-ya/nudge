@@ -29,6 +29,7 @@ const channelLabel = { app: "App", telegram: "Telegram", whatsapp: "WhatsApp", m
 
 export function TaskCard({ task, className }: { task: TaskView; className?: string }) {
   const cancel = useMutation(api.tasks.cancel);
+  const decide = useMutation(api.approvals.decide);
   const ChannelIcon = channelIcon[task.channel];
   const waiting = task.state === "awaiting_approval";
   return (
@@ -60,9 +61,25 @@ export function TaskCard({ task, className }: { task: TaskView; className?: stri
             <Button size="sm" tone="ghost" onClick={() => cancel({ taskId: task._id })}>
               Cancel
             </Button>
-            <ButtonLink size="sm" href={approvalLink(task.approvalToken)} external>
-              Review
-            </ButtonLink>
+            {task.rail === "base-sepolia" ? (
+              // The vault needs the owner's passkey, which lives on the approval site.
+              <ButtonLink size="sm" href={approvalLink(task.approvalToken)} external>
+                Review
+              </ButtonLink>
+            ) : task.rail === "handoff" ? (
+              <>
+                <ButtonLink size="sm" tone="ghost" href={approvalLink(task.approvalToken)} external>
+                  Open UPI
+                </ButtonLink>
+                <Button size="sm" onClick={() => decide({ token: task.approvalToken!, approve: true })}>
+                  I paid
+                </Button>
+              </>
+            ) : (
+              <Button size="sm" onClick={() => decide({ token: task.approvalToken!, approve: true })}>
+                Approve
+              </Button>
+            )}
           </div>
         )}
       </div>
