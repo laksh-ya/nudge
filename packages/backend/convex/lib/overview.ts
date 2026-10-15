@@ -1,4 +1,4 @@
-import { convert, decimalsOf } from "@agent-wallet/domain";
+import { convert, decimalsOf, isVaultVersion } from "@agent-wallet/domain";
 import type { Doc } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { latestRates } from "../rates";
@@ -76,7 +76,7 @@ export async function computeOverview(ctx: QueryCtx, user: Doc<"users">) {
   const spentToday = agents.reduce((s, a) => s + a.spentTodayMinor, 0);
   // A live vault answers this itself (agentHeadroom, read back in chain.ts), capped by what the
   // agents it knows about may still spend.
-  const vault = wallet?.status === "live" && wallet.version === 2 ? wallet.vault : undefined;
+  const vault = wallet?.status === "live" && isVaultVersion(wallet.version) ? wallet.vault : undefined;
   const keyed = liveAgents.filter((a) => a.vault?.active && !a.vault.frozen);
   const agentAuthority = vault
     ? vault.frozen

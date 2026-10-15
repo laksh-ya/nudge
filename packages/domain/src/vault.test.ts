@@ -22,6 +22,18 @@ describe("vault encoding", () => {
     expect(d.lines.find((l) => l.label === "To")?.value).toBe("Blue Tokai");
   });
 
+  it("encodes a contact for the vault's own version and shows its cap", () => {
+    const shop = "0x1111111111111111111111111111111111111111";
+    const v2 = encode.addContact(contactIdOf("c"), shop, false, { version: 2, dailyCap: 9_000_000n });
+    const v3 = encode.addContact(contactIdOf("c"), shop, false, { version: 3, dailyCap: 9_000_000n });
+    expect((v2.length - 2) / 2).toBe(96);
+    expect((v3.length - 2) / 2).toBe(128);
+    expect(describeOp(Op.AddContact, v2, {}).lines.map((l) => l.label)).not.toContain("All agents, per 24 hours");
+    expect(describeOp(Op.AddContact, v3, {}).lines).toContainEqual({ label: "All agents, per 24 hours", value: "$9.00" });
+    const uncapped = encode.addContact(contactIdOf("c"), shop, true);
+    expect(describeOp(Op.AddContact, uncapped, {}).lines).toContainEqual({ label: "All agents, per 24 hours", value: "No cap for this contact" });
+  });
+
   it("derives passkey ids the way the contract does", () => {
     // cast keccak $(cast abi-encode "f(bytes32,bytes32)" 0x11..11 0x22..22)
     expect(keyIdOf(`0x${"11".repeat(32)}`, `0x${"22".repeat(32)}`)).toBe("0x3e92e0db88d6afea9edc4eedf62fffa4d92bcdfc310dccbe943747fe8302e871");

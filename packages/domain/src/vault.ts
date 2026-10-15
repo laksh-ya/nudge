@@ -3,6 +3,7 @@ import {
   encodeAbiParameters,
   getAddress,
   keccak256,
+  size,
   slice,
   toBytes,
   toHex,
@@ -19,6 +20,10 @@ import {
 export const CHAIN_ID = 84532; // Base Sepolia
 export const EXPLORER = "https://sepolia.basescan.org";
 export const TOKEN_DECIMALS = 6; // tUSD and USDC
+/** The PolicyVault version the current factory deploys. Older vaults keep their own encodings. */
+export const VAULT_VERSION = 3;
+/** A vault the app treats as on-chain (v2 or later); v1 vaults only offer the upgrade. */
+export const isVaultVersion = (version?: number | null) => (version ?? 0) >= 2;
 const MINOR_TO_TOKEN = 10n ** BigInt(TOKEN_DECIMALS - 2);
 
 export enum Op {
@@ -100,8 +105,11 @@ export const encode = {
   setAgent: (agent: Address, perPayment: bigint, dailyCap: bigint, expiresAt: bigint) =>
     encodeAbiParameters([{ type: "address" }, { type: "uint128" }, { type: "uint128" }, { type: "uint64" }], [agent, perPayment, dailyCap, expiresAt]),
   removeAgent: (agent: Address) => encodeAbiParameters([{ type: "address" }], [agent]),
-  addContact: (contactId: Hex, payee: Address, immediate: boolean) =>
-    encodeAbiParameters([{ type: "bytes32" }, { type: "address" }, { type: "bool" }], [contactId, payee, immediate]),
+  /** v3 vaults also take a per-contact cap for all agents together, per 24 hours (0 = none). */
+  addContact: (contactId: Hex, payee: Address, immediate: boolean, opts: { dailyCap?: bigint; version?: number } = {}) =>
+    (opts.version ?? VAULT_VERSION) >= 3
+      ? encodeAbiParameters([{ type: "bytes32" }, { type: "address" }, { type: "bool" }, { type: "uint128" }], [contactId, payee, immediate, opts.dailyCap ?? 0n])
+      : encodeAbiParameters([{ type: "bytes32" }, { type: "address" }, { type: "bool" }], [contactId, payee, immediate]),
   setPolicy: (p: Policy) =>
     encodeAbiParameters(POLICY, [p.protectedAmount, p.dailyCeiling, p.newContactDelay, p.changeDelay, p.holdAbove, p.holdFor]),
   unfreeze: (agent: Address) => encodeAbiParameters([{ type: "address" }], [agent]),
@@ -173,13 +181,18 @@ export function describe(op: Op, data: Hex, names: Record<string, string> = {}):
       return { title: `Remove ${who(agent) || "an agent"}`, lines: [{ label: "Agent key", value: agent, mono: true }] };
     }
     case Op.AddContact: {
-      const [, payee, immediate] = decodeAbiParameters([{ type: "bytes32" }, { type: "address" }, { type: "bool" }], data);
+      // v3 adds a fourth word, the contact's daily cap.
+      const v3 = size(data) >= 128;
+      const [, payee, immediate, cap] = v3
+        ? decodeAbiParameters([{ type: "bytes32" }, { type: "address" }, { type: "bool" }, { type: "uint128" }], data)
+        : [...decodeAbiParameters([{ type: "bytes32" }, { type: "address" }, { type: "bool" }], data), undefined];
       return {
         title: `Add ${who(payee) || "a contact"}`,
         lines: [
           { label: "Contact", value: who(payee) || "Unnamed" },
           { label: "Address", value: payee, mono: true },
           { label: "Agents can pay", value: immediate ? "Right away" : "After the waiting period" },
+          ...(v3 ? [{ label: "All agents, per 24 hours", value: cap ? money(cap) : "No cap for this contact" }] : []),
         ],
       };
     }
@@ -265,4 +278,5 @@ export const REFUSAL: Record<number, string> = {
   2007: "This payment was already made",
   2009: "Too many payments in 24 hours",
   2010: "Not one of your contacts",
+  2012: "Above this contact's limit for all agents in 24 hours",
 };

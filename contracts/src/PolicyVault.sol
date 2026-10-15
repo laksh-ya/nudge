@@ -21,7 +21,7 @@ contract PolicyVault {
         Pay, //            (address to, uint256 amount, bytes32 paymentId)
         SetAgent, //       (address agent, uint128 perPayment, uint128 dailyCap, uint64 expiresAt)
         RemoveAgent, //    (address agent)
-        AddContact, //     (bytes32 contactId, address payee, bool immediate)
+        AddContact, //     (bytes32 contactId, address payee, bool immediate, uint128 dailyCap)  dailyCap 0 = no per-contact cap
         RemoveContact, //  (bytes32 contactId)
         SetPolicy, //      (uint256 protectedAmount, uint256 dailyCeiling, uint64 newContactDelay, uint64 changeDelay, uint256 holdAbove, uint64 holdFor)
         Unfreeze, //       (address agent)  address(0) unfreezes the vault
@@ -75,6 +75,7 @@ contract PolicyVault {
         bytes32 contactId;
         uint128 amount;
         uint64 releaseAt;
+        uint64 heldAt;
     }
 
     // ------------------------------------------------------------- constants
@@ -96,6 +97,8 @@ contract PolicyVault {
     uint16 public constant DUPLICATE_PAYMENT = 2007;
     uint16 public constant TOO_MANY_PAYMENTS = 2009;
     uint16 public constant UNKNOWN_CONTACT = 2010;
+    uint16 public constant OVER_CONTACT_LIMIT = 2012;
+    uint8 public constant VERSION = 3;
 
     // ----------------------------------------------------------------- state
 
@@ -127,6 +130,18 @@ contract PolicyVault {
     uint256 public heldTotal;
     /// @notice Owner actions that loosen policy, by id, and when they may apply.
     mapping(bytes32 changeId => uint64 readyAt) public queued;
+    /// @notice The generation a queued change was approved in. Any revocation or freeze starts a new
+    /// generation, so changes approved before it can no longer apply; the owner approves them again.
+    mapping(bytes32 changeId => uint64) public queuedGeneration;
+    uint64 public generation;
+
+    /// @notice Optional rolling 24-hour cap per contact across all agents (0 = none).
+    mapping(bytes32 contactId => uint128) public contactCap;
+    mapping(bytes32 contactId => Spend[AGENT_SLOTS]) private _contactSpends;
+    mapping(bytes32 contactId => uint256) private _contactNext;
+    /// @dev How many saved contacts pay each address, and since when the earliest is active.
+    mapping(address payee => uint256) private _payeeRefs;
+    mapping(address payee => uint64) private _payeeSince;
 
     // ---------------------------------------------------------------- events
 
@@ -170,6 +185,7 @@ contract PolicyVault {
     event ChangeApplied(bytes32 indexed changeId);
     event ChangeCancelled(bytes32 indexed changeId, address by);
     event Struck(address indexed agent, uint8 strikes);
+    event NewGeneration(uint64 generation);
     event Frozen(address indexed agent, address by);
     event Unfrozen(address indexed agent);
     event OwnerKeyAdded(bytes32 indexed keyId);
@@ -192,6 +208,7 @@ contract PolicyVault {
     error BreachesProtected();
     error NotReady();
     error NotQueued();
+    error Stale();
 
     constructor(
         IERC20 token_,
@@ -234,13 +251,14 @@ contract PolicyVault {
 
         paymentUsed[paymentId] = true;
         _record(msg.sender, amount);
+        _recordContact(contactId, amount);
         address payee = contacts[contactId].payee;
         if (holdFor > 0 && amount > holdAbove) {
             // Counted against every limit now; the money leaves only after the owner had time to cancel.
             // forge-lint: disable-next-line(unsafe-typecast)
             uint64 releaseAt = uint64(block.timestamp) + holdFor;
             // forge-lint: disable-next-line(unsafe-typecast)
-            held[paymentId] = Held(msg.sender, payee, contactId, uint128(amount), releaseAt);
+            held[paymentId] = Held(msg.sender, payee, contactId, uint128(amount), releaseAt, uint64(block.timestamp));
             heldTotal += amount;
             emit PaymentHeld(paymentId, msg.sender, contactId, payee, amount, releaseAt, purposeHash);
             return true;
@@ -250,14 +268,23 @@ contract PolicyVault {
         return true;
     }
 
-    /// @notice Anyone may release a held payment once its window has passed, unless it was cancelled,
-    /// the vault or agent has since been frozen, or the contact was removed or changed.
+    /// @notice Anyone may settle a held payment once its window has passed. It is paid only if its agent
+    /// is still registered and unexpired and its contact is unchanged since the hold; otherwise it is
+    /// cancelled and the money freed. While the vault or agent is frozen, or paying would dip into the
+    /// protected amount, it stays held.
     function release(bytes32 paymentId) external {
         Held memory h = held[paymentId];
         if (h.amount == 0) revert NotQueued();
         if (block.timestamp < h.releaseAt) revert NotReady();
-        if (frozen || agents[h.agent].frozen) revert AgentFrozen();
-        if (contacts[h.contactId].payee != h.payee) revert BadAction();
+        Agent memory a = agents[h.agent];
+        Contact memory c = contacts[h.contactId];
+        if (!a.active || a.expiresAt < block.timestamp || c.payee != h.payee || c.activeAt > h.heldAt) {
+            _cancelHeld(paymentId);
+            return;
+        }
+        if (frozen || a.frozen) revert AgentFrozen();
+        // Other holds stay reserved; this one may only use what is above the protected amount.
+        if (_free() < protectedAmount) revert BreachesProtected();
         delete held[paymentId];
         heldTotal -= h.amount;
         emit PaymentReleased(paymentId, h.payee, h.amount);
@@ -274,6 +301,7 @@ contract PolicyVault {
         if (a.strikes >= MAX_STRIKES && !a.frozen) {
             a.frozen = true;
             emit Frozen(agent, address(this));
+            _newGeneration();
         }
     }
 
@@ -292,6 +320,13 @@ contract PolicyVault {
         (uint256 agentSpent, bool agentFull) = _windowSum(_agentSpends[agent], _agentNext[agent]);
         if (agentFull) return TOO_MANY_PAYMENTS;
         if (agentSpent + amount > a.dailyCap) return OVER_AGENT_LIMIT;
+
+        uint128 cap = contactCap[contactId];
+        if (cap > 0) {
+            (uint256 toContact, bool contactFull) = _windowSum(_contactSpends[contactId], _contactNext[contactId]);
+            if (contactFull) return TOO_MANY_PAYMENTS;
+            if (toContact + amount > cap) return OVER_CONTACT_LIMIT;
+        }
 
         (uint256 vaultSpent, bool vaultFull) = _vaultWindowSum();
         if (vaultFull) return TOO_MANY_PAYMENTS;
@@ -330,6 +365,7 @@ contract PolicyVault {
             // forge-lint: disable-next-line(unsafe-typecast)
             uint64 readyAt = uint64(block.timestamp) + changeDelay;
             queued[id] = readyAt;
+            queuedGeneration[id] = generation;
             emit ChangeQueued(id, action.op, action.nonce, readyAt);
             return;
         }
@@ -342,9 +378,11 @@ contract PolicyVault {
         bytes32 id = changeIdOf(op, data, nonce);
         uint64 readyAt = queued[id];
         if (readyAt == 0) revert NotQueued();
+        if (queuedGeneration[id] != generation) revert Stale();
         if (block.timestamp < readyAt) revert NotReady();
         if (frozen && op != Op.Unfreeze) revert AgentFrozen();
         delete queued[id];
+        delete queuedGeneration[id];
         emit ChangeApplied(id);
         _apply(op, data, nonce);
     }
@@ -403,8 +441,15 @@ contract PolicyVault {
             return !a.active || perPayment > a.perPayment || dailyCap > a.dailyCap || expiresAt > a.expiresAt;
         }
         if (op == Op.AddContact) {
-            (,, bool immediate) = abi.decode(data, (bytes32, address, bool));
-            return immediate; // otherwise the contact's own waiting period applies
+            (bytes32 contactId,, bool immediate, uint128 cap) = abi.decode(data, (bytes32, address, bool, uint128));
+            // Otherwise the contact's own waiting period applies; raising or removing its cap loosens.
+            uint128 old = contactCap[contactId];
+            return immediate || (old != 0 && (cap == 0 || cap > old));
+        }
+        if (op == Op.Pay) {
+            // The owner paying an address that isn't a saved contact waits, so it can be cancelled.
+            (address to,,) = abi.decode(data, (address, uint256, bytes32));
+            return !_isSavedPayee(to);
         }
         if (op == Op.SetPolicy) {
             (uint256 p, uint256 c, uint64 cd, uint64 d, uint256 ha, uint64 hf) =
@@ -434,18 +479,33 @@ contract PolicyVault {
             emit AgentSet(agent, perPayment, dailyCap, expiresAt);
         } else if (op == Op.RemoveAgent) {
             address agent = abi.decode(data, (address));
-            delete agents[agent];
+            // A frozen tombstone: adding the same key again leaves it frozen until an explicit,
+            // delayed Unfreeze, so remove-then-add can't skip the wait.
+            agents[agent] = Agent(0, 0, 0, false, true, 0, 0);
             emit AgentRemoved(agent);
+            _newGeneration();
         } else if (op == Op.AddContact) {
-            (bytes32 contactId, address payee, bool immediate) = abi.decode(data, (bytes32, address, bool));
+            (bytes32 contactId, address payee, bool immediate, uint128 cap) =
+                abi.decode(data, (bytes32, address, bool, uint128));
             if (payee == address(0)) revert BadAction();
+            // forge-lint: disable-next-line(unsafe-typecast)
             uint64 activeAt = immediate ? uint64(block.timestamp) : uint64(block.timestamp) + newContactDelay;
+            // The same address again only changes its cap; it doesn't restart a wait already served.
+            Contact memory was = contacts[contactId];
+            if (!immediate && was.payee == payee && was.activeAt != 0) activeAt = was.activeAt;
+            _unref(contacts[contactId].payee);
             contacts[contactId] = Contact(payee, activeAt);
+            contactCap[contactId] = cap;
+            _payeeRefs[payee] += 1;
+            if (_payeeSince[payee] == 0 || activeAt < _payeeSince[payee]) _payeeSince[payee] = activeAt;
             emit ContactAdded(contactId, payee, activeAt);
         } else if (op == Op.RemoveContact) {
             bytes32 contactId = abi.decode(data, (bytes32));
+            _unref(contacts[contactId].payee);
             delete contacts[contactId];
+            delete contactCap[contactId];
             emit ContactRemoved(contactId);
+            _newGeneration();
         } else if (op == Op.SetPolicy) {
             (uint256 p, uint256 c, uint64 cd, uint64 d, uint256 ha, uint64 hf) =
                 abi.decode(data, (uint256, uint256, uint64, uint64, uint256, uint64));
@@ -470,6 +530,8 @@ contract PolicyVault {
             delete ownerKeys[keyId];
             ownerKeyCount--;
             emit OwnerKeyRemoved(keyId);
+            // Changes that key approved and that haven't applied yet don't survive it.
+            _newGeneration();
         } else if (op == Op.Withdraw) {
             (address to, uint256 amount) = abi.decode(data, (address, uint256));
             if (to == address(0)) revert BadAction();
@@ -489,12 +551,14 @@ contract PolicyVault {
         if (msg.sender != guardian) revert NotGuardian();
         frozen = true;
         emit Frozen(address(0), msg.sender);
+        _newGeneration();
     }
 
     function freezeAgent(address agent) external {
         if (msg.sender != guardian && msg.sender != agent) revert NotGuardian();
         agents[agent].frozen = true;
         emit Frozen(agent, msg.sender);
+        _newGeneration();
     }
 
     /// @notice Stop a held agent payment before it leaves. The budget it used stays used.
@@ -548,6 +612,30 @@ contract PolicyVault {
     }
 
     // -------------------------------------------------------------- internals
+
+    /// @dev A revocation or freeze: loosening approved before it must be approved again.
+    function _newGeneration() private {
+        generation += 1;
+        emit NewGeneration(generation);
+    }
+
+    function _isSavedPayee(address payee) private view returns (bool) {
+        return _payeeRefs[payee] > 0 && _payeeSince[payee] <= block.timestamp;
+    }
+
+    function _unref(address payee) private {
+        if (payee == address(0) || _payeeRefs[payee] == 0) return;
+        _payeeRefs[payee] -= 1;
+        if (_payeeRefs[payee] == 0) _payeeSince[payee] = 0;
+    }
+
+    /// @dev Recorded even without a cap, so a cap set later counts the last 24 hours too.
+    function _recordContact(bytes32 contactId, uint256 amount) private {
+        uint256 n = _contactNext[contactId];
+        // forge-lint: disable-next-line(unsafe-typecast)
+        _contactSpends[contactId][n % AGENT_SLOTS] = Spend(uint64(block.timestamp), uint128(amount));
+        _contactNext[contactId] = n + 1;
+    }
 
     function _addKey(bytes32 x, bytes32 y, bytes32 rpIdHash) private {
         if (!P256.isValidPublicKey(x, y)) revert InvalidKey();

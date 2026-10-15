@@ -16,7 +16,7 @@ import {
   type TransactionReceipt,
 } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
-import { CHAIN_ID, contactIdOf, fromTokenUnits, keyIdOf, policyVaultAbi, testUsdAbi, toTokenUnits, vaultFactoryAbi } from "@agent-wallet/domain";
+import { CHAIN_ID, contactIdOf, fromTokenUnits, isVaultVersion, keyIdOf, policyVaultAbi, testUsdAbi, toTokenUnits, vaultFactoryAbi } from "@agent-wallet/domain";
 import { internalAction } from "./_generated/server";
 import type { ActionCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -183,6 +183,11 @@ export const deployVault = internalAction({
         const r = await pub.waitForTransactionReceipt({ hash: deployTx, timeout: RECEIPT_TIMEOUT });
         if (r.status !== "success") throw new Error("Vault deployment reverted");
       }
+      // v2 vaults have no VERSION(); the encodings we send depend on which one this is.
+      const version = await pub
+        .readContract({ address: vault, abi: policyVaultAbi, functionName: "VERSION" })
+        .then(Number)
+        .catch(() => 2);
       // Test dollars so the demo has something to spend. Anyone can mint these; they're worthless.
       const fund = await wallet.writeContract({ address: token, abi: testUsdAbi, functionName: "faucet", args: [vault, toTokenUnits(10_000)] });
       await pub.waitForTransactionReceipt({ hash: fund, timeout: RECEIPT_TIMEOUT });
@@ -198,6 +203,7 @@ export const deployVault = internalAction({
         walletId,
         address: vault,
         keyId: keyIdOf(w.keyX as Hex, w.keyY as Hex),
+        version,
         tokenAddress: token,
         deployTx: deployTx ?? fund,
         agentKeys: keys,
@@ -452,7 +458,7 @@ export const reconcile = internalAction({
 /** Read what the vault enforces right now and store it, so screens show the chain, not our wishes. */
 async function readVault(ctx: ActionCtx, pub: Pub, walletId: Id<"wallets">) {
   const w = await ctx.runQuery(internal.vault.walletForChain, { walletId });
-  if (!w?.address || !w.tokenAddress || w.version !== 2) return;
+  if (!w?.address || !w.tokenAddress || !isVaultVersion(w.version)) return;
   const vault = { address: w.address as Address, abi: policyVaultAbi } as const;
   try {
     const [balance, frozen, protectedAmount, ceiling, contactDelay, changeDelay, holdAbove, holdFor, held, spent, headroom, ownerKeys] = await settled(() =>
@@ -496,7 +502,7 @@ async function readVault(ctx: ActionCtx, pub: Pub, walletId: Id<"wallets">) {
     await ctx.runMutation(internal.vault.onVaultState, {
       walletId,
       vault: {
-        version: 2,
+        version: w.version!,
         protectedMinor: fromTokenUnits(protectedAmount),
         ceilingMinor: fromTokenUnits(ceiling),
         contactDelay: Number(contactDelay),

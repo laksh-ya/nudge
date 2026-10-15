@@ -2,7 +2,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useEffect, useMemo, useState } from "react";
 import { Check, Clock, ExternalLink, Fingerprint, Landmark, LoaderCircle, Lock, ShieldCheck, TriangleAlert, Wallet, X } from "lucide-react";
 import { api } from "@agent-wallet/backend/api";
-import { CHAIN_ID, actionDigest, checkApproval, formatMoney, policyVaultAbi, type ChainReader, type Currency, type Op, type Truth } from "@agent-wallet/domain";
+import { CHAIN_ID, actionDigest, checkApproval, formatMoney, isVaultVersion, policyVaultAbi, type ChainReader, type Currency, type Op, type Truth } from "@agent-wallet/domain";
 import { createPublicClient, http, type Address, type Hex } from "viem";
 import { createPasskey, inAppBrowser, passkeysSupported, signWithPasskey } from "./passkey";
 
@@ -234,7 +234,7 @@ function Approve({ token }: { token: string }) {
   const expired = deadline !== undefined && deadline <= now;
   const secs = deadline ? Math.max(0, Math.round((deadline - now) / 1000)) : null;
   const left = secs === null ? null : secs >= 3600 ? `${Math.floor(secs / 3600)} hr ${Math.floor((secs % 3600) / 60)} min` : `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
-  const legacy = Boolean(data.onchain && data.onchain.version !== 2);
+  const legacy = Boolean(data.onchain && !isVaultVersion(data.onchain.version));
   const open = data.state === "awaiting_approval" && !expired && !legacy;
   // Signing waits for the check, and never happens when the server and the bytes disagree.
   const blocked = live && (!truth || truth.mismatches.length > 0);

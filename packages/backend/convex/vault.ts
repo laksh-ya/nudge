@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { EXPLORER, REFUSAL, Op, base64url, formatMoney, keyIdOf, testPayeeAddress } from "@agent-wallet/domain";
+import { base64url, EXPLORER, formatMoney, isVaultVersion, keyIdOf, Op, REFUSAL, testPayeeAddress, VAULT_VERSION } from "@agent-wallet/domain";
 import type { Hex } from "viem";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
@@ -7,7 +7,7 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { isSandbox, requireViewer, viewer } from "./lib/auth";
 import { newApprovalToken } from "./lib/seed";
-import { addKeyTask, setupTask } from "./lib/actions";
+import { addKeyTask, contactCapTask, setupTask } from "./lib/actions";
 import { relayer } from "./lib/relayer";
 import { hit } from "./lib/limits";
 import { chainReady } from "./chain";
@@ -76,7 +76,7 @@ export const startEnrol = mutation({
     const user = await requireViewer(ctx);
     let w = await walletOf(ctx, user._id);
     if (purpose === "backup") {
-      if (w?.status !== "live" || w.version !== 2) throw new Error("Put the wallet on-chain first");
+      if (w?.status !== "live" || !isVaultVersion(w.version)) throw new Error("Put the wallet on-chain first");
       if ((w.passkeys ?? []).filter((p) => p.status !== "removed").length >= 3) throw new Error("You already have three passkeys");
     } else {
       if (!w) {
@@ -278,7 +278,7 @@ export const upgradeVault = mutation({
   handler: async (ctx) => {
     const user = await requireViewer(ctx);
     const w = await walletOf(ctx, user._id);
-    if (!w || w.status !== "live" || w.version === 2 || !w.keyX) throw new Error("Nothing to upgrade");
+    if (!w || w.status !== "live" || (w.version ?? 1) >= VAULT_VERSION || !w.keyX) throw new Error("Nothing to upgrade");
     await hit(ctx, "deploys", DEPLOYS_PER_HOUR, 3600_000, "Too many wallets are being created right now. Try again in a few minutes.");
     const agents = await ctx.db.query("agents").withIndex("by_user", (q) => q.eq("userId", user._id)).take(50);
     for (const a of agents) {
@@ -304,13 +304,36 @@ export const upgradeVault = mutation({
   },
 });
 
+/**
+ * Cap what all agents together may pay one contact in 24 hours (0 removes it). The vault enforces
+ * it from v3. A lower cap applies to our checks at once; a higher one when the vault applies it.
+ */
+export const setContactCap = mutation({
+  args: { payeeId: v.id("payees"), dailyCapMinor: v.number() },
+  handler: async (ctx, { payeeId, dailyCapMinor }) => {
+    const user = await requireViewer(ctx);
+    if (!Number.isInteger(dailyCapMinor) || dailyCapMinor < 0 || dailyCapMinor > 100_000_000) throw new Error("Amount is out of range");
+    const payee = await ctx.db.get(payeeId);
+    if (!payee || payee.userId !== user._id) throw new Error("Not found");
+    const w = await walletOf(ctx, user._id);
+    if (w?.status !== "live" || (w.version ?? 0) < 3) throw new Error("Contact limits need the current vault. Move to it first.");
+    if (!payee.onchain) throw new Error("Approve this contact in the vault first");
+    await hit(ctx, `contact-cap:${user._id}`, 10, 60_000);
+    const old = payee.dailyCapMinor ?? 0;
+    const tighter = dailyCapMinor > 0 && (old === 0 || dailyCapMinor < old);
+    if (tighter) await ctx.db.patch(payeeId, { dailyCapMinor });
+    const task = await contactCapTask(ctx, user, payee, w, dailyCapMinor);
+    return task.token;
+  },
+});
+
 /** Read the vault again now. */
 export const refresh = mutation({
   args: {},
   handler: async (ctx) => {
     const user = await requireViewer(ctx);
     const w = await walletOf(ctx, user._id);
-    if (w?.status !== "live" || w.version !== 2) return;
+    if (w?.status !== "live" || !isVaultVersion(w.version)) return;
     await hit(ctx, `refresh:${w._id}`, 10, 60_000);
     await ctx.scheduler.runAfter(0, internal.chain.syncVault, { walletId: w._id });
   },
@@ -351,6 +374,7 @@ export const onDeployed = internalMutation({
     walletId: v.id("wallets"),
     address: v.string(),
     keyId: v.string(),
+    version: v.number(),
     tokenAddress: v.string(),
     deployTx: v.string(),
     agentKeys: v.array(v.object({ agentId: v.id("agents"), address: v.string(), privateKey: v.string() })),
@@ -359,7 +383,7 @@ export const onDeployed = internalMutation({
     const w = await ctx.db.get(a.walletId);
     if (!w) return;
     const user = (await ctx.db.get(w.userId))!;
-    await ctx.db.patch(w._id, { status: "live", version: 2, address: a.address, keyId: a.keyId, tokenAddress: a.tokenAddress, deployTx: a.deployTx, statusNote: undefined, frozen: false });
+    await ctx.db.patch(w._id, { status: "live", version: a.version, address: a.address, keyId: a.keyId, tokenAddress: a.tokenAddress, deployTx: a.deployTx, statusNote: undefined, frozen: false });
     for (const k of a.agentKeys) {
       await ctx.db.insert("agentKeys", k);
       await ctx.db.patch(k.agentId, { chainAddress: k.address, onchain: false });
@@ -488,6 +512,7 @@ async function applyEffects(ctx: MutationCtx, t: Doc<"tasks">) {
   if (!e) return;
   for (const a of e.agents) await ctx.db.patch(a, { onchain: true });
   for (const p of e.payees) await ctx.db.patch(p, { onchain: true });
+  if (e.contactCap) await ctx.db.patch(e.contactCap.payeeId, { dailyCapMinor: e.contactCap.dailyCapMinor || undefined });
   if (e.grant) {
     const g = e.grant;
     await ctx.db.patch(g.agentId, {
@@ -522,7 +547,7 @@ export const onOwnerResult = internalMutation({
         const agents = (await Promise.all(t.effects.agents.map((id) => ctx.db.get(id)))).filter((a) => a && a.chainAddress && !a.onchain);
         const payees = (await Promise.all(t.effects.payees.map((id) => ctx.db.get(id)))).filter((p) => p && !p.onchain);
         const w = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", t.userId)).unique();
-        const again = await setupTask(ctx, user, agents as Doc<"agents">[], payees as Doc<"payees">[], t.title, t.effects.policy ? w : null);
+        const again = await setupTask(ctx, user, agents as Doc<"agents">[], payees as Doc<"payees">[], t.title, t.effects.policy ? w : null, w?.version);
         if (again) {
           await ctx.db.insert("messages", { userId: t.userId, role: "assistant", text: `${t.title} didn't go through, and nothing changed. Approve it again when you're ready.`, channel: "app", taskId: again.taskId });
         }

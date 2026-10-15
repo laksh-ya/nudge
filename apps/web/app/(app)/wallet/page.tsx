@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
+import { isVaultVersion } from "@agent-wallet/domain";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Check, Clock, Copy, ExternalLink, Lock, ShieldCheck, Snowflake, Store, User } from "lucide-react";
@@ -10,7 +11,7 @@ import { cn } from "@/lib/cn";
 import { formatMoney, shortAddress } from "@/lib/format";
 import { TaskCard } from "@/components/task-card";
 import { Button, Card, Chip, Divided, IconTile, Meter, PageTitle, Row, Skeleton } from "@/components/ui";
-import { PasskeyCard, RulesCard, WaitingCard } from "@/components/wallet/vault-cards";
+import { ContactLimitForm, PasskeyCard, RulesCard, WaitingCard } from "@/components/wallet/vault-cards";
 
 export default function WalletPage() {
   const data = useQuery(api.wallet.get);
@@ -51,7 +52,7 @@ export default function WalletPage() {
   }
   const { wallet, payees } = data;
   // A live vault's own numbers, read back from the chain; the simulator's otherwise.
-  const v = chain?.wallet?.version === 2 ? chain.wallet.vault : null;
+  const v = chain?.wallet && isVaultVersion(chain.wallet.version) ? chain.wallet.vault : null;
   const balance = v ? v.balanceMinor : wallet.balanceMinor;
   const protectedMinor = v ? v.protectedMinor : wallet.protectedMinor;
   const ceiling = v ? v.ceilingMinor : wallet.dailyCeilingMinor;
@@ -152,7 +153,10 @@ export default function WalletPage() {
               key={p._id}
               leading={<IconTile icon={p.kind === "person" ? User : Store} tone={p.trusted ? "sky" : "amber"} />}
               title={p.name}
-              sub={<span className="num">{p.address ? shortAddress(p.address) : p.handle}{p.onchain ? " · in vault" : ""}</span>}
+              sub={<span className="num">{p.address ? shortAddress(p.address) : p.handle}{p.onchain ? " · in vault" : ""}
+                  {p.dailyCapMinor ? ` · agents ${formatMoney(p.dailyCapMinor, "USDC")}/day` : ""}
+                </span>
+              }
               trailing={
                 p.trusted ? (
                   <ShieldCheck className="size-[18px] text-green" aria-label="Trusted" />
@@ -165,6 +169,7 @@ export default function WalletPage() {
             />
           ))}
         </Divided>
+        {chain && <ContactLimitForm chain={chain} payees={payees} />}
       </Card>
 
       {walletTasks.length > 0 && (
