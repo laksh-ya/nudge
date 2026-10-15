@@ -9,7 +9,7 @@ import { isSandbox, requireViewer, viewer } from "./lib/auth";
 import { newApprovalToken } from "./lib/seed";
 import { addKeyTask, contactCapTask, setupTask } from "./lib/actions";
 import { laneOf, lanePool, relayer } from "./lib/relayer";
-import { hit } from "./lib/limits";
+import { hit, tryHit } from "./lib/limits";
 import { spendDeploy } from "./lib/budget";
 import { chainReady } from "./chain";
 
@@ -223,8 +223,9 @@ export const confirmEnrol = mutation({
     const w = await walletOf(ctx, user._id);
     const c = w?.candidate;
     if (!w || !c || (w.enrolExpiresAt ?? 0) < Date.now()) throw new Error("No passkey is waiting. Start again.");
-    await hit(ctx, `enrol-confirm:${w._id}`, 5, 15 * 60_000);
-    if (code.replace(/\s/g, "") !== c.code) throw new Error("That code doesn't match. Check the phone that made the passkey.");
+    // Wrong codes are returned, not thrown: a throw would roll back the attempt counter with it.
+    if (!(await tryHit(ctx, `enrol-confirm:${w._id}`, 5, 15 * 60_000))) return { approvalToken: null, error: "Too many wrong codes. Wait 15 minutes, or start again." };
+    if (code.replace(/\s/g, "") !== c.code) return { approvalToken: null, error: "That code doesn't match. Check the phone that made the passkey." };
     const keyId = keyIdOf(c.x as Hex, c.y as Hex);
     const entry = { keyId, x: c.x, y: c.y, credentialId: c.credentialId, rpId: c.rpId, label: c.device || "Passkey", addedAt: Date.now() };
 
