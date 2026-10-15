@@ -67,6 +67,12 @@ export default function Onboarding() {
   const complete = useMutation(api.onboarding.complete);
   const [local, setLocal] = useState<StepId | null>(null);
 
+  // Settings links straight to one step, e.g. /onboarding?step=chat for Telegram.
+  useEffect(() => {
+    const want = new URLSearchParams(window.location.search).get("step");
+    if (want && STEPS.some((s) => s.id === want)) setLocal(want as StepId);
+  }, []);
+
   useEffect(() => {
     if (isAuthenticated) void ensure();
   }, [isAuthenticated, ensure]);

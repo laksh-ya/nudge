@@ -16,7 +16,7 @@ Entry for FinTechathon 2026, Topic F (Agent Wallet). Product spec: `reports/Full
 | Bank feeds | Sandbox data per country; statement import (CSV, Excel, PDF, receipts) is real |
 | Family transfers and quotes | Simulated |
 | UPI | Hands the payment to your UPI app; no bank settlement confirmation |
-| Telegram | Adapter built (one-use linking codes, re-link confirmation, update de-duplication); no bot linked in the demo |
+| Telegram | Live as [@Agent_eallet_bot](https://t.me/Agent_eallet_bot): link from Settings → Telegram (one-use 10-minute code), re-linking needs the owner's yes, each update handled once; approvals arrive as a link that opens in the phone's browser |
 | WhatsApp | Not built |
 
 "Protected" means protected from agents: an owner's own Withdraw (delayed) can go below it; an owner-approved payment cannot.

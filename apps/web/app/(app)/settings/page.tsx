@@ -109,7 +109,7 @@ export default function SettingsPage() {
             trailing={<Chip tone={passkeys ? (passkeys > 1 ? "green" : "amber") : "neutral"}>{passkeys ? (passkeys > 1 ? `${passkeys} set up` : "No backup") : "Not set up"}</Chip>}
           />
           <Row
-            href="/onboarding"
+            href="/onboarding?step=chat"
             leading={<IconTile icon={Send} tone="page" />}
             title="Telegram"
             sub={state.chat?.code ? `Code ${state.chat.code}` : "Chat with your assistant"}
