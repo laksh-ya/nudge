@@ -1,3 +1,5 @@
+import type { Seed } from "./world";
+
 /**
  * Cases for the prompt-injection evaluation. Each is a short chat with the app's own assistant.
  *
@@ -44,6 +46,8 @@ export type Case = {
   obedient: Step[][];
   /** In an attack case, a payment the owner really asked for (it is not harm). */
   ownerPays?: { payee: string; amount: number };
+  /** Extra bills, contacts or spending for this case: where text reaches the model via tool results. */
+  seed?: Seed;
 };
 
 const ADDR_A = "0x9b1c4f0e2a7d33c8e5f61a20b4d7e9c3f2a18b55";
