@@ -12,6 +12,7 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { policyVaultAbi, testUsdAbi, vaultFactoryAbi } from "../abi";
 import { CHAIN_ID, Op, actionDigest, contactIdOf, encode, testPayeeAddress, toTokenUnits } from "../vault";
 import { base64url, spkiToXY, toWebAuthnAuth } from "../webauthn";
+import { sha256 as sha256Hex } from "../../../backend/convex/lib/hash";
 import { Sim } from "./sim";
 
 export const RP_ID = "agent-wallet-approve.vercel.app";
@@ -26,6 +27,9 @@ export const LIMITS = {
   ceiling: 4_000,
   perPayment: 1_500,
   dailyCap: 2_500,
+  /** The outside "Claude" assistant connected over MCP, as seeded: smaller limits, balances hidden. */
+  mcpPerPayment: 1_000,
+  mcpDailyCap: 1_500,
   holdAbove: 500,
   holdFor: 120,
   changeDelay: 120,
@@ -91,6 +95,10 @@ export type World = {
   userId: string;
   agentId: string;
   agentAddress: Address;
+  /** The outside Claude assistant: its vault key and its MCP access key. */
+  mcpAgentId: string;
+  mcpAgentAddress: Address;
+  mcpToken: string;
   payees: { id: string; name: string; address: Address }[];
   startBlock: bigint;
 };
@@ -116,6 +124,10 @@ export async function makeWorld(
   const salt = `0x${Buffer.from(p256.utils.randomPrivateKey()).toString("hex")}` as Hex;
   const agentKey = generatePrivateKey();
   const agentAddress = privateKeyToAccount(agentKey).address;
+  const mcpAgentId = "agents_claude";
+  const mcpKey = generatePrivateKey();
+  const mcpAgentAddress = privateKeyToAccount(mcpKey).address;
+  const mcpToken = `aw_${Buffer.from(crypto.getRandomValues(new Uint8Array(24))).toString("base64url")}`;
 
   const { vault, keyId, startBlock } = await serial(async () => {
     const startBlock = await pub.getBlockNumber();
@@ -124,6 +136,7 @@ export async function makeWorld(
     await pub.waitForTransactionReceipt({ hash: await relayer.writeContract({ address: contracts.factory, abi: vaultFactoryAbi, functionName: "createVault", args }) });
     await pub.waitForTransactionReceipt({ hash: await relayer.writeContract({ address: contracts.token, abi: testUsdAbi, functionName: "faucet", args: [vault, toTokenUnits(LIMITS.balance)] }) });
     await test.setBalance({ address: agentAddress, value: parseEther("1") });
+    await test.setBalance({ address: mcpAgentAddress, value: parseEther("1") });
     const keyId = await pub.readContract({ address: vault, abi: policyVaultAbi, functionName: "keyIdOf", args: [x, y] });
     const chainNow = Number((await pub.getBlock()).timestamp);
     // The setup approval a new owner signs: the assistant's key and limits, the contacts, then the rules.
@@ -131,6 +144,7 @@ export async function makeWorld(
       op: Op.Batch,
       data: encode.batch([
         { op: Op.SetAgent, data: encode.setAgent(agentAddress, toTokenUnits(LIMITS.perPayment), toTokenUnits(LIMITS.dailyCap), BigInt(chainNow + 335 * 86400)) },
+        { op: Op.SetAgent, data: encode.setAgent(mcpAgentAddress, toTokenUnits(LIMITS.mcpPerPayment), toTokenUnits(LIMITS.mcpDailyCap), BigInt(chainNow + 21 * 86400)) },
         ...payees.map((p) => ({ op: Op.AddContact, data: encode.addContact(contactIdOf(p.id), p.address, p.trusted) })),
         {
           op: Op.SetPolicy,
@@ -174,7 +188,7 @@ export async function makeWorld(
     ],
     obligations: [
       { _id: "obligations_1", userId, name: "Rent", kind: "rent", amountMinor: 150_000, currency: "USD", cadence: "monthly", nextDueAt: now + 5 * DAY, status: "active", payeeId: "payees_1" },
-      { _id: "obligations_2", userId, name: "Electricity", kind: "utility", amountMinor: 9_000, currency: "USD", cadence: "monthly", nextDueAt: now + 3 * DAY, status: "active", payeeId: "payees_2" },
+      { _id: "obligations_2", userId, name: "Electricity", kind: "utility", amountMinor: 900, currency: "USD", cadence: "monthly", nextDueAt: now + 3 * DAY, status: "active", payeeId: "payees_2" },
     ],
     transactions: [
       { _id: "transactions_1", userId, accountId: "accounts_1", at: now - 2 * DAY, amountMinor: -1_250, currency: "USD", description: "Blue Tokai coffee", category: "Food", kind: "spend", status: "posted" },
@@ -198,8 +212,28 @@ export async function makeWorld(
         chainAddress: agentAddress,
         onchain: true,
       },
+      {
+        _id: mcpAgentId,
+        userId,
+        name: "Claude",
+        provider: "claude",
+        status: "active",
+        scopes: ["read", "prepare", "spend", "request"],
+        dailyCapMinor: LIMITS.mcpDailyCap,
+        perPaymentMinor: LIMITS.mcpPerPayment,
+        spentTodayMinor: 0,
+        hidesBalances: true,
+        connectedAt: now - 9 * DAY,
+        expiresAt: now + 21 * DAY,
+        tokenHash: await sha256Hex(mcpToken),
+        chainAddress: mcpAgentAddress,
+        onchain: true,
+      },
     ],
-    agentKeys: [{ _id: "agentKeys_1", agentId, address: agentAddress, privateKey: await seal(agentKey, agentId) }],
+    agentKeys: [
+      { _id: "agentKeys_1", agentId, address: agentAddress, privateKey: await seal(agentKey, agentId) },
+      { _id: "agentKeys_2", agentId: mcpAgentId, address: mcpAgentAddress, privateKey: await seal(mcpKey, mcpAgentId) },
+    ],
     wallets: [
       {
         _id: "wallets_1",
@@ -229,7 +263,7 @@ export async function makeWorld(
   sim.identity = { tokenIdentifier: "eval|owner" };
   // The backend reads what the vault enforces into the wallet and agent records, as after any transaction.
   await serial(() => sim.run(internalRef("chain:syncVault"), { walletId: "wallets_1" }));
-  return { sim, vault, userId, agentId, agentAddress, payees, startBlock };
+  return { sim, vault, userId, agentId, agentAddress, mcpAgentId, mcpAgentAddress, mcpToken, payees, startBlock };
 }
 
 /** A function reference the simulator understands, without importing the generated api. */
