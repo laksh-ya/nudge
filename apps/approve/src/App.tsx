@@ -14,13 +14,23 @@ function route(): { kind: "approve" | "enrol"; token: string } | null {
   return { kind: m[1] === "a" ? "approve" : "enrol", token: m[2]! };
 }
 
+/** Server time, so a phone whose clock is off doesn't show a live request as expired. */
 function useNow() {
   const [now, setNow] = useState(() => Date.now());
+  const [skew, setSkew] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
+    const sent = Date.now();
+    fetch(window.location.origin, { method: "HEAD", cache: "no-store" })
+      .then((r) => {
+        const server = Date.parse(r.headers.get("date") ?? "");
+        const local = (sent + Date.now()) / 2;
+        if (Number.isFinite(server) && Math.abs(server - local) > 5000) setSkew(server - local);
+      })
+      .catch(() => {});
     return () => clearInterval(id);
   }, []);
-  return now;
+  return now + skew;
 }
 
 function errorText(e: unknown) {
