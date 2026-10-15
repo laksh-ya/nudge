@@ -65,6 +65,8 @@ function Accounts() {
           <div className="figure mt-0.5 text-hero">{formatMoney(o.netWorth, o.currency)}</div>
           <div className="mt-1 text-label text-white/60">
             {accounts.length} {accounts.length === 1 ? "account" : "accounts"} · converted at {o.ratesDate} rates
+            {o.unconverted.length > 0 && <> · no rate for {o.unconverted.join(", ")}, left out</>}
+            {o.partial && <> · totals are partial</>}
           </div>
         </div>
         <div className="grid grid-cols-3 border-t border-white/10 text-label">

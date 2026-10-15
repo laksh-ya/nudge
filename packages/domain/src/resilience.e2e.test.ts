@@ -44,7 +44,7 @@ run("Base Sepolia: races and lost receipts", () => {
       [1, 2, 3, 4].map((i) => mcp<{ outcome: string; taskId: string }>(key, "propose_payment", { contactId: shop, amount: 6, reason: `Race ${i}`, requestId: `race-${i}` })),
     );
     const outcomes = results.map((r) => r.value.outcome);
-    const paid = results.filter((r) => r.value.outcome === "paid");
+    const paid = results.filter((r) => r.value.outcome === "submitted");
     expect(paid.length).toBe(2);
     expect(outcomes.filter((o) => o === "needs_approval").length).toBe(2);
     for (const p of paid) {
@@ -63,7 +63,7 @@ run("Base Sepolia: races and lost receipts", () => {
     backend(["env", "set", "CHAIN_RECEIPT_TIMEOUT_MS", "1"]);
     try {
       const first = (await mcp<{ outcome: string; taskId: string }>(key, "propose_payment", { contactId: shop, amount: 2, reason: "Lost receipt", requestId: "lost-1" })).value;
-      expect(first.outcome).toBe("paid");
+      expect(first.outcome).toBe("submitted");
       const unknown = await taskState(key, first.taskId, ["unknown", "confirmed", "failed"]);
       expect(unknown.state).toBe("unknown");
       const retry = (await mcp<{ outcome: string; taskId: string }>(key, "propose_payment", { contactId: shop, amount: 2, reason: "Lost receipt", requestId: "lost-1" })).value;

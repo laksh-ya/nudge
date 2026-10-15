@@ -102,6 +102,7 @@ export const addOne = mutation({
       account,
       [{ at: args.at, amountMinor: args.amountMinor, description: merchant, category: args.category, note: args.note?.slice(0, 200), receiptId: args.receiptId }],
       importId,
+      { manual: true },
     );
     if (result.rows === 0) throw new Error("Check the date and amount");
     await ctx.db.patch(importId, result);

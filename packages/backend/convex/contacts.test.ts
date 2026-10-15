@@ -49,14 +49,14 @@ describe("a contact's daily limit for all agents", () => {
     const f = await fixture();
     await f.t.run((ctx) => ctx.db.patch(f.payee, { dailyCapMinor: 1000 }));
     const first = await f.t.mutation(internal.gateway.proposePayment, { agentId: f.claude, contactId: f.payee, amount: 6, reason: "beans" });
-    expect(first.outcome).toBe("paid");
+    expect(first.outcome).toBe("submitted");
     const second = await f.t.mutation(internal.gateway.proposePayment, { agentId: f.chatgpt, contactId: f.payee, amount: 6, reason: "more beans" });
     expect(second.outcome).toBe("needs_approval");
     expect((second as { reason: string }).reason).toContain("daily limit for all agents");
     // A day later the window has rolled.
     vi.setSystemTime(NOW + DAY + 1000);
     const later = await f.t.mutation(internal.gateway.proposePayment, { agentId: f.chatgpt, contactId: f.payee, amount: 6, reason: "tomorrow" });
-    expect(later.outcome).toBe("paid");
+    expect(later.outcome).toBe("submitted");
   });
 
   it("is only offered on a v3 vault", async () => {

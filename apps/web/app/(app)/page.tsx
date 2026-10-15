@@ -127,7 +127,11 @@ export default function Home() {
                     </dd>
                   </div>
                 ))}
-                <div className="pt-1 text-label text-white/50">Account data from {ago(o.oldestSync)}</div>
+                <div className="pt-1 text-label text-white/50">
+                  Account data from {ago(o.oldestSync)}
+                  {o.unconverted.length > 0 && <> · no rate for {o.unconverted.join(", ")}, left out</>}
+                  {o.partial && <> · more data than one read covers, totals are partial</>}
+                </div>
               </dl>
             </div>
             </>

@@ -16,6 +16,19 @@ export type IncomingRow = {
   receiptId?: Id<"_storage">;
 };
 
+/** Words that mark money moving between someone's own accounts rather than spending or income. */
+const TRANSFERISH = /\b(transfer|trf|xfer|neft|imps|rtgs|ach|wire|self|own account|sweep|top ?up|add(?:ed)? money|withdraw(?:al)?|deposit|card (?:re)?payment|payment received|repayment)\b|转账|充值|提现|还款/i;
+
+/** The same purchase seen by two sources usually shares a word of its merchant's name. */
+function sameMerchant(a: string, b: string) {
+  const ka = merchantKey(a);
+  const kb = merchantKey(b);
+  if (!ka || !kb) return false;
+  if (ka === kb || ka.includes(kb) || kb.includes(ka)) return true;
+  const words = new Set(ka.split(" ").filter((w) => w.length >= 4));
+  return kb.split(" ").some((w) => words.has(w));
+}
+
 export type IngestResult = { rows: number; added: number; duplicates: number; transfers: number; fromAt?: number; toAt?: number };
 
 function validRow(r: IncomingRow) {
@@ -42,6 +55,8 @@ export async function ingest(
   account: Doc<"accounts">,
   incoming: IncomingRow[],
   importId: Id<"imports"> | undefined,
+  /** Typed in or scanned: each entry is a new purchase, never a re-import of an earlier one. */
+  opts: { manual?: boolean } = {},
 ): Promise<IngestResult> {
   const rows = incoming.filter(validRow).sort((a, b) => a.at - b.at);
   if (rows.length === 0) return { rows: 0, added: 0, duplicates: 0, transfers: 0 };
@@ -52,7 +67,7 @@ export async function ingest(
     .query("transactions")
     .withIndex("by_user_at", (q) => q.eq("userId", user._id).gte("at", fromAt - 3 * DAY).lte("at", toAt + 3 * DAY))
     .take(8000);
-  const fingerprints = new Set(window.map((t) => t.fingerprint).filter(Boolean));
+  const byFingerprint = new Map(window.filter((t) => t.fingerprint).map((t) => [t.fingerprint!, t]));
   const accounts = await ctx.db.query("accounts").withIndex("by_user", (q) => q.eq("userId", user._id)).take(200);
   const accountKind = new Map(accounts.map((a) => [a._id, a.kind]));
   const rules = new Map(
@@ -72,8 +87,11 @@ export async function ingest(
     const base = `${account._id}|${day}|${r.amountMinor}|${key}`;
     const n = (seen.get(base) ?? 0) + 1;
     seen.set(base, n);
-    const fingerprint = `${base}|${n}`;
-    if (fingerprints.has(fingerprint)) {
+    const fingerprint = opts.manual ? `${base}|manual:${importId}:${n}` : `${base}|${n}`;
+    const known = byFingerprint.get(fingerprint);
+    if (known) {
+      // The same row again. If it has since posted, the pending copy we hold becomes posted.
+      if (known.status === "pending" && !r.pending) await ctx.db.patch(known._id, { status: "posted" });
       duplicates++;
       continue;
     }
@@ -85,6 +103,7 @@ export async function ingest(
         t.currency === account.currency &&
         t.amountMinor === r.amountMinor &&
         Math.abs(t.at - r.at) <= 2 * DAY &&
+        sameMerchant(t.raw ?? t.merchant, r.description) &&
         // Two banks or cards don't report each other's spends. The same spend shows up twice only
         // when a payment app or a receipt is one of the sources.
         (accountKind.get(t.accountId) === "payment_app" ||
@@ -112,7 +131,7 @@ export async function ingest(
       categoryLocked: r.category !== undefined ? true : undefined,
       raw: r.description.slice(0, 160),
     });
-    fingerprints.add(fingerprint);
+    byFingerprint.set(fingerprint, (await ctx.db.get(id))!);
     if (twin) duplicates++;
     else added++;
     const doc = (await ctx.db.get(id))!;
@@ -120,7 +139,7 @@ export async function ingest(
     window.push(doc);
   }
 
-  const transfers = await matchTransfers(ctx, window, fresh);
+  const transfers = await matchTransfers(ctx, window, fresh, accounts);
 
   // Balance: trust the statement's running balance when it has one.
   const withBalance = rows.filter((r) => r.balanceMinor !== undefined);
@@ -139,7 +158,16 @@ export async function ingest(
   return { rows: rows.length, added, duplicates, transfers, fromAt, toAt };
 }
 
-async function matchTransfers(ctx: MutationCtx, window: Doc<"transactions">[], fresh: Doc<"transactions">[]) {
+/**
+ * Opposite amounts in two own accounts pair up as a transfer only when one side reads like one:
+ * transfer words, or naming the other account. A $3 dinner and a $3 gift are not a transfer.
+ */
+async function matchTransfers(ctx: MutationCtx, window: Doc<"transactions">[], fresh: Doc<"transactions">[], accounts: Doc<"accounts">[]) {
+  const names = new Map(accounts.map((a) => [a._id, [a.name, a.institution].filter((x) => x && x.length >= 3).map((x) => x.toLowerCase())]));
+  const looksLikeTransfer = (t: Doc<"transactions">, other: Doc<"transactions">) => {
+    const text = `${t.raw ?? ""} ${t.merchant}`;
+    return t.category === "Transfer" || TRANSFERISH.test(text) || (names.get(other.accountId) ?? []).some((n) => text.toLowerCase().includes(n));
+  };
   let pairs = 0;
   const used = new Set<string>();
   for (const t of fresh) {
@@ -153,7 +181,8 @@ async function matchTransfers(ctx: MutationCtx, window: Doc<"transactions">[], f
         o.accountId !== t.accountId &&
         o.currency === t.currency &&
         o.amountMinor === -t.amountMinor &&
-        Math.abs(o.at - t.at) <= 3 * DAY,
+        Math.abs(o.at - t.at) <= 3 * DAY &&
+        (looksLikeTransfer(t, o) || looksLikeTransfer(o, t)),
     );
     if (!other) continue;
     const pairId = `${t._id}:${other._id}`;
