@@ -11,7 +11,7 @@ import { policyVaultAbi, testUsdAbi, vaultFactoryAbi } from "./abi";
 import { CHAIN_ID, Op, actionDigest, contactIdOf, encode, paymentIdOf, toTokenUnits } from "./vault";
 import { base64url, spkiToXY, toWebAuthnAuth } from "./webauthn";
 
-const url = process.env.ANVIL_URL;
+const url = process.env.ANVIL_URL ?? "";
 const run = url ? describe : describe.skip;
 const RP_ID = "agent-wallet-approve.vercel.app";
 
@@ -27,10 +27,10 @@ function browserAssertion(priv: Uint8Array, challenge: Hex, flags = 0x05) {
 }
 
 run("passkey approval on a local chain", () => {
-  const chain = { id: CHAIN_ID, name: "local", nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [url!] } } } as const;
+  const chain = { id: CHAIN_ID, name: "local", nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [url] } } } as const;
   const account = privateKeyToAccount("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80");
-  const pub = createPublicClient({ chain, transport: http(url) });
-  const wallet = createWalletClient({ chain, transport: http(url), account });
+  const pub = createPublicClient({ chain, transport: http(url || "http://127.0.0.1:8546") });
+  const wallet = createWalletClient({ chain, transport: http(url || "http://127.0.0.1:8546"), account });
 
   it("creates a vault for a passkey and pays with a browser-shaped assertion", async () => {
     const token = process.env.TOKEN as Address;

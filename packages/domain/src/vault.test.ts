@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Op, actionDigest, contactIdOf, describe as describeOp, encode, fromTokenUnits, toTokenUnits } from "./vault";
+import { Op, actionDigest, contactIdOf, describe as describeOp, encode, fromTokenUnits, keyIdOf, toTokenUnits } from "./vault";
 
 describe("vault encoding", () => {
   it("matches the contract's digest byte for byte", () => {
@@ -20,5 +20,10 @@ describe("vault encoding", () => {
     const d = describeOp(Op.Pay, data, { "0x1111111111111111111111111111111111111111": "Blue Tokai" });
     expect(d.title).toBe("Pay $12.50");
     expect(d.lines.find((l) => l.label === "To")?.value).toBe("Blue Tokai");
+  });
+
+  it("derives passkey ids the way the contract does", () => {
+    // cast keccak $(cast abi-encode "f(bytes32,bytes32)" 0x11..11 0x22..22)
+    expect(keyIdOf(`0x${"11".repeat(32)}`, `0x${"22".repeat(32)}`)).toBe("0x3e92e0db88d6afea9edc4eedf62fffa4d92bcdfc310dccbe943747fe8302e871");
   });
 });

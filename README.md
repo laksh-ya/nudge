@@ -57,7 +57,7 @@ packages/backend  Convex: ledger, imports, sandbox feeds, crypto reads, rates, M
 packages/domain   money, currencies, directory of banks/apps/chains, statement parsing (tested)
 ```
 
-Still to add: `apps/executor` (agent keys only), `apps/watcher`, `contracts/` (Foundry), `evals/`.
+Still to add: `apps/executor` (agent keys only), `apps/watcher`, `evals/`.
 
 ## Connect an outside assistant (MCP)
 
@@ -68,6 +68,40 @@ claude mcp add --transport http agent-wallet https://ceaseless-raven-960.convex.
 ```
 
 Tools: `get_overview`, `can_afford`, `list_bills`, `spending_this_month`, `list_contacts`, `propose_payment`, `get_task_status`, `cancel_task`. `convex/gateway.ts` decides pay, ask or refuse in code (per-payment and daily limits, wallet ceiling, protected amount, new contacts, freeze).
+
+## On-chain (Base Sepolia)
+
+| Contract | Address |
+|---|---|
+| VaultFactory | [`0x223c60BAa1C2EfCD0F95B0D73e51D6De9460Baa9`](https://sepolia.basescan.org/address/0x223c60BAa1C2EfCD0F95B0D73e51D6De9460Baa9) |
+| TestUSD (tUSD, 6 decimals) | [`0xB0ee01235A8e7903519B029c1530332f5847D932`](https://sepolia.basescan.org/address/0xB0ee01235A8e7903519B029c1530332f5847D932) |
+| Example vault | [`0xC6299CFc10366cBD576AFFc13a6f0440413d3510`](https://sepolia.basescan.org/address/0xC6299CFc10366cBD576AFFc13a6f0440413d3510) |
+
+One run of `packages/domain/src/onchain.e2e.test.ts` through the real backend (passkey assertions from a software P-256 key shaped like a browser's):
+
+| Step | Who signs | Transaction |
+|---|---|---|
+| Vault deployed for the passkey | relayer | [`0xd2056b73…`](https://sepolia.basescan.org/tx/0xd2056b7302cdbd68a40d40be9b47a72887a9f5177b20a07016d35c1221f3ff3e) |
+| Setup: 2 agents and 6 contacts in one approval | passkey | [`0x089acf28…`](https://sepolia.basescan.org/tx/0x089acf28e2a84fa0dfc0497cdffa6cc4c4c10b33a887532575b094eb2091db25) |
+| Claude pays Blue Tokai $8 within its limits | Claude's agent key | [`0xde9860d4…`](https://sepolia.basescan.org/tx/0xde9860d4c13782b76ae2532001dd75447025eb131b2e2e25c28c4f3f338a326b) |
+| Claude asks for $18, over its limit; owner approves | passkey | [`0xb7272497…`](https://sepolia.basescan.org/tx/0xb7272497d2e05893a692decdfdbafc13cb3f165f2b13536f44ecce98962e60f1) |
+| Stolen agent key tries $50: refused, code 2003 | agent key, bypassing our server | [`0xe404d5f3…`](https://sepolia.basescan.org/tx/0xe404d5f31ed429ef92a2bba13e5fc998d787631f96be9024fa3e58b9a1042cb4) |
+| Stolen key replays the $8 payment: refused, code 2007 | agent key | [`0xb2c2e268…`](https://sepolia.basescan.org/tx/0xb2c2e2688c9d51e2c806f7db8698de39da993c96eddea5ddab7bbc47b90ec8f5) |
+| Stolen key pays an unknown address: refused, code 2010 | agent key | [`0xeaa83ddf…`](https://sepolia.basescan.org/tx/0xeaa83ddf0b52937c27ce0331bf23cbfdff1526aa3e0ad9d75ad715b73dc956df) |
+| Guardian freezes Claude in the vault | relayer (can only tighten) | [`0x676a0fc2…`](https://sepolia.basescan.org/tx/0x676a0fc216a827a04f2102aae61f8aec54ea124883974c847ed23bb11e5b7a4e) |
+| Owner unfreezes Claude | passkey | [`0x8e27c5a2…`](https://sepolia.basescan.org/tx/0x8e27c5a2fb9e57142c21d09ead9fd25b40acbfb730c02150ec94385b2f91e12a) |
+
+Deploy your own: put `RELAYER_PRIVATE_KEY` and `RELAYER_ADDRESS` in `contracts/.env`, fund the address with Base Sepolia ETH (0.0001 covers the contracts and a few vaults), then run `contracts/deploy.sh`. It deploys both contracts and points the Convex deployments at them.
+
+Tests:
+
+```bash
+cd contracts && forge test                         # 30 tests, fuzz and invariants
+pnpm --filter @agent-wallet/domain exec vitest run # encoding, digest, statements
+E2E_CONVEX_URL=https://<dev>.convex.cloud pnpm --filter @agent-wallet/domain exec vitest run onchain.e2e
+```
+
+The last one resets the demo account on that deployment and spends about 0.00003 ETH of relayer gas; it reuses its vault on later runs.
 
 ## Turn on Telegram
 
@@ -97,6 +131,6 @@ Reset the demo account: `npx convex run demo:reset` (add `--prod` for production
 
 - Product name (kept in `apps/web/lib/config.ts`).
 - Clerk app is a temporary development instance; claim it into a Clerk account before real users.
-- Demo token: our mintable TEST tokens, Circle test USDC, or both.
+- Demo token: our mintable tUSD now; Circle test USDC later as well.
 - Hosting accounts (Vercel, Neon, container host) versus local Docker first.
 - Whether organisers accept testnet hashes.

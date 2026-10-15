@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { EXPLORER, REFUSAL, Op, formatMoney, testPayeeAddress } from "@agent-wallet/domain";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
+import type { Doc } from "./_generated/dataModel";
 import { requireViewer, viewer } from "./lib/auth";
 import { newApprovalToken } from "./lib/seed";
 import { setupTask } from "./lib/actions";
@@ -215,6 +216,16 @@ export const onOwnerResult = internalMutation({
     await ctx.db.patch(taskId, { state: ok ? "confirmed" : "failed", txHash: txHash ?? t.txHash, reason: ok ? t.reason : `Not sent: ${note ?? "rejected"}`, updatedAt: Date.now() });
     if (!ok) {
       await ctx.db.insert("activity", { userId: t.userId, kind: "payment", title: `${t.title} failed`, detail: note, tone: "bad" });
+      // Nothing changed in the vault, so offer the same setup again with a fresh nonce.
+      if (t.effects && (t.effects.agents.length || t.effects.payees.length)) {
+        const user = (await ctx.db.get(t.userId))!;
+        const agents = (await Promise.all(t.effects.agents.map((id) => ctx.db.get(id)))).filter((a) => a && a.chainAddress && !a.onchain);
+        const payees = (await Promise.all(t.effects.payees.map((id) => ctx.db.get(id)))).filter((p) => p && !p.onchain);
+        const again = await setupTask(ctx, user, agents as Doc<"agents">[], payees as Doc<"payees">[], t.title);
+        if (again) {
+          await ctx.db.insert("messages", { userId: t.userId, role: "assistant", text: `${t.title} didn't go through, and nothing changed. Approve it again when you're ready.`, channel: "app", taskId: again.taskId });
+        }
+      }
       return;
     }
     if (t.effects) {

@@ -57,6 +57,11 @@ export function fromTokenUnits(units: bigint): number {
   return Number(units / MINOR_TO_TOKEN);
 }
 
+/** Same as PolicyVault.keyIdOf: the id the vault stores a passkey under. */
+export function keyIdOf(x: Hex, y: Hex): Hex {
+  return keccak256(encodeAbiParameters([{ type: "bytes32" }, { type: "bytes32" }], [x, y]));
+}
+
 export function contactIdOf(payeeId: string): Hex {
   return keccak256(toBytes(`contact:${payeeId}`));
 }
