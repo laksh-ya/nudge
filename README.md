@@ -89,18 +89,26 @@ Tools: `get_overview`, `can_afford`, `list_bills`, `spending_this_month`, `list_
 | VaultFactory (v1, retired) | [`0x223c60BAa1C2EfCD0F95B0D73e51D6De9460Baa9`](https://sepolia.basescan.org/address/0x223c60BAa1C2EfCD0F95B0D73e51D6De9460Baa9) |
 | TestUSD (tUSD, 6 decimals) | [`0xB0ee01235A8e7903519B029c1530332f5847D932`](https://sepolia.basescan.org/address/0xB0ee01235A8e7903519B029c1530332f5847D932) |
 | Example v1 vault | [`0xC6299CFc10366cBD576AFFc13a6f0440413d3510`](https://sepolia.basescan.org/address/0xC6299CFc10366cBD576AFFc13a6f0440413d3510) |
-| Example v2 vault | [`0x2846E261a88D9ce63eF3494eD2d10ab921b506Ff`](https://sepolia.basescan.org/address/0x2846E261a88D9ce63eF3494eD2d10ab921b506Ff) |
+| Example v2 vault | [`0xa395739975fd3F66b83cbcF6Ad535029e5A94E73`](https://sepolia.basescan.org/address/0xa395739975fd3f66b83cbcf6ad535029e5a94e73) |
 
-Contract v2, through the real backend (software P-256 key shaped like a browser's):
+Contract v2, one full run of `packages/domain/src/onchain.e2e.test.ts` (7 of 7 passed) through the real backend, with a software P-256 key shaped like a browser's. Also covered without a transaction: a registration answering another challenge, a reused setup link and a wrong confirmation code are refused; a retried `requestId` returns the first payment; a held payment is cancelled; after a chat "freeze" the old key reverts with `AgentFrozen`.
 
 | Step | Who signs | Transaction |
 |---|---|---|
-| Vault deployed after the owner typed the phone's code | relayer | [`0x5ea3db5d…`](https://sepolia.basescan.org/tx/0x5ea3db5df61131850ac461a6df0c6d11fa3be4129663c1d8c79c96098d24d857) |
-| Setup: agents, contacts and rules (2-min loosening delay, holds above $5) | passkey | [`0x56dd9dc7…`](https://sepolia.basescan.org/tx/0x56dd9dc70b6778805dac2cbd2026a62e95c150f8ddb9af40ba53cd594615e58d) |
-| Owner approves $12, keeping the protected amount | passkey | [`0xe4d48c43…`](https://sepolia.basescan.org/tx/0xe4d48c439af1e190da7fc5795f40f3f9e30503da021dc3574c6807657a76c193) |
-| Owner signs an unfreeze: queued, not applied | passkey | [`0xb294948d…`](https://sepolia.basescan.org/tx/0xb294948d8772c99b06ef2cccdcae88fa06b7661073d97f2dd33d943910f41e41) |
-| Unfreeze applied after the 2-minute delay | relayer (`finalize`) | [`0x0fea72e1…`](https://sepolia.basescan.org/tx/0x0fea72e1b5d49132d44820f0e917e28d7b3d5df95a88cfad7c0d7dcf4c457866) |
-| Disconnected agent's key removed from the vault | passkey | [`0xf2b60e21…`](https://sepolia.basescan.org/tx/0xf2b60e21ca1a36bcec1a2ddd308a207127b57e9a87fd9cfc5414d3cfe6f5c823) |
+| Vault deployed after the owner typed the phone's code | relayer | [`0x3e3c79c8…`](https://sepolia.basescan.org/tx/0x3e3c79c8dccd4bfb27d16070d19ec2ef2ad5888fb30539f8a8d6ecdd251e975c) |
+| Setup: agents, contacts and rules (2-min loosening delay, holds above $5) | passkey | [`0x80c2b3f8…`](https://sepolia.basescan.org/tx/0x80c2b3f851f0bd97c6351e71c001c999cd668daabb931767a87305e27f318765) |
+| Claude pays $3 over MCP, at once | Claude's agent key | [`0x6e4806e4…`](https://sepolia.basescan.org/tx/0x6e4806e4564247d56b62c66ba8f66058d68283ab5a8d6340583a43a1caca08ca) |
+| Claude pays $6: above $5, so the vault holds it | Claude's agent key | [`0xb545a44f…`](https://sepolia.basescan.org/tx/0xb545a44fbd1961ecbec312c7d53e03bc35d321a7a0130d625d11a5c8a622d6ea) |
+| Held $6 released after the 2-minute window | relayer (`release`) | [`0x3c683069…`](https://sepolia.basescan.org/tx/0x3c683069bf8fd44283e165b2663e0e819ec6c87563ca4f8262fae92a751faceb) |
+| Owner approves $12, keeping the protected amount | passkey | [`0x85e01b58…`](https://sepolia.basescan.org/tx/0x85e01b5803549bc26f304aa5617393360b512ee3501555d3e2f4faed2e871676) |
+| Stolen key tries $50: refused, code 2003 | agent key, bypassing our server | [`0x3981ea8e…`](https://sepolia.basescan.org/tx/0x3981ea8efdec559f3b322b737353f82a52ff908df87621f7964263ec05bfc176) |
+| Stolen key reuses a paid payment id: refused, code 2007 | agent key | [`0x8022158e…`](https://sepolia.basescan.org/tx/0x8022158ee900c5df2a8174162724283dc71e416555f9a2faeb95b5d7ca5a3811) |
+| Stolen key pays an unknown contact: refused, code 2010 | agent key | [`0xaf60bc92…`](https://sepolia.basescan.org/tx/0xaf60bc92578e76687ae5ab26ea1924e4e0a6c8221c69f0be036113f130e3fea1) |
+| Fourth refusal | agent key | [`0xf07a86b4…`](https://sepolia.basescan.org/tx/0xf07a86b4f0113f748cdd2c4794f1d692d7d3d79a43d5d5df384d1c1f9ec4e57e) |
+| Fifth refusal: the vault freezes that key itself | agent key | [`0x8558f8a6…`](https://sepolia.basescan.org/tx/0x8558f8a6b677bdbc6ecfde942e8b78a7804eca39b595f1373b5ca85f9286d0ae) |
+| Owner signs an unfreeze: queued, not applied | passkey | [`0xfbd828ef…`](https://sepolia.basescan.org/tx/0xfbd828ef01f27fbad3c8acbf6c04bbb54d917c0efc6169599c6717d13f70f803) |
+| Unfreeze applied after the 2-minute delay | relayer (`finalize`) | [`0x8ddbdbd8…`](https://sepolia.basescan.org/tx/0x8ddbdbd817fe4fb900c4e1e67820a85f2a97846b8bd8d8f4c9153fccfc02807c) |
+| Disconnected agent's key removed from the vault | passkey | [`0x569ff396…`](https://sepolia.basescan.org/tx/0x569ff39695b5c1a1fe62275302f584f2a67f1c7a286520d82d95657266d31979) |
 
 Contract v1, one run of the earlier end-to-end test:
 

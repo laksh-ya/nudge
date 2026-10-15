@@ -259,12 +259,13 @@ run("Base Sepolia, end to end (contract v2)", () => {
     if (process.env.E2E_FUNDER_KEY) {
       // The key holds only a little gas; give the "attacker" enough for five calls.
       const funder = createWalletClient({ chain, transport: http(), account: privateKeyToAccount(process.env.E2E_FUNDER_KEY as Hex) });
-      await pub.waitForTransactionReceipt({ hash: await funder.sendTransaction({ to: privateKeyToAccount(leaked).address, value: 3_000_000_000_000n }) });
+      await pub.waitForTransactionReceipt({ hash: await funder.sendTransaction({ to: privateKeyToAccount(leaked).address, value: 5_000_000_000_000n }) });
     }
     // The public RPC is load-balanced; wait until the node we hit sees the gas.
     await until("gas on the stolen key", async () => (await pub.getBalance({ address: privateKeyToAccount(leaked).address })) > 1_000_000_000_000n);
     const attempt = async (label: string, contact: string, cents: number, id: Hex) => {
-      const hash = await thief.writeContract({ address: vault, abi: policyVaultAbi, functionName: "agentPay", args: [contactIdOf(contact), toTokenUnits(cents), id, `0x${"00".repeat(32)}`] });
+      // A fixed gas limit: an estimate from a lagging node can miss the extra write when the fifth strike freezes the key.
+      const hash = await thief.writeContract({ address: vault, abi: policyVaultAbi, functionName: "agentPay", args: [contactIdOf(contact), toTokenUnits(cents), id, `0x${"00".repeat(32)}`], gas: 300_000n });
       await pub.waitForTransactionReceipt({ hash });
       log(label, hash);
     };
@@ -273,8 +274,10 @@ run("Base Sepolia, end to end (contract v2)", () => {
     await attempt("Stolen key: unknown contact → refused 2010", "attacker", 100, paymentIdOf("thief-2"));
     await attempt("Stolen key: refused again (4 strikes)", shopId, 5_000, paymentIdOf("thief-3"));
     await attempt("Stolen key: 5th refusal freezes it", shopId, 5_000, paymentIdOf("thief-4"));
-    const fields = (await pub.readContract({ address: vault, abi: policyVaultAbi, functionName: "agents", args: [privateKeyToAccount(leaked).address] })) as readonly unknown[];
-    expect(fields[4]).toBe(true);
+    const fields = await until("the strike-out", async () => {
+      const f = (await pub.readContract({ address: vault, abi: policyVaultAbi, functionName: "agents", args: [privateKeyToAccount(leaked).address] })) as readonly unknown[];
+      return f[4] === true ? f : null;
+    });
     expect(fields[5]).toBe(5);
     await expect(
       thief.writeContract({ address: vault, abi: policyVaultAbi, functionName: "agentPay", args: [contactIdOf(shopId), toTokenUnits(100), paymentIdOf("thief-5"), `0x${"00".repeat(32)}`] }),

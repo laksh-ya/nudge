@@ -38,9 +38,10 @@ const chain = {
   rpcUrls: { default: { http: ["https://sepolia.base.org"] } },
 } as const;
 
-// Base Sepolia gas is about 0.006 gwei, so an agent payment costs roughly 0.000001 ETH.
-const AGENT_GAS = parseEther("0.000005");
-const AGENT_GAS_FLOOR = parseEther("0.000002");
+// Base Sepolia gas is about 0.006 gwei: an agent payment costs roughly 0.000001 ETH, but the wallet
+// must hold gas limit × max fee up front (about 0.000004 for a held payment), so keep a margin.
+const AGENT_GAS = parseEther("0.00002");
+const AGENT_GAS_FLOOR = parseEther("0.00001");
 const RECEIPT_TIMEOUT = 60_000;
 const RECHECK_MS = 30_000;
 const MAX_CHECKS = 20;
