@@ -221,6 +221,15 @@ export const contacts = internalQuery({
   },
 });
 
+/**
+ * A notice on the owner's own chat, which the calling agent can't write to or bury. Fixed wording:
+ * the agent's reason is never forwarded. Does nothing when no chat is linked.
+ */
+async function notify(ctx: MutationCtx, userId: Id<"users">, text: string, approvalUrl?: string) {
+  if (!process.env.TELEGRAM_BOT_TOKEN) return;
+  await ctx.scheduler.runAfter(0, internal.telegram.send, { userId, text, approvalUrl });
+}
+
 /** Agent payments sent (or being sent) to the vault whose receipt hasn't been counted yet. */
 async function paymentsInFlight(ctx: QueryCtx, userId: Id<"users">) {
   const states = ["reserved", "submitted", "unknown"] as const;
@@ -348,6 +357,7 @@ export const proposePayment = internalMutation({
     if (hard || !agent.scopes.includes("request") && agent.scopes.includes("spend")) {
       const b = hard ?? blockers[0]!;
       await ctx.db.insert("activity", { userId: user._id, kind: "agent", title: `Refused ${agent.name}: ${b.why}`, tone: "warn" });
+      if (agent.provider !== "own") await notify(ctx, user._id, `Refused: ${agent.name} tried to pay ${payee.name} ${formatMoney(minor, "USDC")}. ${b.why}.`);
       return { outcome: "refused", code: b.code, reason: b.why };
     }
 
@@ -365,6 +375,9 @@ export const proposePayment = internalMutation({
       });
       await record(ctx, user, agent, `${agent.name} asked to pay ${payee.name} ${formatMoney(minor, "USDC")}. ${blockers[0]!.why}, so it needs your passkey.`, taskId);
       const base = process.env.APPROVE_URL ?? "https://agent-wallet-approve.vercel.app";
+      if (agent.provider !== "own") {
+        await notify(ctx, user._id, `${agent.name} asks to pay ${payee.name} ${formatMoney(minor, "USDC")}. ${blockers[0]!.why}, so it needs your passkey.`, `${base}/a/${token}`);
+      }
       return { outcome: "needs_approval", taskId, approvalUrl: `${base}/a/${token}`, reason: blockers.map((b) => b.why).join(". ") };
     }
 

@@ -569,6 +569,13 @@ export const onHeld = internalMutation({
       detail: `Leaves at ${new Date(releaseAt).toISOString().slice(11, 16)} UTC unless you cancel`,
       tone: "warn",
     });
+    if (process.env.TELEGRAM_BOT_TOKEN && agent?.provider !== "own") {
+      const minutes = Math.max(1, Math.round((releaseAt - Date.now()) / 60_000));
+      await ctx.scheduler.runAfter(0, internal.telegram.send, {
+        userId: t.userId,
+        text: `Held: ${agent?.name ?? "An agent"} is paying ${payee?.name ?? "a contact"} ${formatMoney(t.amountMinor ?? 0, "USDC")}. It leaves in about ${minutes} min unless you cancel it on the Wallet screen.`,
+      });
+    }
   },
 });
 
