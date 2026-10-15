@@ -91,7 +91,7 @@ One run of `packages/domain/src/onchain.e2e.test.ts` through the real backend (p
 | Guardian freezes Claude in the vault | relayer (can only tighten) | [`0x676a0fc2…`](https://sepolia.basescan.org/tx/0x676a0fc216a827a04f2102aae61f8aec54ea124883974c847ed23bb11e5b7a4e) |
 | Owner unfreezes Claude | passkey | [`0x8e27c5a2…`](https://sepolia.basescan.org/tx/0x8e27c5a2fb9e57142c21d09ead9fd25b40acbfb730c02150ec94385b2f91e12a) |
 
-On the live app with a real phone passkey (Android, Chrome), vault [`0xd71b81a1…`](https://sepolia.basescan.org/address/0xd71b81a157Ce1D4651D2B1CF0CCb59bea789Ae40):
+On the live app with a passkey on a real phone, vault [`0xd71b81a1…`](https://sepolia.basescan.org/address/0xd71b81a157Ce1D4651D2B1CF0CCb59bea789Ae40):
 
 | Step | Who signs | Transaction |
 |---|---|---|
