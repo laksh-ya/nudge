@@ -381,7 +381,7 @@ export default defineSchema({
     .index("by_user_state", ["userId", "state"])
     .index("by_approval_token", ["approvalToken"])
     .index("by_state_expires", ["state", "expiresAt"])
-    .index("by_agent_request", ["agentId", "requestId"])
+    .index("by_user_request", ["userId", "requestId"])
     .index("by_payee", ["payeeId"]),
 
   messages: defineTable({

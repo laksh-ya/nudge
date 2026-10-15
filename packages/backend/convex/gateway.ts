@@ -172,6 +172,10 @@ export const canAfford = internalQuery({
     const { agent, user } = await load(ctx, agentId);
     need(agent, "read");
     if (!Number.isFinite(amount) || amount <= 0 || amount > 1e9) throw new Error("Amount must be a positive number");
+    // A yes/no about any amount would let an assistant find a hidden balance by halving guesses.
+    if (agent.hidesBalances) {
+      return { hidden: true, note: "The owner keeps balances private from this assistant. Propose the payment; the wallet's limits decide." };
+    }
     const o = await computeOverview(ctx, user);
     const minor = Math.round(amount * 100);
     const ok = minor <= o.available;
@@ -179,7 +183,7 @@ export const canAfford = internalQuery({
       affordable: ok,
       currency: o.currency,
       note: ok ? "Fits after bills, the emergency fund and pending payments." : "That would dip into money set aside for bills or emergencies.",
-      ...(agent.hidesBalances ? {} : { safeToSpend: formatMoney(o.available, o.currency) }),
+      safeToSpend: formatMoney(o.available, o.currency),
     };
   },
 });
@@ -250,7 +254,8 @@ async function agentPaidTo(ctx: QueryCtx, payeeId: Id<"payees">) {
 }
 
 type Decision =
-  | { outcome: "paid"; taskId: Id<"tasks">; message: string }
+  /** Accepted and on its way; not paid until get_task_status says confirmed. */
+  | { outcome: "submitted"; taskId: Id<"tasks">; message: string }
   | { outcome: "duplicate"; taskId: Id<"tasks">; state: string; message: string }
   // No link: the approval capability goes only to the owner (dashboard, Telegram), never to the agent.
   | { outcome: "needs_approval"; taskId: Id<"tasks">; reason: string; message: string }
@@ -269,7 +274,8 @@ export const proposePayment = internalMutation({
     if (requestId !== undefined && !/^[\w.:#/-]{1,80}$/.test(requestId)) return { outcome: "refused", code: "2011", reason: "requestId must be 1 to 80 letters, digits or .:#/-_" };
     if (requestId) {
       // The same request again (a retry, a duplicate invoice): report the first one, never pay twice.
-      const earlier = await ctx.db.query("tasks").withIndex("by_agent_request", (q) => q.eq("agentId", agent._id).eq("requestId", requestId)).first();
+      // Scoped to the wallet, not the agent: one invoice forwarded to two assistants is paid once.
+      const earlier = await ctx.db.query("tasks").withIndex("by_user_request", (q) => q.eq("userId", user._id).eq("requestId", requestId)).first();
       if (earlier) return { outcome: "duplicate", taskId: earlier._id, state: earlier.state, message: "A payment with this requestId already exists. Check get_task_status instead of retrying." };
     }
     if (!Number.isFinite(amount) || amount <= 0 || amount > 1e6) return { outcome: "refused", code: "2003", reason: "Amount must be a positive number of dollars" };
@@ -338,7 +344,7 @@ export const proposePayment = internalMutation({
       await record(ctx, user, agent, `${agent.name} is paying ${payee.name} ${formatMoney(minor, "USDC")} within its limits.`, taskId);
       const held = vault && vault.holdFor > 0 && minor > vault.holdAboveMinor;
       return {
-        outcome: "paid",
+        outcome: "submitted",
         taskId,
         message: held
           ? `Paying ${payee.name} ${formatMoney(minor, "USDC")} on Base Sepolia. Above ${formatMoney(vault.holdAboveMinor, "USDC")}, so the vault holds it ${Math.round(vault.holdFor / 60)} min for the owner to cancel. Check get_task_status.`
@@ -365,7 +371,7 @@ export const proposePayment = internalMutation({
       await ctx.db.patch(agent._id, { spentTodayMinor: agent.spentTodayMinor + minor });
       await ctx.scheduler.runAfter(1200, internal.tasks.settle, { taskId });
       await record(ctx, user, agent, `${agent.name} is paying ${payee.name} ${formatMoney(minor, "USDC")} within its limits.`, taskId);
-      return { outcome: "paid", taskId, message: `Paying ${payee.name} ${formatMoney(minor, "USDC")}. Check get_task_status for confirmation.` };
+      return { outcome: "submitted", taskId, message: `Paying ${payee.name} ${formatMoney(minor, "USDC")}. Check get_task_status for confirmation.` };
     }
 
     const hard = blockers.find((b) => b.code === "1002");
@@ -429,7 +435,9 @@ export const taskStatus = internalQuery({
     const { agent, user } = await load(ctx, agentId);
     const id = ctx.db.normalizeId("tasks", taskId);
     const task = id ? await ctx.db.get(id) : null;
-    if (!task || task.userId !== user._id || task.agentId !== agent._id) throw new Error("No such task for this assistant");
+    // Another assistant's task is visible only when it was handed back as a duplicate of the same invoice.
+    const shared = task?.requestId !== undefined && task.channel === "mcp";
+    if (!task || task.userId !== user._id || (task.agentId !== agent._id && !shared)) throw new Error("No such task for this assistant");
     return {
       taskId: task._id,
       state: task.state,

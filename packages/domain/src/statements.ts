@@ -89,12 +89,22 @@ export function parseAmount(input: string | number | undefined): number | null {
   } else if (s.startsWith("+")) s = s.slice(1);
   // European format: 1.234,56
   if (/^\d{1,3}(\.\d{3})+,\d{1,2}$/.test(s)) s = s.replace(/\./g, "").replace(",", ".");
+  // A lone comma with one or two digits after it is a decimal comma (12,50); grouping uses three.
+  else if (/^\d+,\d{1,2}$/.test(s)) s = s.replace(",", ".");
   else s = s.replace(/,/g, "");
   if (!/^\d*\.?\d+$/.test(s)) return null;
   return sign * Number(s);
 }
 
 const MONTHS: Record<string, number> = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+
+/** A calendar date at noon UTC, or null if it doesn't exist (31 February, month 13). */
+function day(y: number, month: number, d: number, h = 12, min = 0): number | null {
+  if (month < 1 || month > 12 || d < 1 || h > 23 || min > 59) return null;
+  const t = Date.UTC(y, month - 1, d, h, min);
+  const back = new Date(t);
+  return back.getUTCFullYear() === y && back.getUTCMonth() === month - 1 && back.getUTCDate() === d ? t : null;
+}
 
 /** Parse common statement date formats. Returns local-midnight-ish epoch ms, or null. */
 export function parseDate(input: string | number | Date | undefined, order: "dmy" | "mdy" | "ymd" = "dmy"): number | null {
@@ -107,19 +117,19 @@ export function parseDate(input: string | number | Date | undefined, order: "dmy
   }
   const s = String(input).trim().replace(/\s+/g, " ");
   let m = s.match(/^(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})日?(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
-  if (m) return Date.UTC(+m[1]!, +m[2]! - 1, +m[3]!, +(m[4] ?? 12), +(m[5] ?? 0));
+  if (m) return day(+m[1]!, +m[2]!, +m[3]!, +(m[4] ?? 12), +(m[5] ?? 0));
   m = s.match(/^(\d{1,2})[-/. ]([A-Za-z]{3,9})[-/. ,]*(\d{2,4})/);
   if (m) {
     const mon = MONTHS[m[2]!.slice(0, 3).toLowerCase()];
     if (mon === undefined) return null;
     const y = +m[3]! < 100 ? 2000 + +m[3]! : +m[3]!;
-    return Date.UTC(y, mon, +m[1]!, 12);
+    return day(y, mon + 1, +m[1]!);
   }
   m = s.match(/^([A-Za-z]{3,9}) (\d{1,2}),? (\d{4})/);
   if (m) {
     const mon = MONTHS[m[1]!.slice(0, 3).toLowerCase()];
     if (mon === undefined) return null;
-    return Date.UTC(+m[3]!, mon, +m[2]!, 12);
+    return day(+m[3]!, mon + 1, +m[2]!);
   }
   m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})/);
   if (m) {
@@ -128,8 +138,7 @@ export function parseDate(input: string | number | Date | undefined, order: "dmy
     const y = +m[3]! < 100 ? 2000 + +m[3]! : +m[3]!;
     if (order === "mdy" && a <= 12) [a, b] = [b, a];
     else if (a <= 12 && b > 12) [a, b] = [b, a];
-    if (b < 1 || b > 12 || a < 1 || a > 31) return null;
-    return Date.UTC(y, b - 1, a, 12);
+    return day(y, b, a);
   }
   return null;
 }
@@ -191,7 +200,7 @@ export function rowsToTransactions(
 export function linesToTransactions(lines: string[], order: "dmy" | "mdy" | "ymd" = "dmy", decimals = 2): ParsedRow[] {
   const scale = 10 ** decimals;
   const dateRe = /^(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/. ](?:\d{1,2}|[A-Za-z]{3,9})[-/. ,]*\d{2,4})/;
-  const amountRe = /\(?-?[₹$¥€£]?\s?\d{1,3}(?:[,]\d{2,3})*(?:\.\d{1,2})\)?(?:\s?(?:Dr|Cr|DR|CR))?/g;
+  const amountRe = /\(?-?[₹$¥€£]?\s?(?:\d{1,3}(?:,\d{2,3})+|\d+)\.\d{1,2}\)?(?:\s?(?:Dr|Cr|DR|CR))?/g;
   const rows: { at: number; desc: string; nums: number[]; raw: string }[] = [];
   for (const raw of lines) {
     const line = raw.replace(/\s+/g, " ").trim();
@@ -250,12 +259,12 @@ export function parseReceipt(text: string, order: "dmy" | "mdy" | "ymd" = "dmy")
   let total: number | null = null;
   for (const l of lines) {
     if (/(grand total|total amount|amount due|net payable|total|合计|总计|实付)/i.test(l)) {
-      const nums = [...l.matchAll(/\d{1,3}(?:,\d{2,3})*(?:\.\d{1,2})?/g)].map((m) => parseAmount(m[0])).filter((n): n is number => n !== null);
+      const nums = [...l.matchAll(/(?:\d{1,3}(?:,\d{2,3})+|\d+)(?:\.\d{1,2})?/g)].map((m) => parseAmount(m[0])).filter((n): n is number => n !== null);
       if (nums.length) total = Math.max(total ?? 0, ...nums);
     }
   }
   if (total === null) {
-    const all = [...text.matchAll(/\d{1,3}(?:,\d{2,3})*\.\d{2}/g)].map((m) => parseAmount(m[0])).filter((n): n is number => n !== null);
+    const all = [...text.matchAll(/(?:\d{1,3}(?:,\d{2,3})+|\d+)\.\d{2}/g)].map((m) => parseAmount(m[0])).filter((n): n is number => n !== null);
     if (all.length) total = Math.max(...all);
   }
   let at: number | null = null;

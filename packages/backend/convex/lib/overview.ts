@@ -4,6 +4,18 @@ import type { QueryCtx } from "../_generated/server";
 import { latestRates } from "../rates";
 
 const DAY = 86_400_000;
+/** Far above any real household; past these the totals say they are partial instead of being cut. */
+const MAX_ACCOUNTS = 1000;
+const MAX_RECENT = 20_000;
+
+async function upTo<T>(rows: AsyncIterable<T>, max: number) {
+  const out: T[] = [];
+  for await (const row of rows) {
+    if (out.length === max) return { rows: out, partial: true };
+    out.push(row);
+  }
+  return { rows: out, partial: false };
+}
 
 export type Overview = Awaited<ReturnType<typeof computeOverview>>;
 
@@ -15,11 +27,18 @@ export type Overview = Awaited<ReturnType<typeof computeOverview>>;
 export async function computeOverview(ctx: QueryCtx, user: Doc<"users">) {
   const now = Date.now();
   const rates = await latestRates(ctx);
-  const to = (minor: number, from: Doc<"accounts">["currency"]) => convert(minor, from, user.currency, rates.fiat);
-  const accounts = await ctx.db
-    .query("accounts")
-    .withIndex("by_user", (q) => q.eq("userId", user._id))
-    .take(100);
+  // An amount we can't convert is left out and named, never counted as zero without saying so.
+  const unconverted = new Set<string>();
+  const to = (minor: number, from: Doc<"accounts">["currency"]) => {
+    try {
+      return convert(minor, from, user.currency, rates.fiat);
+    } catch {
+      unconverted.add(from);
+      return 0;
+    }
+  };
+  const accountRows = await upTo(ctx.db.query("accounts").withIndex("by_user", (q) => q.eq("userId", user._id)), MAX_ACCOUNTS);
+  const accounts = accountRows.rows;
   const cashKinds = new Set(["bank", "payment_app", "cash", "transfer"]);
   const cash = accounts.filter((a) => cashKinds.has(a.kind)).reduce((s, a) => s + to(a.balanceMinor, a.currency), 0);
   const cardDue = accounts
@@ -33,16 +52,23 @@ export async function computeOverview(ctx: QueryCtx, user: Doc<"users">) {
     .withIndex("by_user_due", (q) => q.eq("userId", user._id).gte("nextDueAt", now - DAY))
     .take(200);
   const active = obligations.filter((o) => o.status === "active");
-  const beforeIncome = active.filter((o) => o.nextDueAt <= user.nextIncomeAt);
+  // Everything due before payday, including bills already overdue and still unpaid.
+  const beforeIncome = (
+    await ctx.db
+      .query("obligations")
+      .withIndex("by_user_due", (q) => q.eq("userId", user._id).lte("nextDueAt", user.nextIncomeAt))
+      .take(500)
+  ).filter((o) => o.status === "active");
   const commitments = beforeIncome.reduce((s, o) => s + to(o.amountMinor, o.currency), 0);
 
-  const recent = (
-    await ctx.db
+  const recentRows = await upTo(
+    ctx.db
       .query("transactions")
       .withIndex("by_user_at", (q) => q.eq("userId", user._id).gte("at", now - 40 * DAY))
-      .order("desc")
-      .take(2000)
-  ).filter((t) => !t.duplicateOf);
+      .order("desc"),
+    MAX_RECENT,
+  );
+  const recent = recentRows.rows.filter((t) => !t.duplicateOf);
   const pending = recent
     .filter((t) => t.status === "pending" && t.amountMinor < 0 && t.kind !== "transfer")
     .reduce((s, t) => s - to(t.amountMinor, t.currency), 0);
@@ -116,6 +142,10 @@ export async function computeOverview(ctx: QueryCtx, user: Doc<"users">) {
     cryptoValue: whole(cryptoValue),
     accountCount: accounts.length,
     ratesDate: rates.date,
+    /** Currencies with no exchange rate today; their amounts are left out of the totals above. */
+    unconverted: [...unconverted],
+    /** True if there were more accounts or transactions than one read covers; totals are then partial. */
+    partial: accountRows.partial || recentRows.partial,
     suggested: obligations.filter((o) => o.status === "suggested").length,
     agentAuthority,
     walletCurrency: "USDC" as const,
