@@ -35,7 +35,7 @@ export default function ActivityPage() {
                     key={a._id}
                     leading={<ActivityIcon kind={a.kind} tone={a.tone} />}
                     title={a.title}
-                    sub={a.detail}
+                    sub={a.sample ? ["Sample", a.detail].filter(Boolean).join(" · ") : a.detail}
                     trailing={<span className="text-label text-mute">{time(a._creationTime)}</span>}
                   />
                 ))}

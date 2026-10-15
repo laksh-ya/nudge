@@ -1,16 +1,29 @@
 import type { Doc } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 
-export const DEMO_TOKEN = "demo";
+/**
+ * Demo visitors get a private sandbox: the web app signs a short-lived token for a random id kept
+ * in a cookie, so nobody can see or change anyone else's demo. The judge account is the same
+ * kind of token with a fixed id, issued only to someone holding the judge key.
+ */
+export const DEMO_ISSUER = "https://demo.agent-wallet.app";
+export const JUDGE = `${DEMO_ISSUER}|judge`;
 
-/** Signed-in user, or the shared demo user when DEMO_MODE is on and nobody is signed in. */
+export function isDemo(user: Pick<Doc<"users">, "tokenIdentifier">) {
+  return user.tokenIdentifier.startsWith(`${DEMO_ISSUER}|`);
+}
+
+/** A sandbox anyone can make; the judge account is not one. */
+export function isSandbox(user: Pick<Doc<"users">, "tokenIdentifier">) {
+  return isDemo(user) && user.tokenIdentifier !== JUDGE;
+}
+
 export async function viewer(ctx: QueryCtx | MutationCtx): Promise<Doc<"users"> | null> {
   const identity = await ctx.auth.getUserIdentity();
-  const token = identity?.tokenIdentifier ?? (process.env.DEMO_MODE === "true" ? DEMO_TOKEN : null);
-  if (!token) return null;
+  if (!identity) return null;
   return await ctx.db
     .query("users")
-    .withIndex("by_token", (q) => q.eq("tokenIdentifier", token))
+    .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
     .unique();
 }
 

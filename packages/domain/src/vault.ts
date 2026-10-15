@@ -32,8 +32,20 @@ export enum Op {
   AddOwnerKey = 7,
   RemoveOwnerKey = 8,
   Withdraw = 9,
-  Batch = 10,
+  CancelChange = 10,
+  CancelHeld = 11,
+  Batch = 12,
 }
+
+/** Wallet-wide rules. Delays are seconds; amounts are token units. */
+export type Policy = {
+  protectedAmount: bigint;
+  dailyCeiling: bigint;
+  newContactDelay: bigint;
+  changeDelay: bigint;
+  holdAbove: bigint;
+  holdFor: bigint;
+};
 
 export const ACTION_TYPEHASH = keccak256(toBytes("Action(uint8 op,bytes data,uint256 nonce,uint64 deadline,uint256 chainId,address vault)"));
 
@@ -75,6 +87,13 @@ export function testPayeeAddress(name: string): Address {
   return getAddress(slice(keccak256(toBytes(`agent-wallet test payee:${name.toLowerCase()}`)), 12));
 }
 
+const POLICY = [{ type: "uint256" }, { type: "uint256" }, { type: "uint64" }, { type: "uint64" }, { type: "uint256" }, { type: "uint64" }] as const;
+
+/** Same as PolicyVault.changeIdOf: the id a queued owner action waits under. */
+export function changeIdOf(op: Op, data: Hex, nonce: bigint): Hex {
+  return keccak256(encodeAbiParameters([{ type: "uint8" }, { type: "bytes32" }, { type: "uint256" }], [op, keccak256(data), nonce]));
+}
+
 export const encode = {
   pay: (to: Address, amount: bigint, paymentId: Hex) =>
     encodeAbiParameters([{ type: "address" }, { type: "uint256" }, { type: "bytes32" }], [to, amount, paymentId]),
@@ -83,10 +102,15 @@ export const encode = {
   removeAgent: (agent: Address) => encodeAbiParameters([{ type: "address" }], [agent]),
   addContact: (contactId: Hex, payee: Address, immediate: boolean) =>
     encodeAbiParameters([{ type: "bytes32" }, { type: "address" }, { type: "bool" }], [contactId, payee, immediate]),
-  setPolicy: (protectedAmount: bigint, dailyCeiling: bigint, newContactDelay: bigint) =>
-    encodeAbiParameters([{ type: "uint256" }, { type: "uint256" }, { type: "uint64" }], [protectedAmount, dailyCeiling, newContactDelay]),
+  setPolicy: (p: Policy) =>
+    encodeAbiParameters(POLICY, [p.protectedAmount, p.dailyCeiling, p.newContactDelay, p.changeDelay, p.holdAbove, p.holdFor]),
   unfreeze: (agent: Address) => encodeAbiParameters([{ type: "address" }], [agent]),
   withdraw: (to: Address, amount: bigint) => encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [to, amount]),
+  addOwnerKey: (x: Hex, y: Hex, rpIdHash: Hex) =>
+    encodeAbiParameters([{ type: "bytes32" }, { type: "bytes32" }, { type: "bytes32" }], [x, y, rpIdHash]),
+  removeOwnerKey: (keyId: Hex) => encodeAbiParameters([{ type: "bytes32" }], [keyId]),
+  cancelChange: (changeId: Hex) => encodeAbiParameters([{ type: "bytes32" }], [changeId]),
+  cancelHeld: (paymentId: Hex) => encodeAbiParameters([{ type: "bytes32" }], [paymentId]),
   batch: (items: { op: Op; data: Hex }[]) =>
     encodeAbiParameters([{ type: "uint8[]" }, { type: "bytes[]" }], [items.map((i) => i.op), items.map((i) => i.data)]),
 };
@@ -98,6 +122,14 @@ const ZERO = "0x0000000000000000000000000000000000000000";
 function money(units: bigint) {
   const cents = Number(units / MINOR_TO_TOKEN);
   return `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function duration(seconds: bigint) {
+  const s = Number(seconds);
+  if (s === 0) return "No wait";
+  if (s < 3600) return `${Math.round(s / 60)} min`;
+  if (s < 86_400) return `${+(s / 3600).toFixed(1)} hours`;
+  return `${+(s / 86_400).toFixed(1)} days`;
 }
 
 function when(seconds: bigint) {
@@ -152,13 +184,15 @@ export function describe(op: Op, data: Hex, names: Record<string, string> = {}):
       };
     }
     case Op.SetPolicy: {
-      const [protectedAmount, ceiling, delay] = decodeAbiParameters([{ type: "uint256" }, { type: "uint256" }, { type: "uint64" }], data);
+      const [protectedAmount, ceiling, contactDelay, changeDelay, holdAbove, holdFor] = decodeAbiParameters(POLICY, data);
       return {
-        title: "Change wallet limits",
+        title: "Change wallet rules",
         lines: [
-          { label: "Protected", value: money(protectedAmount) },
+          { label: "Protected from agents", value: money(protectedAmount) },
           { label: "All agents, per 24 hours", value: money(ceiling) },
-          { label: "New contacts wait", value: `${Number(delay) / 3600} hours` },
+          { label: "New contacts wait", value: duration(contactDelay) },
+          { label: "Loosening waits", value: duration(changeDelay) },
+          { label: "Agent payments held", value: holdFor === 0n ? "Never" : `Above ${money(holdAbove)}, for ${duration(holdFor)}` },
         ],
       };
     }
@@ -168,7 +202,44 @@ export function describe(op: Op, data: Hex, names: Record<string, string> = {}):
     }
     case Op.Withdraw: {
       const [to, amount] = decodeAbiParameters([{ type: "address" }, { type: "uint256" }], data);
-      return { title: `Withdraw ${money(amount)}`, lines: [{ label: "To", value: to, mono: true }] };
+      return {
+        title: `Withdraw ${money(amount)}`,
+        lines: [
+          { label: "To", value: who(to) || "Address" },
+          { label: "Address", value: to, mono: true },
+          { label: "Protected amount", value: "Can go below it" },
+        ],
+      };
+    }
+    case Op.AddOwnerKey: {
+      const [x, y, rpIdHash] = decodeAbiParameters([{ type: "bytes32" }, { type: "bytes32" }, { type: "bytes32" }], data);
+      return {
+        title: "Add a backup passkey",
+        lines: [
+          { label: "Passkey", value: names[keyIdOf(x, y)] || "New passkey" },
+          { label: "Key ID", value: keyIdOf(x, y), mono: true },
+          { label: "Made for", value: names[rpIdHash] || rpIdHash, mono: !names[rpIdHash] },
+          { label: "Can", value: "Approve anything your current passkey can" },
+        ],
+      };
+    }
+    case Op.RemoveOwnerKey: {
+      const [keyId] = decodeAbiParameters([{ type: "bytes32" }], data);
+      return {
+        title: "Remove a passkey",
+        lines: [
+          { label: "Passkey", value: names[keyId] || "Passkey" },
+          { label: "Key ID", value: keyId, mono: true },
+        ],
+      };
+    }
+    case Op.CancelChange: {
+      const [id] = decodeAbiParameters([{ type: "bytes32" }], data);
+      return { title: "Cancel a waiting change", lines: [{ label: "Change", value: names[id] || id, mono: !names[id] }] };
+    }
+    case Op.CancelHeld: {
+      const [id] = decodeAbiParameters([{ type: "bytes32" }], data);
+      return { title: "Cancel a held payment", lines: [{ label: "Payment", value: names[id] || id, mono: !names[id] }] };
     }
     case Op.Batch: {
       const [ops, datas] = decodeAbiParameters([{ type: "uint8[]" }, { type: "bytes[]" }], data);

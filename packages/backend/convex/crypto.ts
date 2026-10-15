@@ -177,7 +177,7 @@ export const ownerOf = internalQuery({
   args: { accountId: v.id("accounts") },
   handler: async (ctx, { accountId }) => {
     const identity = await ctx.auth.getUserIdentity();
-    const token = identity?.tokenIdentifier ?? (process.env.DEMO_MODE === "true" ? "demo" : null);
+    const token = identity?.tokenIdentifier ?? null;
     const account = await ctx.db.get(accountId);
     if (!token || !account) return null;
     const user = await ctx.db.get(account.userId);

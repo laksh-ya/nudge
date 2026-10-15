@@ -11,6 +11,8 @@ export const PAYMENT_STATES = [
   "cancelled",
   "expired",
   "unknown",
+  "queued",
+  "held",
 ] as const;
 
 export type PaymentState = (typeof PAYMENT_STATES)[number];
@@ -29,4 +31,6 @@ export const STATE_LABEL: Record<PaymentState, string> = {
   cancelled: "Cancelled",
   expired: "Expired",
   unknown: "Checking outcome",
+  queued: "Waiting to apply",
+  held: "Held, cancellable",
 };

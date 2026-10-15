@@ -67,8 +67,13 @@ contract PolicyVaultTest is Passkey {
         keyId = vault.keyIdOf(qx, qy);
         token.faucet(address(vault), 250e6);
 
-        sign(PolicyVault.Op.SetAgent, abi.encode(claude, uint128(10e6), uint128(15e6), uint64(block.timestamp + 30 days)));
-        sign(PolicyVault.Op.SetAgent, abi.encode(chatgpt, uint128(10e6), uint128(30e6), uint64(block.timestamp + 30 days)));
+        sign(
+            PolicyVault.Op.SetAgent, abi.encode(claude, uint128(10e6), uint128(15e6), uint64(block.timestamp + 30 days))
+        );
+        sign(
+            PolicyVault.Op.SetAgent,
+            abi.encode(chatgpt, uint128(10e6), uint128(30e6), uint64(block.timestamp + 30 days))
+        );
         sign(PolicyVault.Op.AddContact, abi.encode(shopId, shop, true));
     }
 
@@ -79,6 +84,10 @@ contract PolicyVaultTest is Passkey {
     function sign(PolicyVault.Op op, bytes memory data) internal {
         PolicyVault.Action memory a = action(op, data);
         vault.execute(a, keyId, assertion(ownerPk, vault.digest(a), RP_ID, 0x05));
+    }
+
+    function policy(uint256 p, uint256 c, uint64 cd, uint64 d, uint256 ha, uint64 hf) internal {
+        sign(PolicyVault.Op.SetPolicy, abi.encode(p, c, cd, d, ha, hf));
     }
 
     function pay(address agent, uint256 amount, bytes32 paymentId) internal returns (bool ok) {
@@ -268,9 +277,14 @@ contract PolicyVaultTest is Passkey {
     }
 
     function test_paymentCountLimit() public {
-        sign(PolicyVault.Op.SetAgent, abi.encode(claude, uint128(1e6), uint128(1_000e6), uint64(block.timestamp + 30 days)));
-        sign(PolicyVault.Op.SetPolicy, abi.encode(uint256(0), uint256(1_000e6), uint64(0)));
-        for (uint256 i; i < 16; ++i) assertTrue(pay(claude, 1, bytes32(i + 1)));
+        sign(
+            PolicyVault.Op.SetAgent,
+            abi.encode(claude, uint128(1e6), uint128(1_000e6), uint64(block.timestamp + 30 days))
+        );
+        policy(0, 1_000e6, 0, 0, 0, 0);
+        for (uint256 i; i < 16; ++i) {
+            assertTrue(pay(claude, 1, bytes32(i + 1)));
+        }
         assertFalse(pay(claude, 1, bytes32(uint256(99))));
     }
 
@@ -321,9 +335,211 @@ contract PolicyVaultTest is Passkey {
         for (uint256 i; i < 12; ++i) {
             vm.warp(block.timestamp + bound(gaps[i], 0, 3 hours));
             uint256 before = token.balanceOf(shop);
-            pay(claude, bound(amounts[i], 1, 20e6), bytes32(i + 1));
+            vm.prank(claude);
+            // Five refusals freeze the key; after that every call reverts, which only helps the owner.
+            try vault.agentPay(shopId, bound(amounts[i], 1, 20e6), bytes32(i + 1), 0) {} catch {}
             moved += token.balanceOf(shop) - before;
             if (block.timestamp - start < 24 hours) assertLe(moved, 15e6);
         }
+    }
+
+    // ------------------------------------------------------ protected amount
+
+    function test_ownerPaymentLeavesProtectedAmount() public {
+        PolicyVault.Action memory a = action(PolicyVault.Op.Pay, abi.encode(shop, 201e6, bytes32("big")));
+        WebAuthn.WebAuthnAuth memory auth = assertion(ownerPk, vault.digest(a), RP_ID, 0x05);
+        vm.expectRevert(PolicyVault.BreachesProtected.selector);
+        vault.execute(a, keyId, auth);
+        sign(PolicyVault.Op.Pay, abi.encode(shop, 200e6, bytes32("ok")));
+        assertEq(token.balanceOf(address(vault)), 50e6);
+    }
+
+    function test_onlyWithdrawGoesBelowProtected() public {
+        sign(PolicyVault.Op.Withdraw, abi.encode(address(this), 250e6));
+        assertEq(token.balanceOf(address(vault)), 0);
+    }
+
+    // -------------------------------------------------------------- strikes
+
+    function test_fiveRefusalsFreezeTheAgent() public {
+        for (uint256 i; i < 4; ++i) {
+            assertFalse(pay(claude, 11e6, bytes32(i + 100)));
+        }
+        (,,,, bool frozenBefore,,) = vault.agents(claude);
+        assertFalse(frozenBefore);
+        assertFalse(pay(claude, 11e6, "s5"));
+        (,,,, bool frozenAfter, uint8 strikes,) = vault.agents(claude);
+        assertTrue(frozenAfter);
+        assertEq(strikes, 5);
+        vm.expectRevert(PolicyVault.AgentFrozen.selector);
+        pay(claude, 1e6, "s6");
+        assertTrue(pay(chatgpt, 1e6, "other")); // only that agent stops
+        sign(PolicyVault.Op.Unfreeze, abi.encode(claude));
+        (,,,,, uint8 reset,) = vault.agents(claude);
+        assertEq(reset, 0);
+        assertTrue(pay(claude, 1e6, "s7"));
+    }
+
+    function test_strikesFadeAfterAQuietDay() public {
+        for (uint256 i; i < 4; ++i) {
+            pay(claude, 11e6, bytes32(i + 200));
+        }
+        vm.warp(block.timestamp + 25 hours);
+        pay(claude, 11e6, "late");
+        (,,,, bool frozen_, uint8 strikes,) = vault.agents(claude);
+        assertFalse(frozen_);
+        assertEq(strikes, 1);
+    }
+
+    function test_changingLimitsDoesNotUnfreeze() public {
+        vm.prank(guardian);
+        vault.freezeAgent(claude);
+        sign(PolicyVault.Op.SetAgent, abi.encode(claude, uint128(5e6), uint128(5e6), uint64(block.timestamp + 1 days)));
+        vm.expectRevert(PolicyVault.AgentFrozen.selector);
+        pay(claude, 1e6, "x");
+    }
+
+    // ------------------------------------------------- delayed loosening
+
+    function test_looseningWaitsAndTighteningIsInstant() public {
+        policy(50e6, 40e6, 1 days, 1 hours, 0, 0); // a longer delay is tightening: instant
+        assertEq(vault.changeDelay(), 1 hours);
+
+        sign(
+            PolicyVault.Op.SetAgent, abi.encode(claude, uint128(20e6), uint128(30e6), uint64(block.timestamp + 30 days))
+        );
+        (uint128 per,,,,,,) = vault.agents(claude);
+        assertEq(per, 10e6, "raise is queued, not applied");
+
+        bytes memory data = abi.encode(claude, uint128(20e6), uint128(30e6), uint64(block.timestamp + 30 days));
+        vm.expectRevert(PolicyVault.NotReady.selector);
+        vault.finalize(PolicyVault.Op.SetAgent, data, nonce);
+        vm.warp(block.timestamp + 1 hours);
+        vault.finalize(PolicyVault.Op.SetAgent, data, nonce);
+        (per,,,,,,) = vault.agents(claude);
+        assertEq(per, 20e6);
+
+        sign(PolicyVault.Op.SetAgent, abi.encode(claude, uint128(1e6), uint128(2e6), uint64(block.timestamp + 1 days)));
+        (per,,,,,,) = vault.agents(claude);
+        assertEq(per, 1e6, "lowering applies at once");
+    }
+
+    function test_guardianCancelsAQueuedLoosening() public {
+        policy(50e6, 40e6, 1 days, 1 hours, 0, 0);
+        policy(0, 40e6, 1 days, 1 hours, 0, 0); // lower the protected amount: queued
+        bytes memory data =
+            abi.encode(uint256(0), uint256(40e6), uint64(1 days), uint64(1 hours), uint256(0), uint64(0));
+        bytes32 id = vault.changeIdOf(PolicyVault.Op.SetPolicy, data, nonce);
+        vm.prank(claude);
+        vm.expectRevert(PolicyVault.NotGuardian.selector);
+        vault.cancelChange(id);
+        vm.prank(guardian);
+        vault.cancelChange(id);
+        vm.warp(block.timestamp + 2 hours);
+        vm.expectRevert(PolicyVault.NotQueued.selector);
+        vault.finalize(PolicyVault.Op.SetPolicy, data, nonce);
+        assertEq(vault.protectedAmount(), 50e6);
+    }
+
+    function test_frozenVaultOnlyLetsUnfreezeApply() public {
+        policy(50e6, 40e6, 1 days, 1 hours, 0, 0);
+        sign(PolicyVault.Op.Withdraw, abi.encode(address(this), 10e6));
+        uint256 withdrawNonce = nonce;
+        vm.prank(guardian);
+        vault.freeze();
+        sign(PolicyVault.Op.Unfreeze, abi.encode(address(0)));
+        uint256 unfreezeNonce = nonce;
+        vm.warp(block.timestamp + 1 hours);
+        vm.expectRevert(PolicyVault.AgentFrozen.selector);
+        vault.finalize(PolicyVault.Op.Withdraw, abi.encode(address(this), 10e6), withdrawNonce);
+        vault.finalize(PolicyVault.Op.Unfreeze, abi.encode(address(0)), unfreezeNonce);
+        assertFalse(vault.frozen());
+    }
+
+    function test_ownerCancelsAQueuedChangeWithPasskey() public {
+        policy(50e6, 40e6, 1 days, 1 hours, 0, 0);
+        bytes memory data = abi.encode(address(this), 10e6);
+        sign(PolicyVault.Op.Withdraw, data);
+        bytes32 id = vault.changeIdOf(PolicyVault.Op.Withdraw, data, nonce);
+        sign(PolicyVault.Op.CancelChange, abi.encode(id)); // tightening: instant
+        assertEq(vault.queued(id), 0);
+    }
+
+    function test_setupBatchIsInstantBeforeADelayExists() public {
+        bytes[] memory datas = new bytes[](2);
+        uint8[] memory raw = new uint8[](2);
+        address gemini = makeAddr("gemini");
+        raw[0] = uint8(PolicyVault.Op.SetAgent);
+        datas[0] = abi.encode(gemini, uint128(2e6), uint128(4e6), uint64(block.timestamp + 1 days));
+        raw[1] = uint8(PolicyVault.Op.SetPolicy);
+        datas[1] =
+            abi.encode(uint256(50e6), uint256(40e6), uint64(1 days), uint64(1 hours), uint256(5e6), uint64(10 minutes));
+        sign(PolicyVault.Op.Batch, abi.encode(raw, datas));
+        (,,, bool active,,,) = vault.agents(gemini);
+        assertTrue(active);
+        assertEq(vault.changeDelay(), 1 hours);
+        assertEq(vault.holdFor(), 10 minutes);
+    }
+
+    // ---------------------------------------------------------------- holds
+
+    function test_largeAgentPaymentWaitsThenReleases() public {
+        policy(50e6, 40e6, 1 days, 0, 5e6, 1 hours);
+        assertTrue(pay(claude, 8e6, "h1"));
+        assertEq(token.balanceOf(shop), 0, "held, not sent");
+        assertEq(vault.heldTotal(), 8e6);
+        assertTrue(pay(claude, 4e6, "small")); // at or under the threshold goes now
+        assertEq(token.balanceOf(shop), 4e6);
+        vm.expectRevert(PolicyVault.NotReady.selector);
+        vault.release("h1");
+        vm.warp(block.timestamp + 1 hours);
+        vault.release("h1");
+        assertEq(token.balanceOf(shop), 12e6);
+        assertEq(vault.heldTotal(), 0);
+    }
+
+    function test_ownerCancelsAHeldPayment() public {
+        policy(50e6, 40e6, 1 days, 0, 5e6, 1 hours);
+        pay(claude, 8e6, "h2");
+        vm.prank(claude);
+        vm.expectRevert(PolicyVault.NotGuardian.selector);
+        vault.cancelHeld("h2");
+        vm.prank(guardian);
+        vault.cancelHeld("h2");
+        vm.warp(block.timestamp + 1 hours);
+        vm.expectRevert(PolicyVault.NotQueued.selector);
+        vault.release("h2");
+        assertEq(token.balanceOf(shop), 0);
+        assertEq(vault.spentToday(claude), 8e6, "cancelled spend still counts");
+    }
+
+    function test_freezeOrRemovedContactBlocksRelease() public {
+        policy(50e6, 40e6, 1 days, 0, 5e6, 1 hours);
+        pay(claude, 8e6, "h3");
+        pay(chatgpt, 9e6, "h4");
+        vm.prank(guardian);
+        vault.freezeAgent(claude);
+        sign(PolicyVault.Op.RemoveContact, abi.encode(shopId));
+        vm.warp(block.timestamp + 1 hours);
+        vm.expectRevert(PolicyVault.AgentFrozen.selector);
+        vault.release("h3");
+        vm.expectRevert(PolicyVault.BadAction.selector);
+        vault.release("h4");
+    }
+
+    function test_heldMoneyCountsAgainstProtected() public {
+        policy(50e6, 1_000e6, 1 days, 0, 5e6, 1 hours);
+        sign(
+            PolicyVault.Op.SetAgent,
+            abi.encode(chatgpt, uint128(100e6), uint128(500e6), uint64(block.timestamp + 30 days))
+        );
+        assertTrue(pay(chatgpt, 100e6, "big1"));
+        assertTrue(pay(chatgpt, 90e6, "big2"));
+        assertEq(vault.agentHeadroom(), 10e6);
+        assertFalse(pay(chatgpt, 11e6, "big3")); // would dip into protected once holds settle
+        PolicyVault.Action memory a = action(PolicyVault.Op.Pay, abi.encode(shop, 11e6, bytes32("own")));
+        WebAuthn.WebAuthnAuth memory auth = assertion(ownerPk, vault.digest(a), RP_ID, 0x05);
+        vm.expectRevert(PolicyVault.BreachesProtected.selector);
+        vault.execute(a, keyId, auth);
     }
 }

@@ -470,4 +470,8 @@ export async function seedUser(ctx: MutationCtx, userId: Id<"users">) {
   for (const [kind, title, detail, tone] of events.reverse()) {
     await ctx.db.insert("activity", { userId, kind, title, detail, tone });
   }
+
+  // Everything above is illustration, not evidence: label it so screens never mix it with real chain events.
+  for (const t of await ctx.db.query("tasks").withIndex("by_user_updated", (q) => q.eq("userId", userId)).take(200)) await ctx.db.patch(t._id, { sample: true });
+  for (const a of await ctx.db.query("activity").withIndex("by_user", (q) => q.eq("userId", userId)).take(200)) await ctx.db.patch(a._id, { sample: true });
 }

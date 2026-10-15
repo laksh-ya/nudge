@@ -14,7 +14,7 @@ type Update = {
     message_id: number;
     text?: string;
     chat: { id: number; type: string };
-    from?: { id: number; is_bot?: boolean; first_name?: string };
+    from?: { id: number; is_bot?: boolean; first_name?: string; username?: string };
     forward_origin?: unknown;
     forward_from?: unknown;
   };
@@ -30,24 +30,43 @@ export const telegramWebhook = httpAction(async (ctx, req) => {
     await ctx.runAction(internal.telegram.send, { chatId: String(m.chat.id), text: "I don't act on forwarded messages. Tell me in your own words what you need." });
     return new Response("ok");
   }
-  await ctx.runMutation(internal.telegram.inbound, { chatId: String(m.chat.id), updateId: update.update_id, text: m.text.slice(0, 500) });
+  await ctx.runMutation(internal.telegram.inbound, {
+    chatId: String(m.chat.id),
+    updateId: update.update_id,
+    text: m.text.slice(0, 500),
+    name: (m.from?.username ? `@${m.from.username}` : m.from?.first_name ?? "").slice(0, 40),
+  });
   return new Response("ok");
 });
 
 export const inbound = internalMutation({
-  args: { chatId: v.string(), updateId: v.number(), text: v.string() },
-  handler: async (ctx, { chatId, updateId, text }) => {
+  args: { chatId: v.string(), updateId: v.number(), text: v.string(), name: v.optional(v.string()) },
+  handler: async (ctx, { chatId, updateId, text, name }) => {
+    // Telegram redelivers updates it isn't sure we got. Each update id is handled once, ever.
+    const key = `telegram:${updateId}`;
+    if (await ctx.db.query("inbound").withIndex("by_key", (q) => q.eq("key", key)).unique()) return;
+    await ctx.db.insert("inbound", { key, at: Date.now() });
+
     const start = text.match(/^\/start(?:\s+([A-Z0-9]{6}))?/i);
     if (start) {
       const code = start[1]?.toUpperCase();
       const link = code ? await ctx.db.query("chatLinks").withIndex("by_code", (q) => q.eq("code", code)).unique() : null;
-      if (!link || link.channel !== "telegram") {
-        await ctx.scheduler.runAfter(0, internal.telegram.send, { chatId, text: "Open the app, go to setup, and get a linking code. Then send it here as /start CODE." });
+      if (!link || link.channel !== "telegram" || (link.codeExpiresAt ?? 0) < Date.now()) {
+        await ctx.scheduler.runAfter(0, internal.telegram.send, { chatId, text: "That code isn't valid any more. Get a new linking code in the app, then send it here as /start CODE." });
         return;
       }
-      await ctx.db.patch(link._id, { externalId: chatId, linkedAt: Date.now() });
+      // One use only: the code is gone the moment a chat claims it.
+      const spent = `used-${crypto.getRandomValues(new Uint32Array(1))[0]}`;
+      if (link.linkedAt && link.externalId && link.externalId !== chatId) {
+        // Moving an account to a different chat needs the owner's yes in the app.
+        await ctx.db.patch(link._id, { code: spent, codeExpiresAt: undefined, pendingExternalId: chatId, pendingName: name });
+        await ctx.db.insert("activity", { userId: link.userId, kind: "security", title: "A new Telegram chat wants to link", detail: `${name || "Unknown"} · confirm it in Settings`, tone: "warn" });
+        await ctx.scheduler.runAfter(0, internal.telegram.send, { chatId, text: "Almost there. Confirm this chat in the app (Settings) to finish linking." });
+        return;
+      }
+      await ctx.db.patch(link._id, { code: spent, codeExpiresAt: undefined, externalId: chatId, linkedAt: Date.now(), pendingExternalId: undefined });
       const user = await ctx.db.get(link.userId);
-      await ctx.db.insert("activity", { userId: link.userId, kind: "security", title: "Telegram linked", tone: "good" });
+      await ctx.db.insert("activity", { userId: link.userId, kind: "security", title: "Telegram linked", detail: name || undefined, tone: "good" });
       await ctx.scheduler.runAfter(0, internal.telegram.send, {
         chatId,
         text: `Linked to ${user?.name ?? "your"} account. Ask what you can spend, list bills, or tell me who to pay.`,
@@ -59,10 +78,6 @@ export const inbound = internalMutation({
       await ctx.scheduler.runAfter(0, internal.telegram.send, { chatId, text: "This chat isn't linked to an account. Get a linking code in the app first." });
       return;
     }
-    // Telegram retries deliveries; the same update must never become two tasks.
-    const recent = await ctx.db.query("messages").withIndex("by_user", (q) => q.eq("userId", link.userId)).order("desc").take(5);
-    if (recent.some((r) => r.channel === "telegram" && r.role === "user" && r.text === text && Date.now() - r._creationTime < 15_000)) return;
-    void updateId;
     await ctx.db.insert("messages", { userId: link.userId, role: "user", text, channel: "telegram" });
     await ctx.scheduler.runAfter(0, internal.messages.reply, { userId: link.userId, text, channel: "telegram" });
   },

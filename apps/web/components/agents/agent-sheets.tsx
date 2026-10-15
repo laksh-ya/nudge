@@ -172,8 +172,10 @@ export function PermissionsSheet({ agent, onClose }: { agent: AgentView; onClose
             tone="danger"
             className="w-full"
             onClick={async () => {
-              await revoke({ agentId: agent._id });
+              const token = await revoke({ agentId: agent._id });
               onClose();
+              // Its vault key is frozen already; this approval removes it from the vault for good.
+              if (token) window.location.assign(approvalLink(token));
             }}
           >
             Disconnect {agent.name}

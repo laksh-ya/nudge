@@ -1,34 +1,46 @@
 # agent-wallet (working name)
 
-A personal-finance app with its own assistant, a dashboard, and a wallet that lets AI agents spend within limits the owner sets. People use it on the web, through Telegram (then WhatsApp), or through an outside assistant over MCP. Every surface shares one account, one ledger, one task list and one payment lifecycle.
+A testnet wallet that lets AI agents pay saved contacts within owner-set limits. The vault contract enforces those limits even if an agent's key is stolen. Anything larger, and any change that loosens a rule, needs the owner's passkey signature over the exact action, and loosening then waits out a delay the owner can cancel. Around it sits a personal-finance app (dashboard, imports, bills) with its own assistant. Bank feeds, family transfers and some demo history are simulated.
 
-Entry for FinTechathon 2026, Topic F (Agent Wallet). Product spec: `reports/Full product plan.md` in the research workspace. Team architecture reference: `PactVault/docs/03-architecture.md` and `06-decisions.md`.
+Entry for FinTechathon 2026, Topic F (Agent Wallet). Product spec: `reports/Full product plan.md` in the research workspace. This file is the stack decision record that Claude and Codex both follow; change a row here instead of writing a second architecture.
 
-The interface is built against Convex with sample data. Payments are simulated; passkey signing and the wallet contract come next. This file is the stack decision record that Claude and Codex both follow; change a row here instead of writing a second architecture.
+## What is live and what is simulated
+
+| Area | State |
+|---|---|
+| Vault payments (agent within limits, held, owner-approved, refused) | Live on Base Sepolia, test token tUSD (no value) |
+| Passkey approval and enrolment | Live: browser WebAuthn on the approval site, verified by the contract |
+| Freeze, unfreeze, disconnect, limit changes | Live: every route acts on the vault and is confirmed by reading it back |
+| Claude and other assistants over MCP | Live: JSON-RPC over HTTP with per-assistant bearer keys (OAuth not yet) |
+| Built-in assistant | Rule-based replies; no language model inside the app yet |
+| Bank feeds | Sandbox data per country; statement import (CSV, Excel, PDF, receipts) is real |
+| Family transfers and quotes | Simulated |
+| UPI | Hands the payment to your UPI app; no bank settlement confirmation |
+| Telegram | Adapter built (one-use linking codes, re-link confirmation, update de-duplication); no bot linked in the demo |
+| WhatsApp | Not built |
+
+"Protected" means protected from agents: an owner's own Withdraw (delayed) can go below it; an owner-approved payment cannot.
 
 ## Stack
 
-| Layer | Use | Version checked 14 Oct 2026 | Why |
+| Layer | In use | Version | Why |
 |---|---|---|---|
-| Language | TypeScript (strict) everywhere off-chain | – | One set of schemas for web, API, tools, workers |
+| Language | TypeScript (strict) everywhere off-chain | 5.9 | One set of types for web, backend, approval site and tests |
 | Monorepo | pnpm workspaces + Turborepo | turbo 2.11 | Separate deployables, shared packages |
-| Shared schemas | Zod | 4.6 | One definition feeds REST, MCP and assistant tools |
-| Dashboard | Next.js App Router, Tailwind, shadcn/ui, installable PWA | next 16.4, tailwind 4.3 | Main product UI |
-| Approval site | Separate Vite + React static app on its own host and passkey RP ID; no analytics; strict CSP | vite 8.3 | The only place owner signing happens; a hacked backend or dashboard can't alter it |
-| Backend | Convex: schema, queries, mutations, scheduler, HTTP actions for chat webhooks | convex 1.46 | Live queries make every screen update instantly; mutations are transactions |
-| App login | Clerk, connected to Convex through a `convex` JWT template | @clerk/nextjs 7.9 | Normal sign-in. It never authorises money |
-| Payment passkey | SimpleWebAuthn on the approval site; P-256 public key stored on the vault | @simplewebauthn 14.0 | Separate from login, so recovering email can't replace the wallet owner |
-| Outside agents | Official MCP TypeScript SDK, Streamable HTTP, OAuth per client | @modelcontextprotocol/sdk 1.32 | Each assistant gets its own identity, scopes, expiry |
-| Jobs | Convex scheduler, called inside the mutation that changes state | – | A scheduled job commits with its state change, which is the outbox guarantee |
-| Assistant | Vercel AI SDK with Anthropic provider; default Claude Sonnet 5.5, Opus 5.5 for hard planning | ai 7.0 | Provider-swappable for evals; tools call the same services as REST |
-| Telegram | grammY, webhook mode | grammy 1.46 | Maintained, typed |
-| WhatsApp | Meta WhatsApp Cloud API via plain HTTP adapter | – | Official API only |
-| Contracts | Solidity, Foundry, OpenZeppelin (P256/WebAuthn utils) | @openzeppelin/contracts 5.6 | Fuzz and invariant tests; verified P-256 precompile on Base Sepolia |
+| Dashboard | Next.js App Router, Tailwind | next 16.4, tailwind 4.3 | Main product UI |
+| Approval site | Separate Vite + React static app on its own host and passkey RP ID; no analytics; strict CSP | vite 8.3 | The only place owner signing happens |
+| Backend | Convex: schema, queries, mutations, scheduler, crons, HTTP actions | convex 1.46 | Mutations are transactions; a scheduled job commits with its state change |
+| Relayer queue | Convex Workpool, one transaction at a time | @convex-dev/workpool 0.4.12 | No two sends share a nonce |
+| App login | Clerk (`convex` JWT template); demo visitors get their own sandbox via a signed token | @clerk/nextjs 7.9 | Normal sign-in never authorises money |
+| Payment passkey | Browser WebAuthn (no library) on the approval site; P-256 key verified by the vault | – | Separate from login |
+| Outside agents | Hand-written MCP JSON-RPC at `/mcp`, bearer key per assistant, 60 calls/min | – | Small surface; OAuth per client is planned |
+| Agent keys | One per agent, AES-256-GCM sealed under `AGENT_KEY_SECRET` | – | A database copy alone yields no key; the contract caps any one key |
+| Contracts | Solidity 0.8.30, Foundry, OpenZeppelin WebAuthn/P256 | OZ 5.6.1 | Fuzz and invariant tests; P-256 precompile on Base Sepolia |
 | Chain client | viem | 2.57 | Typed calls, receipts, event decoding |
-| Chain | Base Sepolia (84532) | – | 0x100 P-256 precompile checked against Wycheproof vectors on 14 Oct |
-| Files | S3-compatible private storage (MinIO locally) | – | Statements, receipts, evidence |
-| Tests | Vitest, Playwright (virtual WebAuthn authenticator), forge test, eval runner | – | Product, approval flow, contract and attack suites |
-| Logs | pino with redaction + `audit_events` table | – | No secrets or card data in logs |
+| Chain | Base Sepolia (84532) | – | Testnet prototype |
+| Tests | forge test, Vitest (unit, local-chain, Base Sepolia end to end) | – | Contract, encoding and full-path suites |
+
+Planned, not in the code: an LLM-backed assistant, OAuth for MCP clients, WhatsApp, object storage for files, structured log redaction and an audit table, Playwright journeys.
 
 ## Not using
 
@@ -57,7 +69,7 @@ packages/backend  Convex: ledger, imports, sandbox feeds, crypto reads, rates, M
 packages/domain   money, currencies, directory of banks/apps/chains, statement parsing (tested)
 ```
 
-Still to add: `apps/executor` (agent keys only), `apps/watcher`, `evals/`.
+Still to add: a separate signer service for agent keys, an independent watcher for alerts, `evals/`.
 
 ## Connect an outside assistant (MCP)
 

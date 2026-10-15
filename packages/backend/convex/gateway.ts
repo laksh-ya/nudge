@@ -8,7 +8,10 @@ import { own, requireViewer } from "./lib/auth";
 import { computeOverview } from "./lib/overview";
 import { newApprovalToken } from "./lib/seed";
 import { sha256 } from "./lib/hash";
-import { ownerPayTask, setupTask } from "./lib/actions";
+import { ownerPayTask, paymentIdFor } from "./lib/actions";
+import { changeLimits, revokeAgent } from "./lib/control";
+import { relayer } from "./lib/relayer";
+import { hit } from "./lib/limits";
 
 /**
  * The single path outside assistants (MCP) and chat channels use to touch money.
@@ -54,28 +57,18 @@ export const updateGrant = mutation({
     if (!Number.isInteger(args.days) || args.days < 1 || args.days > 365) throw new Error("Pick 1 to 365 days");
     const scopes = [...new Set(args.scopes)];
     if (!scopes.includes("read")) scopes.unshift("read");
-    await ctx.db.patch(agent._id, {
+    await ctx.db.patch(agent._id, { hidesBalances: args.hidesBalances });
+    const approvalToken = await changeLimits(ctx, user, agent, {
       scopes,
-      dailyCapMinor: scopes.includes("spend") ? args.dailyCapMinor : 0,
-      perPaymentMinor: scopes.includes("spend") ? args.perPaymentMinor : 0,
-      hidesBalances: args.hidesBalances,
+      perPaymentMinor: args.perPaymentMinor,
+      dailyCapMinor: args.dailyCapMinor,
       expiresAt: Date.now() + args.days * DAY,
     });
-    const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
-    let approvalToken: string | null = null;
-    if (wallet?.status === "live" && scopes.includes("spend") && agent.status === "active") {
-      if (agent.chainAddress) {
-        const fresh = (await ctx.db.get(agent._id))!;
-        approvalToken = (await setupTask(ctx, user, [fresh], [], `Change ${agent.name}'s limits`))?.token ?? null;
-      } else {
-        await ctx.scheduler.runAfter(0, internal.chain.provisionAgent, { agentId: agent._id });
-      }
-    }
     await ctx.db.insert("activity", {
       userId: user._id,
       kind: "agent",
       title: `Changed what ${agent.name} may do`,
-      detail: scopes.includes("spend") ? `Up to $${(args.dailyCapMinor / 100).toFixed(2)} a day` : "Can't spend",
+      detail: !scopes.includes("spend") ? "Can't spend" : approvalToken ? "Waiting for your passkey" : `Up to $${(args.dailyCapMinor / 100).toFixed(2)} a day`,
       tone: "neutral",
     });
     return approvalToken;
@@ -88,8 +81,20 @@ export const revoke = mutation({
     const user = await requireViewer(ctx);
     const agent = await own(user, await ctx.db.get(agentId));
     if (agent.provider === "own") throw new Error("Freeze your own assistant instead");
-    await ctx.db.patch(agent._id, { status: "revoked", tokenHash: undefined });
-    await ctx.db.insert("activity", { userId: user._id, kind: "agent", title: `Disconnected ${agent.name}`, tone: "warn" });
+    return await revokeAgent(ctx, user, agent);
+  },
+});
+
+/** 60 calls a minute per assistant. */
+export const allow = internalMutation({
+  args: { agentId: v.id("agents") },
+  handler: async (ctx, { agentId }) => {
+    try {
+      await hit(ctx, `mcp:${agentId}`, 60, 60_000);
+      return true;
+    } catch {
+      return false;
+    }
   },
 });
 
@@ -205,6 +210,7 @@ export const contacts = internalQuery({
 
 type Decision =
   | { outcome: "paid"; taskId: Id<"tasks">; message: string }
+  | { outcome: "duplicate"; taskId: Id<"tasks">; state: string; message: string }
   | { outcome: "needs_approval"; taskId: Id<"tasks">; approvalUrl: string; reason: string }
   | { outcome: "refused"; code: string; reason: string };
 
@@ -213,11 +219,17 @@ async function record(ctx: MutationCtx, user: Doc<"users">, agent: Agent, text: 
 }
 
 export const proposePayment = internalMutation({
-  args: { agentId: v.id("agents"), contactId: v.string(), amount: v.number(), reason: v.string() },
-  handler: async (ctx, { agentId, contactId, amount, reason }): Promise<Decision> => {
+  args: { agentId: v.id("agents"), contactId: v.string(), amount: v.number(), reason: v.string(), requestId: v.optional(v.string()) },
+  handler: async (ctx, { agentId, contactId, amount, reason, requestId }): Promise<Decision> => {
     const { agent, user } = await load(ctx, agentId);
     need(agent, "prepare");
     await ctx.db.patch(agent._id, { lastUsedAt: Date.now() });
+    if (requestId !== undefined && !/^[\w.:#/-]{1,80}$/.test(requestId)) return { outcome: "refused", code: "2011", reason: "requestId must be 1 to 80 letters, digits or .:#/-_" };
+    if (requestId) {
+      // The same request again (a retry, a duplicate invoice): report the first one, never pay twice.
+      const earlier = await ctx.db.query("tasks").withIndex("by_agent_request", (q) => q.eq("agentId", agent._id).eq("requestId", requestId)).first();
+      if (earlier) return { outcome: "duplicate", taskId: earlier._id, state: earlier.state, message: "A payment with this requestId already exists. Check get_task_status instead of retrying." };
+    }
     if (!Number.isFinite(amount) || amount <= 0 || amount > 1e6) return { outcome: "refused", code: "2003", reason: "Amount must be a positive number of dollars" };
     const minor = Math.round(amount * 100);
     const payeeId = ctx.db.normalizeId("payees", contactId);
@@ -230,20 +242,29 @@ export const proposePayment = internalMutation({
     if (!wallet) return { outcome: "refused", code: "2001", reason: "The owner hasn't set up an agent wallet" };
     const purpose = reason.trim().slice(0, 140) || undefined;
 
+    // When the vault is live its own numbers win; our copy can only be stricter, never looser.
+    const vault = wallet.status === "live" && wallet.version === 2 ? wallet.vault : undefined;
+    // Before the vault registers this agent its record reads as zeros; those aren't limits yet.
+    const agentVault = vault && agent.vault?.active ? agent.vault : undefined;
+    const perPayment = Math.min(agent.perPaymentMinor, agentVault?.perPaymentMinor ?? Infinity);
+    const dailyCap = Math.min(agent.dailyCapMinor, agentVault?.dailyCapMinor ?? Infinity);
     const agents = await ctx.db.query("agents").withIndex("by_user", (q) => q.eq("userId", user._id)).take(50);
-    const spentToday = agents.reduce((s, a) => s + a.spentTodayMinor, 0);
+    const spentToday = vault ? vault.spentMinor : agents.reduce((s, a) => s + a.spentTodayMinor, 0);
+    const ceiling = Math.min(wallet.dailyCeilingMinor, vault?.ceilingMinor ?? Infinity);
+    const protectedMinor = Math.max(wallet.protectedMinor, vault?.protectedMinor ?? 0);
+    const free = vault ? vault.balanceMinor - vault.heldMinor : wallet.balanceMinor;
     const blockers: { code: string; why: string }[] = [];
-    if (wallet.frozen) blockers.push({ code: "1002", why: "The wallet is frozen" });
+    if (wallet.frozen || vault?.frozen) blockers.push({ code: "1002", why: "The wallet is frozen" });
     if (!agent.scopes.includes("spend")) blockers.push({ code: "2002", why: `${agent.name} can prepare payments but not send them` });
-    if (minor > agent.perPaymentMinor) blockers.push({ code: "2003", why: `Above ${agent.name}'s ${formatMoney(agent.perPaymentMinor, "USDC")} per-payment limit` });
-    if (agent.spentTodayMinor + minor > agent.dailyCapMinor) blockers.push({ code: "2003", why: `Above ${agent.name}'s daily limit` });
-    if (spentToday + minor > wallet.dailyCeilingMinor) blockers.push({ code: "2004", why: "Above the wallet's daily ceiling for all agents" });
-    if (wallet.balanceMinor - minor < wallet.protectedMinor) blockers.push({ code: "2005", why: "Would dip into the protected amount" });
+    if (minor > perPayment) blockers.push({ code: "2003", why: `Above ${agent.name}'s ${formatMoney(perPayment, "USDC")} per-payment limit` });
+    if (agent.spentTodayMinor + minor > dailyCap) blockers.push({ code: "2003", why: `Above ${agent.name}'s daily limit` });
+    if (spentToday + minor > ceiling) blockers.push({ code: "2004", why: "Above the wallet's daily ceiling for all agents" });
+    if (free - minor < protectedMinor) blockers.push({ code: "2005", why: "Would dip into the protected amount" });
     if (!payee.trusted || (payee.holdUntil && payee.holdUntil > Date.now())) blockers.push({ code: "2006", why: `${payee.name} is a new contact` });
 
-    if (wallet.balanceMinor < minor) return { outcome: "refused", code: "2005", reason: "Not enough in the wallet" };
+    if (free < minor) return { outcome: "refused", code: "2005", reason: "Not enough in the wallet" };
 
-    const live = wallet.status === "live";
+    const live = wallet.status === "live" && wallet.version === 2;
     if (blockers.length === 0 && live && agent.onchain && payee.onchain) {
       // The vault decides. Our checks passed; the contract checks again with the agent's own key.
       const taskId = await ctx.db.insert("tasks", {
@@ -257,11 +278,20 @@ export const proposePayment = internalMutation({
         purpose,
         state: "reserved",
         rail: "base-sepolia",
+        requestId,
         updatedAt: Date.now(),
       });
-      await ctx.scheduler.runAfter(0, internal.chain.agentPay, { taskId });
+      await ctx.db.patch(taskId, { paymentId: paymentIdFor(taskId, agent._id, requestId) });
+      await relayer.enqueueAction(ctx, internal.chain.agentPay, { taskId });
       await record(ctx, user, agent, `${agent.name} is paying ${payee.name} ${formatMoney(minor, "USDC")} within its limits.`, taskId);
-      return { outcome: "paid", taskId, message: `Sending ${formatMoney(minor, "USDC")} to ${payee.name} on Base Sepolia. Check get_task_status for the transaction.` };
+      const held = vault && vault.holdFor > 0 && minor > vault.holdAboveMinor;
+      return {
+        outcome: "paid",
+        taskId,
+        message: held
+          ? `Paying ${payee.name} ${formatMoney(minor, "USDC")} on Base Sepolia. Above ${formatMoney(vault.holdAboveMinor, "USDC")}, so the vault holds it ${Math.round(vault.holdFor / 60)} min for the owner to cancel. Check get_task_status.`
+          : `Sending ${formatMoney(minor, "USDC")} to ${payee.name} on Base Sepolia. Check get_task_status for the transaction.`,
+      };
     }
     if (blockers.length === 0 && live) blockers.push({ code: "1001", why: `${agent.name} isn't registered in the vault yet` });
 
@@ -277,6 +307,7 @@ export const proposePayment = internalMutation({
         purpose,
         state: "submitted",
         rail: "simulator",
+        requestId,
         updatedAt: Date.now(),
       });
       await ctx.db.patch(agent._id, { spentTodayMinor: agent.spentTodayMinor + minor });
@@ -302,6 +333,7 @@ export const proposePayment = internalMutation({
         agentId: agent._id,
         purpose,
         reason: blockers.map((b) => b.why).join(". "),
+        requestId,
       });
       await record(ctx, user, agent, `${agent.name} asked to pay ${payee.name} ${formatMoney(minor, "USDC")}. ${blockers[0]!.why}, so it needs your passkey.`, taskId);
       const base = process.env.APPROVE_URL ?? "https://agent-wallet-approve.vercel.app";
@@ -321,6 +353,7 @@ export const proposePayment = internalMutation({
       state: "awaiting_approval",
       reason: blockers.map((b) => b.why).join(". "),
       rail: "simulator",
+      requestId,
       approvalToken: token,
       expiresAt: Date.now() + 30 * 60_000,
       updatedAt: Date.now(),
@@ -345,6 +378,7 @@ export const taskStatus = internalQuery({
       reason: task.reason ?? null,
       simulated: task.rail === "simulator",
       transaction: task.txHash ? `https://sepolia.basescan.org/tx/${task.txHash}` : null,
+      releasesAt: task.state === "held" && task.releaseAt ? new Date(task.releaseAt).toISOString() : null,
       updatedAt: new Date(task.updatedAt).toISOString(),
     };
   },

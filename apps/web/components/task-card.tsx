@@ -21,6 +21,7 @@ export type TaskView = {
   channel: "app" | "telegram" | "whatsapp" | "mcp" | "family";
   approvalToken?: string;
   txHash?: string;
+  sample?: boolean;
 };
 
 const channelIcon = { app: MessageCircle, telegram: Send, whatsapp: MessageCircle, mcp: Plug, family: Users };
@@ -37,7 +38,7 @@ export function TaskCard({ task, className }: { task: TaskView; className?: stri
           <div className="truncate text-body font-semibold">{task.payee ?? task.title}</div>
           <div className="flex items-center gap-1.5 text-label text-mute">
             <ChannelIcon className="size-3" />
-            {[task.agent, channelLabel[task.channel], task.rail === "handoff" ? "UPI" : task.currency === "USDC" ? "Wallet" : null]
+            {[task.sample ? "Sample" : null, task.agent, channelLabel[task.channel], task.rail === "handoff" ? "UPI" : task.currency === "USDC" ? "Wallet" : null]
               .filter(Boolean)
               .join(" · ")}
           </div>

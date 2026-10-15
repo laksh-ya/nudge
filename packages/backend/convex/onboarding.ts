@@ -1,11 +1,14 @@
 import { v } from "convex/values";
+import { changeLimits, revokeAgent } from "./lib/control";
+import { policyTask } from "./lib/actions";
 import { country as countryInfo } from "@agent-wallet/domain";
 import { mutation, query } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import { currency } from "./schema";
-import { requireViewer, viewer } from "./lib/auth";
+import { JUDGE, requireViewer, viewer } from "./lib/auth";
 import { wipeUser } from "./lib/wipe";
+import { hit } from "./lib/limits";
 
 const DAY = 86_400_000;
 export const STEPS = ["you", "goals", "sources", "history", "review", "assistant", "wallet", "chat", "people", "done"] as const;
@@ -54,7 +57,14 @@ export const state = query({
       wallet,
       agents: agents.map((a) => ({ _id: a._id, provider: a.provider, name: a.name, status: a.status })),
       family: family.map((f) => ({ _id: f._id, name: f.name, relation: f.relation, status: f.status })),
-      chat: link ? { code: link.code, linked: Boolean(link.linkedAt), channel: link.channel } : null,
+      chat: link
+        ? {
+            code: link.codeExpiresAt && link.codeExpiresAt > Date.now() ? link.code : null,
+            linked: Boolean(link.linkedAt),
+            channel: link.channel,
+            pending: link.pendingExternalId ? (link.pendingName || "A new chat") : null,
+          }
+        : null,
       bot: process.env.TELEGRAM_BOT_USERNAME ?? null,
     };
   },
@@ -124,7 +134,8 @@ async function ownAssistant(ctx: MutationCtx, user: Doc<"users">, mode: "draft" 
   const per = mode === "limited" ? (wallet?.perPaymentMinor ?? 1_000) : 0;
   const existing = agents.find((a) => a.provider === "own");
   if (existing) {
-    await ctx.db.patch(existing._id, { scopes, dailyCapMinor: cap, perPaymentMinor: per });
+    // Through the shared path, so a live vault key is re-limited or frozen too.
+    await changeLimits(ctx, user, existing, { scopes, dailyCapMinor: cap, perPaymentMinor: per, expiresAt: existing.expiresAt });
   } else {
     await ctx.db.insert("agents", {
       userId: user._id,
@@ -167,8 +178,18 @@ export const setupWallet = mutation({
     for (const n of Object.values(args)) if (!minorOk(n)) throw new Error("Amount is out of range");
     if (args.perPaymentMinor > args.dailyCeilingMinor) throw new Error("A single payment can't exceed the daily ceiling");
     const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
-    if (wallet) {
-      // Tightening applies now; loosening will need the passkey once signing is connected.
+    if (wallet?.status === "live" && wallet.version === 2) {
+      // The vault enforces these. Our gateway takes whichever is stricter right away; the vault
+      // changes when the owner signs (and, for looser limits, after its delay).
+      const task = await policyTask(ctx, user, wallet, { protectedMinor: args.protectedMinor, dailyCeilingMinor: args.dailyCeilingMinor });
+      await ctx.db.patch(wallet._id, {
+        proposedPolicy: { ...args, taskId: task.taskId },
+        protectedMinor: Math.max(wallet.protectedMinor, args.protectedMinor),
+        dailyCeilingMinor: Math.min(wallet.dailyCeilingMinor, args.dailyCeilingMinor),
+        perPaymentMinor: Math.min(wallet.perPaymentMinor ?? args.perPaymentMinor, args.perPaymentMinor),
+      });
+      return task.token;
+    } else if (wallet) {
       await ctx.db.patch(wallet._id, args);
     } else {
       await ctx.db.insert("wallets", {
@@ -190,6 +211,7 @@ export const setupWallet = mutation({
     }
     const fresh = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
     await ownAssistant(ctx, user, user.autonomy ?? "draft", fresh);
+    return null;
   },
 });
 
@@ -199,6 +221,7 @@ export const addTestFunds = mutation({
     const user = await requireViewer(ctx);
     const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
     if (!wallet) throw new Error("Set up the wallet first");
+    if (wallet.status === "live") throw new Error("Your vault holds real test tokens on-chain; it was funded when it was created");
     if (wallet.balanceMinor >= 100_000) throw new Error("Test balance is capped at $1,000");
     await ctx.db.patch(wallet._id, { balanceMinor: wallet.balanceMinor + 10_000 });
     await ctx.db.insert("activity", { userId: user._id, kind: "payment", title: "Added $100.00 test USDC", detail: "Simulated funds", tone: "neutral" });
@@ -211,17 +234,32 @@ function pairingCode() {
   return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
 }
 
-/** Linking always starts here, in the signed-in app, never from the chat side. */
+/** Linking always starts here, in the signed-in app, never from the chat side. Codes last 10 minutes and work once. */
 export const chatCode = mutation({
   args: { channel: v.union(v.literal("telegram"), v.literal("whatsapp")) },
   handler: async (ctx, { channel }) => {
     const user = await requireViewer(ctx);
+    await hit(ctx, `chat-code:${user._id}`, 10, 3600_000);
     const existing = await ctx.db.query("chatLinks").withIndex("by_user", (q) => q.eq("userId", user._id)).take(10);
     const same = existing.find((l) => l.channel === channel);
-    if (same) return same.code;
     const code = pairingCode();
-    await ctx.db.insert("chatLinks", { userId: user._id, channel, code });
+    const codeExpiresAt = Date.now() + 10 * 60_000;
+    if (same) await ctx.db.patch(same._id, { code, codeExpiresAt });
+    else await ctx.db.insert("chatLinks", { userId: user._id, channel, code, codeExpiresAt });
     return code;
+  },
+});
+
+/** The owner's answer to "a new chat wants to link". */
+export const confirmChat = mutation({
+  args: { channel: v.union(v.literal("telegram"), v.literal("whatsapp")), accept: v.boolean() },
+  handler: async (ctx, { channel, accept }) => {
+    const user = await requireViewer(ctx);
+    const link = (await ctx.db.query("chatLinks").withIndex("by_user", (q) => q.eq("userId", user._id)).take(10)).find((l) => l.channel === channel);
+    if (!link?.pendingExternalId) return;
+    if (accept) await ctx.db.patch(link._id, { externalId: link.pendingExternalId, linkedAt: Date.now(), pendingExternalId: undefined, pendingName: undefined });
+    else await ctx.db.patch(link._id, { pendingExternalId: undefined, pendingName: undefined });
+    await ctx.db.insert("activity", { userId: user._id, kind: "security", title: accept ? "Moved Telegram to a new chat" : "Refused a new Telegram chat", detail: link.pendingName, tone: accept ? "neutral" : "warn" });
   },
 });
 
@@ -255,7 +293,10 @@ export const removeAssistant = mutation({
     const user = await requireViewer(ctx);
     const agent = await ctx.db.get(agentId);
     if (!agent || agent.userId !== user._id || agent.provider === "own") throw new Error("Not found");
+    // A key that ever reached the vault is disconnected and frozen, never silently deleted.
+    if (agent.chainAddress) return await revokeAgent(ctx, user, agent);
     await ctx.db.delete(agentId);
+    return null;
   },
 });
 
@@ -298,6 +339,7 @@ export const restart = mutation({
   args: { fresh: v.boolean() },
   handler: async (ctx, { fresh }) => {
     const user = await requireViewer(ctx);
+    if (fresh && user.tokenIdentifier === JUDGE) throw new Error("The judge account keeps its vault; it can't be wiped from the app");
     if (fresh) {
       await wipeUser(ctx, user._id);
       await ctx.db.patch(user._id, { onboardedAt: undefined, priorities: [], autonomy: undefined, incomeDay: undefined, nextIncomeAt: Date.now() + 30 * DAY });

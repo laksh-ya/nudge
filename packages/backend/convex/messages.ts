@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { freezeAll } from "./lib/control";
 import { formatMoney } from "@agent-wallet/domain";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -105,16 +106,14 @@ export const reply = internalMutation({
     };
 
     if (/\b(freeze|stop|lock|panic)\b/.test(t)) {
-      const agents = await ctx.db.query("agents").withIndex("by_user", (q) => q.eq("userId", userId)).take(50);
-      let n = 0;
-      for (const a of agents) {
-        if (a.status === "active") {
-          await ctx.db.patch(a._id, { status: "frozen" });
-          n++;
-        }
-      }
-      await ctx.db.insert("activity", { userId, kind: "security", title: `Froze ${n} agents from chat`, tone: "warn" });
-      return say(n ? `Froze ${n} ${n === 1 ? "agent" : "agents"}. Nothing can spend until you unfreeze them in Agents.` : "All agents are already frozen.");
+      // Same path as the dashboard: our gateway stops now, and each agent's key is frozen in the vault.
+      const user = (await ctx.db.get(userId))!;
+      const n = await freezeAll(ctx, user, channel === "telegram" ? "From Telegram" : "From chat");
+      return say(
+        n
+          ? `Froze ${n} ${n === 1 ? "agent" : "agents"}. They can't spend through us now; the vault confirms each freeze in a few seconds (see Activity).`
+          : "All agents are already frozen.",
+      );
     }
 
     const payees = await ctx.db.query("payees").withIndex("by_user", (q) => q.eq("userId", userId)).take(200);

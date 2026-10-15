@@ -38,6 +38,9 @@ export default function SettingsPage() {
   const { setDemo } = useDemo();
   const restart = useMutation(api.onboarding.restart);
   const restore = useMutation(api.demo.restore);
+  const confirmChat = useMutation(api.onboarding.confirmChat);
+  const chain = useQuery(api.vault.status);
+  const passkeys = chain?.wallet?.passkeys.filter((k) => k.status === "active").length ?? (chain?.wallet?.hasPasskey ? 1 : 0);
   const router = useRouter();
   const [editing, setEditing] = useState<Editing>(null);
   const [restored, setRestored] = useState(false);
@@ -98,14 +101,31 @@ export default function SettingsPage() {
 
       <Card title="Security" pad={false}>
         <Divided className="px-4 pb-1">
-          <Row leading={<IconTile icon={Fingerprint} tone="page" />} title="Payment passkey" sub="Approves payments over your limits" trailing={<Chip tone="amber">Not set up</Chip>} />
+          <Row
+            href="/wallet"
+            leading={<IconTile icon={Fingerprint} tone="page" />}
+            title="Payment passkeys"
+            sub={passkeys ? `${passkeys} on your vault · approve anything over your limits` : "Approve payments over your limits"}
+            trailing={<Chip tone={passkeys ? (passkeys > 1 ? "green" : "amber") : "neutral"}>{passkeys ? (passkeys > 1 ? `${passkeys} set up` : "No backup") : "Not set up"}</Chip>}
+          />
           <Row
             href="/onboarding"
             leading={<IconTile icon={Send} tone="page" />}
             title="Telegram"
-            sub={state.chat ? `Code ${state.chat.code}` : "Chat with your assistant"}
+            sub={state.chat?.code ? `Code ${state.chat.code}` : "Chat with your assistant"}
             trailing={<Chip tone={state.chat?.linked ? "green" : "neutral"}>{state.chat?.linked ? "Linked" : "Not linked"}</Chip>}
           />
+          {state.chat?.pending && (
+            <div className="flex items-center gap-2 py-3">
+              <span className="flex-1 text-label text-amber">{state.chat.pending} wants to take over your Telegram link.</span>
+              <Button size="sm" tone="ghost" onClick={() => confirmChat({ channel: "telegram", accept: false })}>
+                Refuse
+              </Button>
+              <Button size="sm" onClick={() => confirmChat({ channel: "telegram", accept: true })}>
+                Allow
+              </Button>
+            </div>
+          )}
         </Divided>
       </Card>
 
@@ -120,7 +140,7 @@ export default function SettingsPage() {
             title="Go through setup again"
             sub="Keeps your accounts and history"
           />
-          {me.demo && (
+          {me.sandbox && (
             <Row
               onClick={async () => {
                 await restore();

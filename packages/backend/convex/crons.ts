@@ -9,4 +9,6 @@ crons.daily("reset agent daily spend", { hourUTC: 18, minuteUTC: 30 }, internal.
 
 crons.interval("expire unanswered approvals", { minutes: 5 }, internal.tasks.expireStale, {});
 
+crons.interval("delete idle demo sandboxes", { hours: 1 }, internal.demo.sweep, {});
+
 export default crons;

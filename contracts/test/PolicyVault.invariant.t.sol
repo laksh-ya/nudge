@@ -28,10 +28,12 @@ contract Handler is Test {
         address agent = agents[who % 2];
         amount = bound(amount, 1, 40e6);
         vm.prank(agent);
-        if (vault.agentPay(shopId, amount, bytes32(++n), 0)) {
-            times.push(block.timestamp);
-            amounts.push(amount);
-        }
+        try vault.agentPay(shopId, amount, bytes32(++n), 0) returns (bool ok) {
+            if (ok) {
+                times.push(block.timestamp);
+                amounts.push(amount);
+            }
+        } catch {}
     }
 
     function wait(uint256 secs) external {
@@ -68,7 +70,8 @@ contract PolicyVaultInvariant is Passkey {
     }
 
     function sign(PolicyVault.Op op, bytes memory data) internal {
-        PolicyVault.Action memory act = PolicyVault.Action({op: op, data: data, nonce: ++nonce, deadline: uint64(block.timestamp + 600)});
+        PolicyVault.Action memory act =
+            PolicyVault.Action({op: op, data: data, nonce: ++nonce, deadline: uint64(block.timestamp + 600)});
         (uint256 x, uint256 y) = vm.publicKeyP256(ownerPk);
         vault.execute(act, vault.keyIdOf(bytes32(x), bytes32(y)), assertion(ownerPk, vault.digest(act), RP_ID, 0x05));
     }
@@ -84,7 +87,9 @@ contract PolicyVaultInvariant is Passkey {
         for (uint256 i; i < c; ++i) {
             uint256 sum;
             uint256 start = handler.times(i);
-            for (uint256 j = i; j < c && handler.times(j) < start + 24 hours; ++j) sum += handler.amounts(j);
+            for (uint256 j = i; j < c && handler.times(j) < start + 24 hours; ++j) {
+                sum += handler.amounts(j);
+            }
             assertLe(sum, 40e6);
         }
     }

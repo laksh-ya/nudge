@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { CHAIN_ID, EXPLORER } from "@agent-wallet/domain";
+import { relayer } from "./lib/relayer";
 
 /**
  * The approval link carries an opaque token. Opening it only reads; nothing is
@@ -32,11 +33,20 @@ export const get = query({
       for (const a of await ctx.db.query("agents").withIndex("by_user", (q) => q.eq("userId", task.userId)).take(50)) {
         if (a.chainAddress) names[a.chainAddress.toLowerCase()] = a.name;
       }
+      const keys = (wallet.passkeys ?? []).filter((k) => k.status !== "removed");
+      for (const k of keys) names[k.keyId] = k.label;
+      for (const rp of new Set(keys.map((k) => k.rpId))) {
+        const h = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(rp))), (b) => b.toString(16).padStart(2, "0")).join("");
+        names[`0x${h}`] = rp;
+      }
       onchain = {
         action: task.action,
         vault: wallet.address,
         chainId: CHAIN_ID,
+        version: wallet.version ?? 1,
+        changeDelay: wallet.vault?.changeDelay ?? 0,
         keyId: wallet.keyId,
+        credentialIds: keys.filter((k) => k.status === "active").map((k) => k.credentialId),
         credentialId: wallet.credentialId ?? null,
         rpId: wallet.rpId ?? null,
         names,
@@ -45,6 +55,7 @@ export const get = query({
     return {
       onchain,
       txHash: task.txHash ?? null,
+      readyAt: task.readyAt ?? null,
       explorer: EXPLORER,
       title: task.title,
       state: task.state,
@@ -100,8 +111,10 @@ export const submit = mutation({
       authenticatorData: v.string(),
       clientDataJSON: v.string(),
     }),
+    /** Which of the owner's passkeys signed (by credential id). */
+    credentialId: v.optional(v.string()),
   },
-  handler: async (ctx, { token, auth }) => {
+  handler: async (ctx, { token, auth, credentialId }) => {
     const task = await ctx.db
       .query("tasks")
       .withIndex("by_approval_token", (q) => q.eq("approvalToken", token))
@@ -113,8 +126,13 @@ export const submit = mutation({
       return "expired";
     }
     if (auth.clientDataJSON.length > 2000 || auth.authenticatorData.length > 1000) throw new Error("Signature too large");
+    const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", task.userId)).unique();
+    const keys = (wallet?.passkeys ?? []).filter((k) => k.status === "active");
+    const key = credentialId ? keys.find((k) => k.credentialId === credentialId) : keys[0];
+    const keyId = key?.keyId ?? wallet?.keyId;
+    if (!keyId) throw new Error("This wallet has no passkey");
     await ctx.db.patch(task._id, { state: "reserved", updatedAt: Date.now() });
-    await ctx.scheduler.runAfter(0, internal.chain.relayOwner, { taskId: task._id, auth });
+    await relayer.enqueueAction(ctx, internal.chain.relayOwner, { taskId: task._id, auth, keyId });
     return "reserved";
   },
 });

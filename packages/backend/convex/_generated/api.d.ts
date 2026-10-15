@@ -23,10 +23,14 @@ import type * as http from "../http.js";
 import type * as imports from "../imports.js";
 import type * as lib_actions from "../lib/actions.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_control from "../lib/control.js";
 import type * as lib_hash from "../lib/hash.js";
 import type * as lib_ledger from "../lib/ledger.js";
+import type * as lib_limits from "../lib/limits.js";
 import type * as lib_overview from "../lib/overview.js";
+import type * as lib_relayer from "../lib/relayer.js";
 import type * as lib_sandbox from "../lib/sandbox.js";
+import type * as lib_secrets from "../lib/secrets.js";
 import type * as lib_seed from "../lib/seed.js";
 import type * as lib_wipe from "../lib/wipe.js";
 import type * as messages from "../messages.js";
@@ -62,10 +66,14 @@ declare const fullApi: ApiFromModules<{
   imports: typeof imports;
   "lib/actions": typeof lib_actions;
   "lib/auth": typeof lib_auth;
+  "lib/control": typeof lib_control;
   "lib/hash": typeof lib_hash;
   "lib/ledger": typeof lib_ledger;
+  "lib/limits": typeof lib_limits;
   "lib/overview": typeof lib_overview;
+  "lib/relayer": typeof lib_relayer;
   "lib/sandbox": typeof lib_sandbox;
+  "lib/secrets": typeof lib_secrets;
   "lib/seed": typeof lib_seed;
   "lib/wipe": typeof lib_wipe;
   messages: typeof messages;
@@ -106,4 +114,6 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  relayer: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"relayer">;
+};

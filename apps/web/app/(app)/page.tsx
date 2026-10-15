@@ -163,7 +163,7 @@ export default function Home() {
                   key={t._id}
                   leading={t.agentProvider ? <AgentMark provider={t.agentProvider} /> : <IconTile icon={Receipt} />}
                   title={t.title}
-                  sub={t.reason}
+                  sub={t.sample ? `Sample · ${t.reason ?? ""}` : t.reason}
                   trailing={
                     <div className="flex items-center gap-3">
                       <Money minor={t.amountMinor ?? 0} currency={t.currency ?? "USDC"} className="text-body font-semibold" />
@@ -185,7 +185,7 @@ export default function Home() {
                     </span>
                   }
                   title={`${t.title} · ${t.payee ?? ""}`}
-                  sub="Sent, waiting for confirmation"
+                  sub={t.sample ? "Sample · sent, waiting for confirmation" : "Sent, waiting for confirmation"}
                   trailing={<Money minor={t.amountMinor ?? 0} currency={t.currency ?? "USDC"} className="text-body font-semibold" />}
                 />
               ))}

@@ -13,9 +13,15 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
   const [demo, setDemoState] = useState(false);
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
+    // /judge redirects here with ?demo=1 after setting its cookie.
+    const fromLink = new URLSearchParams(window.location.search).get("demo") === "1";
     try {
-      setDemoState(localStorage.getItem(KEY) === "1");
-    } catch {}
+      if (fromLink) localStorage.setItem(KEY, "1");
+      setDemoState(fromLink || localStorage.getItem(KEY) === "1");
+    } catch {
+      setDemoState(fromLink);
+    }
+    if (fromLink) window.history.replaceState(null, "", window.location.pathname);
     setLoaded(true);
   }, []);
   const setDemo = useCallback((on: boolean) => {

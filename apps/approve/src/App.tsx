@@ -97,18 +97,23 @@ function Enrol({ token }: { token: string }) {
   const info = useQuery(api.vault.enrolInfo, { token });
   const complete = useMutation(api.vault.completeEnrol);
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
+  const [code, setCode] = useState<string>();
   const [error, setError] = useState<string>();
-  if (info === undefined && !done) return <Frame><div className="mt-4 h-80 animate-pulse rounded-2xl bg-white" /></Frame>;
-  if (done) {
+  if (info === undefined && !code) return <Frame><div className="mt-4 h-80 animate-pulse rounded-2xl bg-white" /></Frame>;
+  if (code) {
+    // The app (signed in as the owner) asks for this code. A copied setup link alone gets nowhere.
     return (
       <Frame live>
         <div className="mt-14 flex flex-col items-center text-center">
           <span className="pop grid size-20 place-items-center rounded-full bg-green text-white">
             <Check className="size-10" strokeWidth={3} />
           </span>
-          <h1 className="rise mt-6 text-head font-semibold">Passkey saved</h1>
-          <p className="rise mt-1 max-w-xs text-body text-ink-2">Your wallet is being created on Base Sepolia. Go back to the app; it takes about a minute.</p>
+          <h1 className="rise mt-6 text-head font-semibold">Passkey made. One step left</h1>
+          <p className="rise mt-1 max-w-xs text-body text-ink-2">Type this code in the app, on the Wallet screen, to confirm it's yours.</p>
+          <div className="figure rise mt-5 rounded-2xl bg-white px-6 py-3 text-[40px] leading-[44px] tracking-[0.12em] text-navy shadow-sm">
+            {code.slice(0, 3)} {code.slice(3)}
+          </div>
+          <p className="rise mt-3 text-label text-mute">Valid for 15 minutes. If you didn't start this, don't type it anywhere.</p>
         </div>
       </Frame>
     );
@@ -120,15 +125,19 @@ function Enrol({ token }: { token: string }) {
         <span className="grid size-14 place-items-center rounded-2xl bg-sky text-navy">
           <Fingerprint className="size-7" />
         </span>
-        <h1 className="mt-4 text-[24px] leading-[30px] font-bold text-navy">Create your payment passkey</h1>
+        <h1 className="mt-4 text-[24px] leading-[30px] font-bold text-navy">{info.purpose === "backup" ? "Add a backup passkey" : "Create your payment passkey"}</h1>
         <p className="mt-2 text-body text-ink-2">
-          It's the only thing that can approve payments above your limits or change them. It stays on your device; nobody else, including us, can use it.
+          {info.purpose === "backup"
+            ? "Make it on a different device. If you lose your phone, this one can still approve payments and changes."
+            : "It's what approves payments above your limits and any change to them, with your device's own check: Face ID, fingerprint or PIN."}
         </p>
-        <dl className="mt-4 divide-y divide-line rounded-xl bg-page px-4 text-body">
-          <Detail label="Agents, per 24 hours">{formatMoney(info.dailyCeilingMinor, "USDC")}</Detail>
-          <Detail label="Biggest single payment">{formatMoney(info.perPaymentMinor, "USDC")}</Detail>
-          <Detail label="Always protected">{formatMoney(info.protectedMinor, "USDC")}</Detail>
-        </dl>
+        {info.purpose === "first" && (
+          <dl className="mt-4 divide-y divide-line rounded-xl bg-page px-4 text-body">
+            <Detail label="Agents, per 24 hours">{formatMoney(info.dailyCeilingMinor, "USDC")}</Detail>
+            <Detail label="Biggest single payment">{formatMoney(info.perPaymentMinor, "USDC")}</Detail>
+            <Detail label="Protected from agents">{formatMoney(info.protectedMinor, "USDC")}</Detail>
+          </dl>
+        )}
         <div className="mt-4">
           <WebViewNotice />
           {!passkeysSupported() && <p className="mb-3 text-label text-red">This browser doesn't support passkeys.</p>}
@@ -139,9 +148,8 @@ function Enrol({ token }: { token: string }) {
               setBusy(true);
               setError(undefined);
               try {
-                const key = await createPasskey({ userHandle: info.userHandle, name: info.name });
-                await complete({ token, ...key });
-                setDone(true);
+                const key = await createPasskey({ userHandle: info.userHandle, name: info.name, challenge: info.challenge, backup: info.purpose === "backup" });
+                setCode(await complete({ token, ...key }));
               } catch (e) {
                 setError(errorText(e));
               } finally {
@@ -160,6 +168,10 @@ function Enrol({ token }: { token: string }) {
       </p>
     </Frame>
   );
+}
+
+function clock(ms: number) {
+  return new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
 function Approve({ token }: { token: string }) {
@@ -187,7 +199,8 @@ function Approve({ token }: { token: string }) {
   const expired = deadline !== undefined && deadline <= now;
   const secs = deadline ? Math.max(0, Math.round((deadline - now) / 1000)) : null;
   const left = secs === null ? null : secs >= 3600 ? `${Math.floor(secs / 3600)} hr ${Math.floor((secs % 3600) / 60)} min` : `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
-  const open = data.state === "awaiting_approval" && !expired;
+  const legacy = Boolean(data.onchain && data.onchain.version !== 2);
+  const open = data.state === "awaiting_approval" && !expired && !legacy;
   const txUrl = data.txHash ? `${data.explorer}/tx/${data.txHash}` : null;
 
   const approve = async () => {
@@ -195,9 +208,11 @@ function Approve({ token }: { token: string }) {
     setError(undefined);
     try {
       if (signed && data.onchain) {
-        const auth = await signWithPasskey(signed.digest, data.onchain.credentialId, data.onchain.rpId);
+        const ids = data.onchain.credentialIds.length ? data.onchain.credentialIds : data.onchain.credentialId ? [data.onchain.credentialId] : [];
+        const { auth, credentialId } = await signWithPasskey(signed.digest, ids, data.onchain.rpId);
         await submit({
           token,
+          credentialId,
           auth: { ...auth, challengeIndex: Number(auth.challengeIndex), typeIndex: Number(auth.typeIndex) },
         });
       } else {
@@ -209,6 +224,27 @@ function Approve({ token }: { token: string }) {
       setBusy(false);
     }
   };
+
+  if (data.state === "queued" && data.readyAt) {
+    return (
+      <Frame live>
+        <div className="mt-14 flex flex-col items-center text-center">
+          <span className="pop grid size-20 place-items-center rounded-full bg-amber text-white">
+            <Clock className="size-10" strokeWidth={2.5} />
+          </span>
+          <h1 className="rise mt-6 text-head font-semibold">Approved. Applies at {clock(data.readyAt)}</h1>
+          <p className="rise mt-1 max-w-xs text-body text-ink-2">
+            Loosening a rule waits {Math.round((data.onchain?.changeDelay ?? 0) / 60)} min in the vault. You can cancel it from the Wallet screen until then.
+          </p>
+          {txUrl && (
+            <a href={txUrl} target="_blank" rel="noopener" className="rise mt-4 inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-label font-semibold text-navy shadow-sm">
+              View transaction <ExternalLink className="size-3.5" />
+            </a>
+          )}
+        </div>
+      </Frame>
+    );
+  }
 
   if (data.state === "confirmed") {
     return (
@@ -289,7 +325,6 @@ function Approve({ token }: { token: string }) {
         )}
 
         <dl className="divide-y divide-line border-t border-line px-5 text-body">
-          {data.purpose && <Detail label="For">{data.purpose}</Detail>}
           {data.reason && <Detail label="Why you're asked">{data.reason}</Detail>}
           {left && (
             <Detail label="Expires">
@@ -300,7 +335,16 @@ function Approve({ token }: { token: string }) {
           )}
         </dl>
 
+        {data.purpose && (
+          // The assistant wrote this; nothing checks it. It sits outside what the passkey signs.
+          <div className="border-t border-line bg-page px-5 py-3">
+            <div className="text-micro font-semibold text-mute uppercase">Note from {data.agent ?? "the request"} · not verified</div>
+            <p className="mt-1 line-clamp-3 text-body break-words text-ink-2">{data.purpose}</p>
+          </div>
+        )}
+
         <div className="border-t border-line p-4">
+          {legacy && <p className="mb-3 text-label font-medium text-amber">This request was made for your earlier vault. Ask again from the app.</p>}
           {open && live && <WebViewNotice />}
           {error && <p className="mb-3 text-label font-medium text-red">{error}</p>}
           {open && data.rail === "handoff" && data.payee && /@/.test(data.payee.handle) && (

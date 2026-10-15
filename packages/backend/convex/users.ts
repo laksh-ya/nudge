@@ -1,5 +1,5 @@
-import { internalMutation, mutation, query } from "./_generated/server";
-import { DEMO_TOKEN, viewer } from "./lib/auth";
+import { mutation, query } from "./_generated/server";
+import { DEMO_ISSUER, isDemo, isSandbox, viewer } from "./lib/auth";
 import { seedUser } from "./lib/seed";
 
 const DAY = 86_400_000;
@@ -18,12 +18,13 @@ export const me = query({
       timezone: user.timezone,
       onboarded: Boolean(user.onboardedAt),
       onboardingStep: user.onboardingStep ?? null,
-      demo: user.tokenIdentifier === DEMO_TOKEN,
+      demo: isDemo(user),
+      sandbox: isSandbox(user),
     };
   },
 });
 
-/** Called once after sign-in. New accounts start empty and go through setup. */
+/** Called once after sign-in. New accounts start empty and go through setup; demo sandboxes start full. */
 export const ensure = mutation({
   args: {},
   handler: async (ctx) => {
@@ -33,7 +34,15 @@ export const ensure = mutation({
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
-    if (existing) return existing._id;
+    if (existing) {
+      if (identity.issuer === DEMO_ISSUER) await ctx.db.patch(existing._id, { lastSeenAt: Date.now() });
+      return existing._id;
+    }
+    if (identity.issuer === DEMO_ISSUER) {
+      const userId = await ctx.db.insert("users", { ...demoProfile(), tokenIdentifier: identity.tokenIdentifier, lastSeenAt: Date.now() });
+      await seedUser(ctx, userId);
+      return userId;
+    }
     return await ctx.db.insert("users", {
       tokenIdentifier: identity.tokenIdentifier,
       name: identity.givenName ?? identity.name?.split(" ")[0] ?? "",
@@ -48,29 +57,20 @@ export const ensure = mutation({
   },
 });
 
-export const seedDemo = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    const existing = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", DEMO_TOKEN))
-      .unique();
-    if (existing) return existing._id;
-    const userId = await ctx.db.insert("users", {
-      tokenIdentifier: DEMO_TOKEN,
-      name: "Aarav",
-      email: "demo@example.com",
-      country: "IN",
-      currency: "INR",
-      timezone: "Asia/Kolkata",
-      monthlyBudgetMinor: 4_500_000,
-      emergencyMinor: 3_000_000,
-      nextIncomeAt: Date.now() + 18 * DAY,
-      onboardedAt: Date.now(),
-      autonomy: "limited",
-      priorities: ["spending", "bills", "agents", "family"],
-    });
-    await seedUser(ctx, userId);
-    return userId;
-  },
-});
+/** The sample person every demo sandbox starts as. */
+export function demoProfile() {
+  return {
+    name: "Aarav",
+    email: "demo@example.com",
+    country: "IN",
+    currency: "INR" as const,
+    timezone: "Asia/Kolkata",
+    monthlyBudgetMinor: 4_500_000,
+    emergencyMinor: 3_000_000,
+    nextIncomeAt: Date.now() + 18 * DAY,
+    onboardedAt: Date.now(),
+    onboardingStep: undefined,
+    autonomy: "limited" as const,
+    priorities: ["spending", "bills", "agents", "family"],
+  };
+}

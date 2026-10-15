@@ -148,6 +148,8 @@ const stateTone: Record<PaymentState, Tone> = {
   cancelled: "neutral",
   expired: "neutral",
   unknown: "amber",
+  queued: "amber",
+  held: "amber",
 };
 
 export function StateChip({ state }: { state: PaymentState }) {

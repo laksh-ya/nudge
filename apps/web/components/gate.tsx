@@ -86,7 +86,7 @@ function Landing() {
 
 export function Gate({ children }: { children: React.ReactNode }) {
   const { isLoading, isAuthenticated } = useConvexAuth();
-  const { demo, loaded } = useDemo();
+  const { loaded } = useDemo();
   const ensure = useMutation(api.users.ensure);
   const me = useQuery(api.users.me);
   const router = useRouter();
@@ -100,13 +100,14 @@ export function Gate({ children }: { children: React.ReactNode }) {
   }, [me, router]);
 
   if (isLoading || !loaded) return <Splash />;
-  if (isAuthenticated) return <Shell>{children}</Shell>;
-  if (demo)
+  if (!isAuthenticated) return <Landing />;
+  if (me === undefined || me === null) return <Splash />;
+  if (me.demo)
     return (
       <div style={{ "--bar": "36px" } as React.CSSProperties}>
         <DemoBar />
         <Shell>{children}</Shell>
       </div>
     );
-  return <Landing />;
+  return <Shell>{children}</Shell>;
 }

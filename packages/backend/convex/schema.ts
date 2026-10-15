@@ -28,7 +28,40 @@ export const paymentState = v.union(
   v.literal("cancelled"),
   v.literal("expired"),
   v.literal("unknown"),
+  /** An owner change that loosens policy, waiting out the vault's delay. */
+  v.literal("queued"),
+  /** An agent payment above the hold threshold, waiting so the owner can cancel it. */
+  v.literal("held"),
 );
+
+/** What the vault itself currently enforces, read back from the chain. */
+const vaultState = v.object({
+  version: v.number(),
+  protectedMinor: v.number(),
+  ceilingMinor: v.number(),
+  contactDelay: v.number(),
+  changeDelay: v.number(),
+  holdAboveMinor: v.number(),
+  holdFor: v.number(),
+  frozen: v.boolean(),
+  balanceMinor: v.number(),
+  heldMinor: v.number(),
+  spentMinor: v.number(),
+  headroomMinor: v.number(),
+  ownerKeys: v.number(),
+  syncedAt: v.number(),
+});
+
+const passkey = v.object({
+  keyId: v.string(),
+  x: v.string(),
+  y: v.string(),
+  credentialId: v.string(),
+  rpId: v.string(),
+  label: v.string(),
+  addedAt: v.number(),
+  status: v.union(v.literal("active"), v.literal("adding"), v.literal("removed")),
+});
 
 export const channel = v.union(
   v.literal("app"),
@@ -81,6 +114,7 @@ export default defineSchema({
     reminderLeadDays: v.optional(v.number()),
     onboardingStep: v.optional(v.string()),
     onboardedAt: v.optional(v.number()),
+    lastSeenAt: v.optional(v.number()),
   }).index("by_token", ["tokenIdentifier"]),
 
   accounts: defineTable({
@@ -219,9 +253,23 @@ export default defineSchema({
     rpId: v.optional(v.string()),
     tokenAddress: v.optional(v.string()),
     deployTx: v.optional(v.string()),
+    /** 2 for vaults with delays, holds and strikes. Older vaults are kept as evidence only. */
+    version: v.optional(v.number()),
+    vault: v.optional(vaultState),
+    /** Rules the owner asked for that the vault doesn't enforce yet. */
+    proposedPolicy: v.optional(v.object({ protectedMinor: v.number(), dailyCeilingMinor: v.number(), perPaymentMinor: v.number(), taskId: v.id("tasks") })),
+    passkeys: v.optional(v.array(passkey)),
+    /** A passkey made from a setup link, waiting for the signed-in owner to confirm it. */
+    candidate: v.optional(
+      v.object({ x: v.string(), y: v.string(), credentialId: v.string(), rpId: v.string(), code: v.string(), device: v.string(), at: v.number(), purpose: v.union(v.literal("first"), v.literal("backup")) }),
+    ),
+    enrolChallenge: v.optional(v.string()),
+    deployRequestedAt: v.optional(v.number()),
+    previous: v.optional(v.array(v.object({ address: v.string(), version: v.number(), retiredAt: v.number() }))),
   })
     .index("by_user", ["userId"])
-    .index("by_enrol_token", ["enrolToken"]),
+    .index("by_enrol_token", ["enrolToken"])
+    .index("by_deploy_requested", ["deployRequestedAt"]),
 
   payees: defineTable({
     userId: v.id("users"),
@@ -257,6 +305,21 @@ export default defineSchema({
     tokenHash: v.optional(v.string()),
     chainAddress: v.optional(v.string()),
     onchain: v.optional(v.boolean()),
+    /** What the vault enforces for this agent's key, read back from the chain. */
+    vault: v.optional(
+      v.object({
+        perPaymentMinor: v.number(),
+        dailyCapMinor: v.number(),
+        expiresAt: v.number(),
+        active: v.boolean(),
+        frozen: v.boolean(),
+        strikes: v.number(),
+        spentMinor: v.number(),
+        syncedAt: v.number(),
+      }),
+    ),
+    /** A guardian freeze sent to the vault and not yet confirmed by reading it back. */
+    freezing: v.optional(v.boolean()),
   })
     .index("by_user", ["userId"])
     .index("by_token_hash", ["tokenHash"]),
@@ -284,7 +347,28 @@ export default defineSchema({
     refusalCode: v.optional(v.number()),
     /** The exact vault action the owner signs, when this task runs on-chain. */
     action: v.optional(v.object({ op: v.number(), data: v.string(), nonce: v.string(), deadline: v.number() })),
-    effects: v.optional(v.object({ agents: v.array(v.id("agents")), payees: v.array(v.id("payees")) })),
+    effects: v.optional(
+      v.object({
+        agents: v.array(v.id("agents")),
+        payees: v.array(v.id("payees")),
+        /** Limits to record for an agent once the vault applies them. */
+        grant: v.optional(v.object({ agentId: v.id("agents"), perPaymentMinor: v.number(), dailyCapMinor: v.number(), expiresAt: v.number(), scopes: v.optional(v.array(v.string())) })),
+        removeAgent: v.optional(v.id("agents")),
+        policy: v.optional(v.boolean()),
+        passkey: v.optional(v.string()),
+      }),
+    ),
+    /** Set while a loosening change waits out the vault's delay. */
+    changeId: v.optional(v.string()),
+    readyAt: v.optional(v.number()),
+    /** Set while an agent payment is held. */
+    releaseAt: v.optional(v.number()),
+    /** The caller's own id for this payment (an invoice number, say). Retries with it never pay twice. */
+    requestId: v.optional(v.string()),
+    paymentId: v.optional(v.string()),
+    checks: v.optional(v.number()),
+    /** Seeded demo history, shown with a "Sample" label. */
+    sample: v.optional(v.boolean()),
     approvalToken: v.optional(v.string()),
     expiresAt: v.optional(v.number()),
     updatedAt: v.number(),
@@ -292,7 +376,8 @@ export default defineSchema({
     .index("by_user_updated", ["userId", "updatedAt"])
     .index("by_user_state", ["userId", "state"])
     .index("by_approval_token", ["approvalToken"])
-    .index("by_state_expires", ["state", "expiresAt"]),
+    .index("by_state_expires", ["state", "expiresAt"])
+    .index("by_agent_request", ["agentId", "requestId"]),
 
   messages: defineTable({
     userId: v.id("users"),
@@ -344,6 +429,7 @@ export default defineSchema({
     title: v.string(),
     detail: v.optional(v.string()),
     tone: v.union(v.literal("neutral"), v.literal("good"), v.literal("warn"), v.literal("bad")),
+    sample: v.optional(v.boolean()),
   }).index("by_user", ["userId"]),
 
   rates: defineTable({
@@ -359,10 +445,20 @@ export default defineSchema({
     userId: v.id("users"),
     channel: v.union(v.literal("telegram"), v.literal("whatsapp")),
     code: v.string(),
+    codeExpiresAt: v.optional(v.number()),
     externalId: v.optional(v.string()),
+    /** Set when a chat tries to claim the code; the owner confirms in the app before it links. */
+    pendingExternalId: v.optional(v.string()),
+    pendingName: v.optional(v.string()),
     linkedAt: v.optional(v.number()),
   })
     .index("by_code", ["code"])
     .index("by_user", ["userId"])
     .index("by_external", ["channel", "externalId"]),
+
+  /** Telegram update ids already handled, so a redelivered update does nothing. */
+  inbound: defineTable({ key: v.string(), at: v.number() }).index("by_key", ["key"]),
+
+  /** Fixed-window counters for abuse limits. */
+  limits: defineTable({ key: v.string(), windowStart: v.number(), count: v.number() }).index("by_key", ["key"]),
 });

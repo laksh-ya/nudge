@@ -32,6 +32,7 @@ import {
 } from "@agent-wallet/domain";
 import { api, type Id } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { approvalLink } from "@/lib/config";
 import { useDemo } from "@/lib/demo";
 import { dueLabel, fmtAmount } from "@/lib/format";
 import { AgentMark, Wordmark } from "@/components/brand";
@@ -655,7 +656,9 @@ function Wallet({ state, onNext }: { state: State; onNext: () => void }) {
               const daily = toMinorUnits(form.daily, "USD") ?? 0;
               const per = toMinorUnits(form.per, "USD") ?? 0;
               const protect = toMinorUnits(form.protect || "0", "USD") ?? 0;
-              await setup({ dailyCeilingMinor: daily, perPaymentMinor: per, protectedMinor: protect });
+              const token = await setup({ dailyCeilingMinor: daily, perPaymentMinor: per, protectedMinor: protect });
+              // A live vault enforces these, so the change goes to the passkey page.
+              if (token) return window.location.assign(approvalLink(token));
               if (!w) await fund();
               onNext();
             } catch (e) {

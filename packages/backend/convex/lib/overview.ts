@@ -74,8 +74,15 @@ export async function computeOverview(ctx: QueryCtx, user: Doc<"users">) {
   const liveAgents = agents.filter((a) => a.status === "active" && a.scopes.includes("spend"));
   const agentHeadroom = liveAgents.reduce((s, a) => s + Math.max(0, a.dailyCapMinor - a.spentTodayMinor), 0);
   const spentToday = agents.reduce((s, a) => s + a.spentTodayMinor, 0);
-  const agentAuthority =
-    wallet && !wallet.frozen
+  // A live vault answers this itself (agentHeadroom, read back in chain.ts), capped by what the
+  // agents it knows about may still spend.
+  const vault = wallet?.status === "live" && wallet.version === 2 ? wallet.vault : undefined;
+  const keyed = liveAgents.filter((a) => a.vault?.active && !a.vault.frozen);
+  const agentAuthority = vault
+    ? vault.frozen
+      ? 0
+      : Math.min(vault.headroomMinor, keyed.reduce((s, a) => s + Math.max(0, a.vault!.dailyCapMinor - a.vault!.spentMinor), 0))
+    : wallet && !wallet.frozen
       ? Math.max(
           0,
           Math.min(

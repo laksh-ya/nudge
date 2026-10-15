@@ -11,8 +11,10 @@ contract Deploy is Script {
     function run() external {
         uint256 pk = vm.envUint("RELAYER_PRIVATE_KEY");
         address guardian = vm.addr(pk);
+        // Reuse an existing test token when TOKEN_ADDRESS is set (redeploying only the factory).
+        address existing = vm.envOr("TOKEN_ADDRESS", address(0));
         vm.startBroadcast(pk);
-        TestUSD token = new TestUSD();
+        TestUSD token = existing == address(0) ? new TestUSD() : TestUSD(existing);
         VaultFactory factory = new VaultFactory(guardian);
         vm.stopBroadcast();
         console.log("TestUSD", address(token));

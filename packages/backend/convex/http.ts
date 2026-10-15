@@ -48,6 +48,10 @@ const TOOLS = [
         contactId: { type: "string", description: "From list_contacts" },
         amount: { type: "number", description: "Dollars, e.g. 12.5" },
         reason: { type: "string", description: "What it's for, shown to the owner" },
+        requestId: {
+          type: "string",
+          description: "Your own id for this payment, such as an invoice number. Sending the same requestId again never pays twice.",
+        },
       },
       required: ["contactId", "amount", "reason"],
       additionalProperties: false,
@@ -85,7 +89,13 @@ async function callTool(ctx: ActionCtx, agentId: Id<"agents">, name: string, arg
     case "list_contacts":
       return await ctx.runQuery(internal.gateway.contacts, { agentId });
     case "propose_payment":
-      return await ctx.runMutation(internal.gateway.proposePayment, { agentId, contactId: str("contactId"), amount: num("amount"), reason: str("reason") });
+      return await ctx.runMutation(internal.gateway.proposePayment, {
+        agentId,
+        contactId: str("contactId"),
+        amount: num("amount"),
+        reason: str("reason"),
+        requestId: args.requestId === undefined ? undefined : str("requestId"),
+      });
     case "get_task_status":
       return await ctx.runQuery(internal.gateway.taskStatus, { agentId, taskId: str("taskId") });
     case "cancel_task":
@@ -141,6 +151,9 @@ http.route({
     const agent = await ctx.runQuery(internal.gateway.agentByToken, { tokenHash: await sha256(token) });
     if (!agent) return json({ jsonrpc: "2.0", id: null, error: { code: -32001, message: "This access key isn't valid any more" } }, 401);
     if (agent.status === "frozen") return json({ jsonrpc: "2.0", id: null, error: { code: -32003, message: "This assistant is frozen by its owner" } }, 403);
+    if (!(await ctx.runMutation(internal.gateway.allow, { agentId: agent._id }))) {
+      return json({ jsonrpc: "2.0", id: null, error: { code: -32029, message: "Too many requests. Slow down and try again in a minute." } }, 429);
+    }
     let body: Rpc | Rpc[];
     try {
       body = (await req.json()) as Rpc | Rpc[];

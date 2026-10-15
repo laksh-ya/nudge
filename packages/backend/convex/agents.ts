@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { unfreezeTask } from "./lib/actions";
+import { freezeAgent, freezeAll as freezeAll_ } from "./lib/control";
 import { own, requireViewer, viewer } from "./lib/auth";
 
 export const list = query({
@@ -20,24 +20,19 @@ export const setStatus = mutation({
     const user = await requireViewer(ctx);
     const agent = await own(user, await ctx.db.get(agentId));
     if (agent.status === "revoked") throw new Error("Agent was revoked");
-    const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
-    const onchain = wallet?.status === "live" && agent.chainAddress;
     if (status === "frozen") {
-      await ctx.db.patch(agentId, { status });
-      if (onchain) await ctx.scheduler.runAfter(0, internal.chain.guardianFreeze, { walletId: wallet._id, agentAddress: agent.chainAddress });
-    } else if (onchain) {
-      // Loosening needs the passkey. The agent stays frozen until the vault confirms.
+      await freezeAgent(ctx, user, agent);
+      await ctx.db.insert("activity", { userId: user._id, kind: "agent", title: `${agent.name} frozen`, tone: "warn" });
+      return null;
+    }
+    const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
+    if (wallet?.status === "live" && wallet.version === 2 && agent.chainAddress) {
+      // Loosening needs the passkey. The agent stays frozen until the vault applies it.
       const taskId = await unfreezeTask(ctx, user, agent);
       return (await ctx.db.get(taskId))?.approvalToken ?? null;
-    } else {
-      await ctx.db.patch(agentId, { status });
     }
-    await ctx.db.insert("activity", {
-      userId: user._id,
-      kind: "agent",
-      title: `${agent.name} ${status === "frozen" ? "frozen" : "unfrozen"}`,
-      tone: status === "frozen" ? "warn" : "neutral",
-    });
+    await ctx.db.patch(agentId, { status: "active" });
+    await ctx.db.insert("activity", { userId: user._id, kind: "agent", title: `${agent.name} unfrozen`, tone: "neutral" });
     return null;
   },
 });
@@ -46,24 +41,7 @@ export const freezeAll = mutation({
   args: {},
   handler: async (ctx) => {
     const user = await requireViewer(ctx);
-    const agents = await ctx.db.query("agents").withIndex("by_user", (q) => q.eq("userId", user._id)).take(50);
-    const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
-    let count = 0;
-    for (const a of agents) {
-      if (a.status !== "active") continue;
-      await ctx.db.patch(a._id, { status: "frozen" });
-      if (wallet?.status === "live" && a.chainAddress) {
-        await ctx.scheduler.runAfter(0, internal.chain.guardianFreeze, { walletId: wallet._id, agentAddress: a.chainAddress });
-      }
-      count++;
-    }
-    await ctx.db.insert("activity", {
-      userId: user._id,
-      kind: "security",
-      title: `Froze ${count} ${count === 1 ? "agent" : "agents"}`,
-      tone: "warn",
-    });
-    return count;
+    return await freezeAll_(ctx, user, "From the dashboard");
   },
 });
 
@@ -72,6 +50,7 @@ export const resetDaily = internalMutation({
   args: {},
   handler: async (ctx) => {
     const agents = await ctx.db.query("agents").take(5000);
-    for (const a of agents) if (a.spentTodayMinor > 0) await ctx.db.patch(a._id, { spentTodayMinor: 0 });
+    // Agents with a vault key follow the vault's rolling 24 hours instead (read back in chain.ts).
+    for (const a of agents) if (a.spentTodayMinor > 0 && !a.vault) await ctx.db.patch(a._id, { spentTodayMinor: 0 });
   },
 });

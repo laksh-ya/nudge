@@ -117,7 +117,11 @@ function AgentCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="truncate text-title font-semibold">{a.name}</span>
-            {frozen ? (
+            {a.freezing ? (
+              <Chip tone="amber">
+                <Snowflake className="size-3" /> Freezing in vault…
+              </Chip>
+            ) : frozen ? (
               <Chip tone="red">
                 <Snowflake className="size-3" /> Frozen
               </Chip>
@@ -160,6 +164,12 @@ function AgentCard({
             <div className="mt-2 text-label text-mute">
               Up to <span className="num font-semibold text-ink-2">{formatMoney(a.perPaymentMinor, "USDC")}</span> a payment without asking
             </div>
+            {a.vault && (
+              <div className="mt-1 text-label text-mute">
+                Vault enforces {formatMoney(a.vault.perPaymentMinor, "USDC")} · {formatMoney(a.vault.dailyCapMinor, "USDC")} per 24h
+                {a.vault.strikes > 0 && <span className="text-amber"> · {a.vault.strikes} of 5 strikes</span>}
+              </div>
+            )}
           </>
         ) : (
           <p className="text-label text-mute">Can't spend. Anything it prepares comes to you.</p>

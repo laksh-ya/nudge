@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Op, actionDigest, contactIdOf, describe as describeOp, encode, fromTokenUnits, keyIdOf, toTokenUnits } from "./vault";
+import { Op, actionDigest, changeIdOf, contactIdOf, describe as describeOp, encode, fromTokenUnits, keyIdOf, toTokenUnits } from "./vault";
 
 describe("vault encoding", () => {
   it("matches the contract's digest byte for byte", () => {
@@ -25,5 +25,16 @@ describe("vault encoding", () => {
   it("derives passkey ids the way the contract does", () => {
     // cast keccak $(cast abi-encode "f(bytes32,bytes32)" 0x11..11 0x22..22)
     expect(keyIdOf(`0x${"11".repeat(32)}`, `0x${"22".repeat(32)}`)).toBe("0x3e92e0db88d6afea9edc4eedf62fffa4d92bcdfc310dccbe943747fe8302e871");
+  });
+
+  it("derives queued-change ids the way the contract does", () => {
+    const data = encode.withdraw("0x1111111111111111111111111111111111111111", 10_000_000n);
+    expect(changeIdOf(Op.Withdraw, data, 7n)).toBe("0x816ee5fc5c086979e3ec9d9ae157d3eb871fe849e2bd4a2939a9f3f7a87353ce");
+  });
+
+  it("spells out every rule a policy change sets", () => {
+    const data = encode.setPolicy({ protectedAmount: 50_000_000n, dailyCeiling: 40_000_000n, newContactDelay: 86_400n, changeDelay: 600n, holdAbove: 5_000_000n, holdFor: 300n });
+    const d = describeOp(Op.SetPolicy, data);
+    expect(d.lines.map((l) => l.value)).toEqual(["$50.00", "$40.00", "1 days", "10 min", "Above $5.00, for 5 min"]);
   });
 });
