@@ -173,6 +173,62 @@ contract AuditFindings is AuditBase {
         assertEq(vault.protectedAmount(), 200e6, "an older queued change silently lowered the protected amount");
     }
 
+    /// F5b. Same lost phone, realistic order: the thief's Withdraw was queued first, so it is ready before
+    /// the owner's removal of that key. Signing the removal has to stop the key's queued changes at once,
+    /// not only when the removal itself applies.
+    function test_F5b_signingAPasskeyRemovalStopsItsQueuedChangesAtOnce() public {
+        uint256 backupPk = 0xB4C;
+        (uint256 bx, uint256 by) = vm.publicKeyP256(backupPk);
+        sign(PolicyVault.Op.AddOwnerKey, abi.encode(bytes32(bx), bytes32(by), sha256(bytes(RP_ID))));
+        bytes32 backupId = vault.keyIdOf(bytes32(bx), bytes32(by));
+        policy(50e6, 40e6, 1 days, 1 days, 0, 0);
+
+        address thief = makeAddr("thief");
+        bytes memory steal = abi.encode(thief, uint256(250e6));
+        uint256 stealNonce = signWith(ownerPk, keyId, PolicyVault.Op.Withdraw, steal);
+        vm.warp(block.timestamp + 1 hours); // the owner notices an hour later
+        signWith(backupPk, backupId, PolicyVault.Op.RemoveOwnerKey, abi.encode(keyId));
+
+        vm.warp(block.timestamp + 23 hours + 1); // the thief's change is ready; the removal isn't yet
+        vm.prank(thief);
+        try vault.finalize(PolicyVault.Op.Withdraw, steal, stealNonce) {} catch {}
+        assertEq(token.balanceOf(thief), 0, "the stolen passkey's withdrawal applied after the owner signed its removal");
+    }
+
+    /// F6b. The owner queues a bigger allowance for Claude, then cuts Claude's limits (applies at once).
+    /// The older queued grant later restores the bigger allowance.
+    function test_F6b_staleQueuedGrantMustNotUndoALaterCut() public {
+        policy(50e6, 40e6, 1 days, 120, 0, 0);
+        bytes memory bigger = abi.encode(claude, uint128(10e6), uint128(25e6), uint64(block.timestamp + 30 days));
+        sign(PolicyVault.Op.SetAgent, bigger); // looser: queued
+        uint256 biggerNonce = nonce;
+        sign(PolicyVault.Op.SetAgent, abi.encode(claude, uint128(2e6), uint128(5e6), uint64(block.timestamp + 30 days)));
+        vm.warp(block.timestamp + 121);
+        try vault.finalize(PolicyVault.Op.SetAgent, bigger, biggerNonce) {} catch {}
+        (uint128 perPayment, uint128 dailyCap,,,,,) = vault.agents(claude);
+        assertEq(perPayment, 2e6, "an older queued grant undid the owner's later cut");
+        assertEq(dailyCap, 5e6, "an older queued grant undid the owner's later cut");
+    }
+
+    // ------------------------------------------------------------ who can void owner changes
+
+    /// F9. Only revocations by the owner, the guardian or a registered agent's own key may void the
+    /// owner's queued changes. An address that was never an agent must not be able to, or anyone could
+    /// keep a frozen vault frozen by voiding every unfreeze the owner signs.
+    function test_F9_aStrangerCannotVoidTheOwnersQueuedUnfreeze() public {
+        policy(50e6, 40e6, 1 days, 120, 0, 0);
+        vm.prank(guardian);
+        vault.freeze();
+        sign(PolicyVault.Op.Unfreeze, abi.encode(address(0))); // queued
+        uint256 unfreezeNonce = nonce;
+        address stranger = makeAddr("stranger");
+        vm.prank(stranger);
+        vault.freezeAgent(stranger); // allowed: msg.sender == agent
+        vm.warp(block.timestamp + 121);
+        try vault.finalize(PolicyVault.Op.Unfreeze, abi.encode(address(0)), unfreezeNonce) {} catch {}
+        assertFalse(vault.frozen(), "a stranger kept the vault frozen by voiding the owner's unfreeze");
+    }
+
     // ------------------------------------------------------------ griefing (new)
 
     /// F7. Owner and agent payment ids share one namespace. An agent that learns the id of a payment
