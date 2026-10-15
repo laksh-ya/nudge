@@ -3,20 +3,25 @@
 import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Check, Clock, Copy, Lock, ShieldCheck, Snowflake, Store, User } from "lucide-react";
+import { Check, Clock, Copy, ExternalLink, Fingerprint, LoaderCircle, Lock, ShieldCheck, Snowflake, Store, TriangleAlert, User } from "lucide-react";
+import { approvalLink, APPROVE_URL } from "@/lib/config";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { formatMoney, shortAddress } from "@/lib/format";
 import { TaskCard } from "@/components/task-card";
-import { Button, Card, Chip, Divided, IconTile, Meter, PageTitle, Row, Skeleton } from "@/components/ui";
+import { Button, ButtonLink, Card, Chip, Divided, IconTile, Meter, PageTitle, Row, Skeleton } from "@/components/ui";
+import { ErrorText, errorMessage } from "@/components/form";
 
 export default function WalletPage() {
   const data = useQuery(api.wallet.get);
   const home = useQuery(api.home.overview);
   const tasks = useQuery(api.tasks.list);
+  const chain = useQuery(api.vault.status);
+  const startEnrol = useMutation(api.vault.startEnrol);
+  const [enrolError, setEnrolError] = useState<string>();
   const setFrozen = useMutation(api.wallet.setFrozen).withOptimisticUpdate((store, { frozen }) => {
     const current = store.getQuery(api.wallet.get, {});
-    if (current?.wallet) store.setQuery(api.wallet.get, {}, { ...current, wallet: { ...current.wallet, frozen } });
+    if (current?.wallet && frozen) store.setQuery(api.wallet.get, {}, { ...current, wallet: { ...current.wallet, frozen } });
   });
   const [copied, setCopied] = useState(false);
   const setStep = useMutation(api.onboarding.setStep);
@@ -70,20 +75,25 @@ export default function WalletPage() {
           </div>
           <div className="figure mt-1 text-hero">{formatMoney(wallet.balanceMinor, "USDC", { cents: true })}</div>
           {wallet.address ? (
-            <button
-              onClick={() => {
-                void navigator.clipboard?.writeText(wallet.address);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 1400);
-              }}
-              className="press mt-2 flex items-center gap-1.5 text-label text-white/70 hover:text-white"
-            >
-              <span className="num">{shortAddress(wallet.address)}</span>
-              {copied ? <Check className="size-3.5 text-cyan" /> : <Copy className="size-3.5" />}
-            </button>
+            <div className="mt-2 flex items-center gap-3 text-label text-white/70">
+              <button
+                onClick={() => {
+                  void navigator.clipboard?.writeText(wallet.address);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1400);
+                }}
+                className="press flex items-center gap-1.5 hover:text-white"
+              >
+                <span className="num">{shortAddress(wallet.address)}</span>
+                {copied ? <Check className="size-3.5 text-cyan" /> : <Copy className="size-3.5" />}
+              </button>
+              <a href={`${chain?.wallet?.explorer ?? "https://sepolia.basescan.org"}/address/${wallet.address}`} target="_blank" rel="noopener" className="flex items-center gap-1 font-semibold text-cyan">
+                Explorer <ExternalLink className="size-3" />
+              </a>
+            </div>
           ) : (
             <div className="mt-2 flex items-center gap-2 text-label text-white/70">
-              Contract not deployed yet
+              Simulated until you create a passkey
               <button onClick={() => fund()} className="press rounded-md bg-white/10 px-2 py-0.5 font-semibold text-cyan">
                 + $100 test
               </button>
@@ -104,6 +114,16 @@ export default function WalletPage() {
         </div>
       </section>
 
+      {chain?.ready && <PasskeyCard chain={chain} onStart={async () => {
+        setEnrolError(undefined);
+        try {
+          const token = await startEnrol();
+          window.location.assign(`${APPROVE_URL}/enrol/${token}`);
+        } catch (e) {
+          setEnrolError(errorMessage(e));
+        }
+      }} error={enrolError} />}
+
       <Card title="Today's ceiling for all agents">
         <div className="flex items-baseline justify-between">
           <span className="figure text-figure">{formatMoney(home.overview.agentAuthority, "USDC", { cents: true })}</span>
@@ -115,7 +135,10 @@ export default function WalletPage() {
             tone={wallet.frozen ? "primary" : "danger"}
             icon={Snowflake}
             className="w-full"
-            onClick={() => setFrozen({ frozen: !wallet.frozen })}
+            onClick={async () => {
+              const token = await setFrozen({ frozen: !wallet.frozen });
+              if (token) window.location.assign(approvalLink(token));
+            }}
           >
             {wallet.frozen ? "Unfreeze wallet" : "Freeze wallet"}
           </Button>
@@ -129,7 +152,7 @@ export default function WalletPage() {
               key={p._id}
               leading={<IconTile icon={p.kind === "person" ? User : Store} tone={p.trusted ? "sky" : "amber"} />}
               title={p.name}
-              sub={<span className="num">{p.handle}</span>}
+              sub={<span className="num">{p.address ? shortAddress(p.address) : p.handle}{p.onchain ? " · in vault" : ""}</span>}
               trailing={
                 p.trusted ? (
                   <ShieldCheck className="size-[18px] text-green" aria-label="Trusted" />
@@ -154,5 +177,71 @@ export default function WalletPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+type ChainStatus = NonNullable<ReturnType<typeof useQuery<typeof api.vault.status>>>;
+
+function PasskeyCard({ chain, onStart, error }: { chain: ChainStatus; onStart: () => void; error?: string }) {
+  const w = chain.wallet;
+  if (!w) return null;
+  if (w.status === "live") {
+    return (
+      <Card>
+        <div className="flex items-center gap-3">
+          <IconTile icon={ShieldCheck} tone="green" />
+          <div className="min-w-0 flex-1">
+            <div className="text-body font-semibold">On-chain, protected by your passkey</div>
+            <div className="truncate text-label text-mute">Passkey for {w.rpId}</div>
+          </div>
+          {w.deployTx && (
+            <a href={`${w.explorer}/tx/${w.deployTx}`} target="_blank" rel="noopener" className="flex items-center gap-1 text-label font-semibold text-cyan-ink">
+              Deployment <ExternalLink className="size-3" />
+            </a>
+          )}
+        </div>
+        {chain.setup && (
+          <div className="mt-3 flex items-center gap-3 rounded-btn bg-amber-soft p-3">
+            <span className="flex-1 text-label font-medium text-amber">{chain.setup.title}: approve your agents and contacts</span>
+            <ButtonLink href={approvalLink(chain.setup.token!)} size="sm">
+              Approve
+            </ButtonLink>
+          </div>
+        )}
+      </Card>
+    );
+  }
+  if (w.status === "deploying") {
+    return (
+      <Card>
+        <div className="flex items-center gap-3">
+          <span className="grid size-10 place-items-center rounded-[12px] bg-sky text-navy">
+            <LoaderCircle className="size-5 animate-spin" />
+          </span>
+          <div>
+            <div className="text-body font-semibold">Creating your vault on Base Sepolia</div>
+            <div className="text-label text-mute">About a minute. You can leave this page.</div>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+  return (
+    <Card>
+      <div className="flex items-start gap-3">
+        <IconTile icon={w.status === "error" ? TriangleAlert : Fingerprint} tone={w.status === "error" ? "red" : "sky"} />
+        <div className="flex-1">
+          <div className="text-body font-semibold">Put this wallet on-chain</div>
+          <div className="text-label text-ink-2">
+            Create a payment passkey. A vault contract is deployed for it; from then on, only your passkey can approve payments above your limits.
+          </div>
+          {w.status === "error" && <div className="mt-1 text-label text-red">{w.statusNote}</div>}
+        </div>
+      </div>
+      <ErrorText>{error}</ErrorText>
+      <Button icon={Fingerprint} className="mt-3 w-full" onClick={onStart}>
+        {w.status === "error" ? "Try again" : "Create payment passkey"}
+      </Button>
+    </Card>
   );
 }

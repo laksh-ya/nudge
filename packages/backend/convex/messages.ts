@@ -7,6 +7,7 @@ import type { MutationCtx } from "./_generated/server";
 import { requireViewer, viewer } from "./lib/auth";
 import { computeOverview } from "./lib/overview";
 import { newApprovalToken } from "./lib/seed";
+import { ownerPayTask } from "./lib/actions";
 import { withNames } from "./tasks";
 
 export const list = query({
@@ -56,6 +57,13 @@ async function createPayment(
   currency: "INR" | "USDC",
   title: string,
 ) {
+  if (currency === "USDC") {
+    const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
+    if (wallet?.status === "live") {
+      const { taskId } = await ownerPayTask(ctx, { user, payee, amountMinor, title, channel: "app", reason: "You're paying from your agent wallet" });
+      return taskId;
+    }
+  }
   const taskId = await ctx.db.insert("tasks", {
     userId: user._id,
     title,

@@ -207,7 +207,21 @@ export default defineSchema({
     dailyCeilingMinor: v.number(),
     perPaymentMinor: v.optional(v.number()),
     frozen: v.boolean(),
-  }).index("by_user", ["userId"]),
+    // On-chain vault. Absent status means the wallet runs on the simulator.
+    status: v.optional(v.union(v.literal("enrolling"), v.literal("deploying"), v.literal("live"), v.literal("error"))),
+    statusNote: v.optional(v.string()),
+    enrolToken: v.optional(v.string()),
+    enrolExpiresAt: v.optional(v.number()),
+    keyX: v.optional(v.string()),
+    keyY: v.optional(v.string()),
+    keyId: v.optional(v.string()),
+    credentialId: v.optional(v.string()),
+    rpId: v.optional(v.string()),
+    tokenAddress: v.optional(v.string()),
+    deployTx: v.optional(v.string()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_enrol_token", ["enrolToken"]),
 
   payees: defineTable({
     userId: v.id("users"),
@@ -216,6 +230,8 @@ export default defineSchema({
     kind: v.union(v.literal("person"), v.literal("merchant")),
     trusted: v.boolean(),
     holdUntil: v.optional(v.number()),
+    address: v.optional(v.string()),
+    onchain: v.optional(v.boolean()),
   }).index("by_user", ["userId"]),
 
   agents: defineTable({
@@ -239,9 +255,18 @@ export default defineSchema({
     lastUsedAt: v.optional(v.number()),
     expiresAt: v.number(),
     tokenHash: v.optional(v.string()),
+    chainAddress: v.optional(v.string()),
+    onchain: v.optional(v.boolean()),
   })
     .index("by_user", ["userId"])
     .index("by_token_hash", ["tokenHash"]),
+
+  /** Agent signing keys for the executor. Never returned by any public function. */
+  agentKeys: defineTable({
+    agentId: v.id("agents"),
+    address: v.string(),
+    privateKey: v.string(),
+  }).index("by_agent", ["agentId"]),
 
   tasks: defineTable({
     userId: v.id("users"),
@@ -256,6 +281,10 @@ export default defineSchema({
     reason: v.optional(v.string()),
     rail: v.union(v.literal("simulator"), v.literal("base-sepolia"), v.literal("handoff")),
     txHash: v.optional(v.string()),
+    refusalCode: v.optional(v.number()),
+    /** The exact vault action the owner signs, when this task runs on-chain. */
+    action: v.optional(v.object({ op: v.number(), data: v.string(), nonce: v.string(), deadline: v.number() })),
+    effects: v.optional(v.object({ agents: v.array(v.id("agents")), payees: v.array(v.id("payees")) })),
     approvalToken: v.optional(v.string()),
     expiresAt: v.optional(v.number()),
     updatedAt: v.number(),

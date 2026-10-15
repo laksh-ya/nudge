@@ -22,5 +22,6 @@ export async function wipeUser(ctx: MutationCtx, userId: Id<"users">) {
   ]);
   const holdings = [];
   for (const a of batches[0]) holdings.push(...(await ctx.db.query("holdings").withIndex("by_account", (q) => q.eq("accountId", a._id)).take(500)));
+  for (const a of batches[8]) holdings.push(...(await ctx.db.query("agentKeys").withIndex("by_agent", (q) => q.eq("agentId", a._id)).take(10)));
   for (const batch of [...batches, holdings]) for (const doc of batch) await ctx.db.delete(doc._id);
 }

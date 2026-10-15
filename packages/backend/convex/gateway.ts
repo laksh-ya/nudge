@@ -8,6 +8,7 @@ import { own, requireViewer } from "./lib/auth";
 import { computeOverview } from "./lib/overview";
 import { newApprovalToken } from "./lib/seed";
 import { sha256 } from "./lib/hash";
+import { ownerPayTask, setupTask } from "./lib/actions";
 
 /**
  * The single path outside assistants (MCP) and chat channels use to touch money.
@@ -60,6 +61,16 @@ export const updateGrant = mutation({
       hidesBalances: args.hidesBalances,
       expiresAt: Date.now() + args.days * DAY,
     });
+    const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
+    let approvalToken: string | null = null;
+    if (wallet?.status === "live" && scopes.includes("spend") && agent.status === "active") {
+      if (agent.chainAddress) {
+        const fresh = (await ctx.db.get(agent._id))!;
+        approvalToken = (await setupTask(ctx, user, [fresh], [], `Change ${agent.name}'s limits`))?.token ?? null;
+      } else {
+        await ctx.scheduler.runAfter(0, internal.chain.provisionAgent, { agentId: agent._id });
+      }
+    }
     await ctx.db.insert("activity", {
       userId: user._id,
       kind: "agent",
@@ -67,6 +78,7 @@ export const updateGrant = mutation({
       detail: scopes.includes("spend") ? `Up to $${(args.dailyCapMinor / 100).toFixed(2)} a day` : "Can't spend",
       tone: "neutral",
     });
+    return approvalToken;
   },
 });
 
@@ -231,6 +243,28 @@ export const proposePayment = internalMutation({
 
     if (wallet.balanceMinor < minor) return { outcome: "refused", code: "2005", reason: "Not enough in the wallet" };
 
+    const live = wallet.status === "live";
+    if (blockers.length === 0 && live && agent.onchain && payee.onchain) {
+      // The vault decides. Our checks passed; the contract checks again with the agent's own key.
+      const taskId = await ctx.db.insert("tasks", {
+        userId: user._id,
+        title: purpose ?? `Pay ${payee.name}`,
+        channel: "mcp",
+        agentId: agent._id,
+        payeeId: payee._id,
+        amountMinor: minor,
+        currency: "USDC",
+        purpose,
+        state: "reserved",
+        rail: "base-sepolia",
+        updatedAt: Date.now(),
+      });
+      await ctx.scheduler.runAfter(0, internal.chain.agentPay, { taskId });
+      await record(ctx, user, agent, `${agent.name} is paying ${payee.name} ${formatMoney(minor, "USDC")} within its limits.`, taskId);
+      return { outcome: "paid", taskId, message: `Sending ${formatMoney(minor, "USDC")} to ${payee.name} on Base Sepolia. Check get_task_status for the transaction.` };
+    }
+    if (blockers.length === 0 && live) blockers.push({ code: "1001", why: `${agent.name} isn't registered in the vault yet` });
+
     if (blockers.length === 0) {
       const taskId = await ctx.db.insert("tasks", {
         userId: user._id,
@@ -256,6 +290,22 @@ export const proposePayment = internalMutation({
       const b = hard ?? blockers[0]!;
       await ctx.db.insert("activity", { userId: user._id, kind: "agent", title: `Refused ${agent.name}: ${b.why}`, tone: "warn" });
       return { outcome: "refused", code: b.code, reason: b.why };
+    }
+
+    if (live) {
+      const { taskId, token } = await ownerPayTask(ctx, {
+        user,
+        payee,
+        amountMinor: minor,
+        title: purpose ?? `Pay ${payee.name}`,
+        channel: "mcp",
+        agentId: agent._id,
+        purpose,
+        reason: blockers.map((b) => b.why).join(". "),
+      });
+      await record(ctx, user, agent, `${agent.name} asked to pay ${payee.name} ${formatMoney(minor, "USDC")}. ${blockers[0]!.why}, so it needs your passkey.`, taskId);
+      const base = process.env.APPROVE_URL ?? "https://agent-wallet-approve.vercel.app";
+      return { outcome: "needs_approval", taskId, approvalUrl: `${base}/a/${token}`, reason: blockers.map((b) => b.why).join(". ") };
     }
 
     const token = newApprovalToken();
@@ -294,6 +344,7 @@ export const taskStatus = internalQuery({
       amount: task.amountMinor !== undefined ? formatMoney(task.amountMinor, task.currency ?? "USDC") : null,
       reason: task.reason ?? null,
       simulated: task.rail === "simulator",
+      transaction: task.txHash ? `https://sepolia.basescan.org/tx/${task.txHash}` : null,
       updatedAt: new Date(task.updatedAt).toISOString(),
     };
   },

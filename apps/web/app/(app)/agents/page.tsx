@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { EyeOff, KeyRound, Plus, SlidersHorizontal, Snowflake } from "lucide-react";
 import { api } from "@/lib/api";
+import { approvalLink } from "@/lib/config";
 import { cn } from "@/lib/cn";
 import { ago, formatMoney } from "@/lib/format";
 import { AgentMark } from "@/components/brand";
@@ -27,7 +28,7 @@ export default function AgentsPage() {
   const add = useMutation(api.onboarding.addAssistant);
   const setStatus = useMutation(api.agents.setStatus).withOptimisticUpdate((store, { agentId, status }) => {
     const current = store.getQuery(api.agents.list, {});
-    if (current) store.setQuery(api.agents.list, {}, current.map((a) => (a._id === agentId ? { ...a, status } : a)));
+    if (current && status === "frozen") store.setQuery(api.agents.list, {}, current.map((a) => (a._id === agentId ? { ...a, status } : a)));
   });
   const [sheet, setSheet] = useState<{ id: string; kind: "connect" | "permissions" } | null>(null);
   const [adding, setAdding] = useState(false);
@@ -48,7 +49,10 @@ export default function AgentsPage() {
             <AgentCard
               key={a._id}
               agent={a}
-              onToggle={() => setStatus({ agentId: a._id, status: a.status === "active" ? "frozen" : "active" })}
+              onToggle={async () => {
+                const token = await setStatus({ agentId: a._id, status: a.status === "active" ? "frozen" : "active" });
+                if (token) window.location.assign(approvalLink(token));
+              }}
               onConnect={() => setSheet({ id: a._id, kind: "connect" })}
               onPermissions={() => setSheet({ id: a._id, kind: "permissions" })}
             />

@@ -6,7 +6,7 @@ import { Check, Copy, KeyRound, TriangleAlert } from "lucide-react";
 import { api, type Doc } from "@/lib/api";
 
 export type AgentView = Omit<Doc<"agents">, "tokenHash"> & { hasKey: boolean };
-import { MCP_URL } from "@/lib/config";
+import { MCP_URL, approvalLink } from "@/lib/config";
 import { Button, Sheet } from "../ui";
 import { Choice, ErrorText, Field, MoneyInput, Select, Toggle, errorMessage, toMinorUnits } from "../form";
 
@@ -150,7 +150,7 @@ export function PermissionsSheet({ agent, onClose }: { agent: AgentView; onClose
           onClick={async () => {
             setError(undefined);
             try {
-              await update({
+              const token = await update({
                 agentId: agent._id,
                 scopes,
                 dailyCapMinor: spend ? (toMinorUnits(daily, "USD") ?? 0) : 0,
@@ -159,6 +159,7 @@ export function PermissionsSheet({ agent, onClose }: { agent: AgentView; onClose
                 days: Number(days),
               });
               onClose();
+              if (token) window.location.assign(approvalLink(token));
             } catch (e) {
               setError(errorMessage(e));
             }

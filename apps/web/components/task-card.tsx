@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation } from "convex/react";
-import { Landmark, LoaderCircle, MessageCircle, Plug, Send, Users } from "lucide-react";
+import { ExternalLink, Landmark, LoaderCircle, MessageCircle, Plug, Send, Users } from "lucide-react";
 import type { Currency, PaymentState } from "@agent-wallet/domain";
 import { api, type Id } from "@/lib/api";
 import { approvalLink } from "@/lib/config";
@@ -20,6 +20,7 @@ export type TaskView = {
   rail: "simulator" | "base-sepolia" | "handoff";
   channel: "app" | "telegram" | "whatsapp" | "mcp" | "family";
   approvalToken?: string;
+  txHash?: string;
 };
 
 const channelIcon = { app: MessageCircle, telegram: Send, whatsapp: MessageCircle, mcp: Plug, family: Users };
@@ -49,7 +50,8 @@ export function TaskCard({ task, className }: { task: TaskView; className?: stri
         <div className="flex items-center gap-1.5">
           <StateChip state={task.state} />
           {task.rail === "simulator" && task.state === "confirmed" && <span className="text-micro text-mute">Simulated</span>}
-          {task.state === "submitted" && <LoaderCircle className="size-3.5 animate-spin text-cyan" />}
+          {task.rail === "base-sepolia" && <span className="text-micro text-mute">On-chain</span>}
+          {(task.state === "submitted" || task.state === "reserved") && <LoaderCircle className="size-3.5 animate-spin text-cyan" />}
           {task.rail === "handoff" && waiting && <Landmark className="size-3.5 text-mute" />}
         </div>
         {waiting && task.approvalToken && (
@@ -65,6 +67,11 @@ export function TaskCard({ task, className }: { task: TaskView; className?: stri
       </div>
       {task.reason && (task.state === "failed" || task.state === "unknown") && (
         <p className="mt-2 text-label text-ink-2">{task.reason}</p>
+      )}
+      {task.txHash && (
+        <a href={`https://sepolia.basescan.org/tx/${task.txHash}`} target="_blank" rel="noopener" className="mt-2 inline-flex items-center gap-1 text-label font-semibold text-cyan-ink">
+          {task.state === "failed" ? "Refusal on-chain" : "View transaction"} <ExternalLink className="size-3" />
+        </a>
       )}
     </div>
   );

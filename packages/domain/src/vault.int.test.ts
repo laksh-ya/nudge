@@ -5,10 +5,10 @@
 import { p256 } from "@noble/curves/p256";
 import { sha256 } from "@noble/hashes/sha2";
 import { createPublicClient, createWalletClient, http, parseEventLogs, type Address, type Hex } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { describe, expect, it } from "vitest";
 import { policyVaultAbi, testUsdAbi, vaultFactoryAbi } from "./abi";
-import { CHAIN_ID, Op, actionDigest, encode, toTokenUnits } from "./vault";
+import { CHAIN_ID, Op, actionDigest, contactIdOf, encode, paymentIdOf, toTokenUnits } from "./vault";
 import { base64url, spkiToXY, toWebAuthnAuth } from "./webauthn";
 
 const url = process.env.ANVIL_URL;
@@ -45,7 +45,7 @@ run("passkey approval on a local chain", () => {
     await pub.waitForTransactionReceipt({ hash: await wallet.writeContract({ address: factory, abi: vaultFactoryAbi, functionName: "createVault", args }) });
     await pub.waitForTransactionReceipt({ hash: await wallet.writeContract({ address: token, abi: testUsdAbi, functionName: "faucet", args: [vault, toTokenUnits(10_000)] }) });
 
-    const to = "0x000000000000000000000000000000000000bEEF" as Address;
+    const to = privateKeyToAccount(generatePrivateKey()).address;
     for (let i = 0; i < 4; i++) {
       const action = { op: Op.Pay, data: encode.pay(to, toTokenUnits(150), `0x${(i + 1).toString(16).padStart(64, "0")}`), nonce: BigInt(1000 + i), deadline: BigInt(Math.floor(Date.now() / 1000) + 600) };
       const auth = toWebAuthnAuth(browserAssertion(priv, actionDigest(action, vault)));
@@ -58,5 +58,50 @@ run("passkey approval on a local chain", () => {
     }
     const balance = await pub.readContract({ address: token, abi: testUsdAbi, functionName: "balanceOf", args: [to] });
     expect(balance).toBe(toTokenUnits(600));
+  }, 60_000);
+
+  it("registers an agent and a contact with one approval; the vault pays and refuses on its own", async () => {
+    const token = process.env.TOKEN as Address;
+    const factory = process.env.FACTORY as Address;
+    const priv = p256.utils.randomPrivateKey();
+    const { x, y } = spkiToXY(new Uint8Array([...new Uint8Array(26), ...p256.getPublicKey(priv, false)]));
+    const rpIdHash = `0x${Buffer.from(sha256(new TextEncoder().encode(RP_ID))).toString("hex")}` as Hex;
+    const args = [token, x, y, rpIdHash, toTokenUnits(5_000), toTokenUnits(2_000), 86400n, `0x${Buffer.from(p256.utils.randomPrivateKey()).toString("hex")}` as Hex] as const;
+    const vault = await pub.readContract({ address: factory, abi: vaultFactoryAbi, functionName: "predict", args });
+    await pub.waitForTransactionReceipt({ hash: await wallet.writeContract({ address: factory, abi: vaultFactoryAbi, functionName: "createVault", args }) });
+    await pub.waitForTransactionReceipt({ hash: await wallet.writeContract({ address: token, abi: testUsdAbi, functionName: "faucet", args: [vault, toTokenUnits(10_000)] }) });
+    const keyId = await pub.readContract({ address: vault, abi: policyVaultAbi, functionName: "keyIdOf", args: [x, y] });
+
+    const agentKey = generatePrivateKey();
+    const agent = privateKeyToAccount(agentKey);
+    await pub.waitForTransactionReceipt({ hash: await wallet.sendTransaction({ to: agent.address, value: 10n ** 16n }) });
+    const shop = privateKeyToAccount(generatePrivateKey()).address;
+    const setup = {
+      op: Op.Batch,
+      data: encode.batch([
+        { op: Op.SetAgent, data: encode.setAgent(agent.address, toTokenUnits(1_000), toTokenUnits(1_500), BigInt(Math.floor(Date.now() / 1000) + 86400 * 30)) },
+        { op: Op.AddContact, data: encode.addContact(contactIdOf("payee-1"), shop, true) },
+      ]),
+      nonce: 7n,
+      deadline: BigInt(Math.floor(Date.now() / 1000) + 600),
+    };
+    const auth = toWebAuthnAuth(browserAssertion(priv, actionDigest(setup, vault)));
+    const r1 = await pub.waitForTransactionReceipt({ hash: await wallet.writeContract({ address: vault, abi: policyVaultAbi, functionName: "execute", args: [setup, keyId, auth] }) });
+    expect(r1.status).toBe("success");
+
+    const agentWallet = createWalletClient({ chain, transport: http(url), account: agent });
+    const pay = async (cents: number, task: string) => {
+      const hash = await agentWallet.writeContract({ address: vault, abi: policyVaultAbi, functionName: "agentPay", args: [contactIdOf("payee-1"), toTokenUnits(cents), paymentIdOf(task), `0x${"00".repeat(32)}`] });
+      const r = await pub.waitForTransactionReceipt({ hash });
+      return {
+        executed: parseEventLogs({ abi: policyVaultAbi, logs: r.logs, eventName: "PaymentExecuted" }).length,
+        refused: parseEventLogs({ abi: policyVaultAbi, logs: r.logs, eventName: "PaymentRefused" }).map((l) => Number(l.args.code)),
+      };
+    };
+    expect(await pay(800, "t1")).toEqual({ executed: 1, refused: [] });
+    expect(await pay(1_800, "t2")).toEqual({ executed: 0, refused: [2003] });
+    expect(await pay(800, "t1")).toEqual({ executed: 0, refused: [2007] });
+    const balance = await pub.readContract({ address: token, abi: testUsdAbi, functionName: "balanceOf", args: [shop] });
+    expect(balance).toBe(toTokenUnits(800));
   }, 60_000);
 });

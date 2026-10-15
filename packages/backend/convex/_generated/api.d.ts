@@ -11,6 +11,7 @@
 import type * as activity from "../activity.js";
 import type * as agents from "../agents.js";
 import type * as approvals from "../approvals.js";
+import type * as chain from "../chain.js";
 import type * as connections from "../connections.js";
 import type * as crons from "../crons.js";
 import type * as crypto from "../crypto.js";
@@ -20,6 +21,7 @@ import type * as gateway from "../gateway.js";
 import type * as home from "../home.js";
 import type * as http from "../http.js";
 import type * as imports from "../imports.js";
+import type * as lib_actions from "../lib/actions.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_hash from "../lib/hash.js";
 import type * as lib_ledger from "../lib/ledger.js";
@@ -35,6 +37,7 @@ import type * as rates from "../rates.js";
 import type * as tasks from "../tasks.js";
 import type * as telegram from "../telegram.js";
 import type * as users from "../users.js";
+import type * as vault from "../vault.js";
 import type * as wallet from "../wallet.js";
 
 import type {
@@ -47,6 +50,7 @@ declare const fullApi: ApiFromModules<{
   activity: typeof activity;
   agents: typeof agents;
   approvals: typeof approvals;
+  chain: typeof chain;
   connections: typeof connections;
   crons: typeof crons;
   crypto: typeof crypto;
@@ -56,6 +60,7 @@ declare const fullApi: ApiFromModules<{
   home: typeof home;
   http: typeof http;
   imports: typeof imports;
+  "lib/actions": typeof lib_actions;
   "lib/auth": typeof lib_auth;
   "lib/hash": typeof lib_hash;
   "lib/ledger": typeof lib_ledger;
@@ -71,6 +76,7 @@ declare const fullApi: ApiFromModules<{
   tasks: typeof tasks;
   telegram: typeof telegram;
   users: typeof users;
+  vault: typeof vault;
   wallet: typeof wallet;
 }>;
 
