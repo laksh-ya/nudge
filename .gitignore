@@ -19,3 +19,6 @@ next-env.d.ts
 .claude/
 .vercel/
 .clerk/
+contracts/out/
+contracts/cache/
+contracts/broadcast/

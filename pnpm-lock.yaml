@@ -35,6 +35,9 @@ importers:
       react-dom:
         specifier: 19.3.1
         version: 19.3.1(react@19.3.1)
+      viem:
+        specifier: 2.57.7
+        version: 2.57.7(typescript@5.9.3)
     devDependencies:
       '@tailwindcss/vite':
         specifier: 4.3.3
@@ -125,6 +128,12 @@ importers:
         specifier: 5.9.3
         version: 5.9.3
 
+  contracts:
+    dependencies:
+      '@openzeppelin/contracts':
+        specifier: 5.6.1
+        version: 5.6.1
+
   packages/backend:
     dependencies:
       '@agent-wallet/domain':
@@ -145,7 +154,17 @@ importers:
         version: 5.9.3
 
   packages/domain:
+    dependencies:
+      viem:
+        specifier: 2.57.7
+        version: 2.57.7(typescript@5.9.3)
     devDependencies:
+      '@noble/curves':
+        specifier: 1.9.1
+        version: 1.9.1
+      '@noble/hashes':
+        specifier: 1.8.0
+        version: 1.8.0
       '@types/node':
         specifier: 22.20.5
         version: 22.20.5
@@ -680,6 +699,9 @@ packages:
   '@noble/hashes@1.8.0':
     resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
     engines: {node: ^14.21.3 || >=16}
+
+  '@openzeppelin/contracts@5.6.1':
+    resolution: {integrity: sha512-Ly6SlsVJ3mj+b18W3R8gNufB7dTICT105fJhodGAGgyC2oqnBAhqSiNDJ8V8DLY05cCz81GLI0CU5vNYA1EC/w==}
 
   '@oxc-project/types@0.154.0':
     resolution: {integrity: sha512-KYOUGQFlLWR+s4QMV2Q9ko38TZm7EdO87Qm7rvZLqk/webse/cDjtyxKhg/47l0byCbs/k46LT8qc4PKjAikzA==}
@@ -2160,6 +2182,8 @@ snapshots:
       '@noble/hashes': 1.8.0
 
   '@noble/hashes@1.8.0': {}
+
+  '@openzeppelin/contracts@5.6.1': {}
 
   '@oxc-project/types@0.154.0': {}
 
