@@ -40,6 +40,19 @@ export const issueToken = mutation({
   },
 });
 
+/** Operator-only (CLI with a deploy key): issue an assistant key for an account, for demos and tests. */
+export const issueTokenAsOperator = internalMutation({
+  args: { agentId: v.id("agents") },
+  handler: async (ctx, { agentId }) => {
+    const agent = await ctx.db.get(agentId);
+    if (!agent || agent.provider === "own") throw new Error("No such assistant");
+    const token = randomToken();
+    await ctx.db.patch(agent._id, { tokenHash: await sha256(token), connectedAt: Date.now() });
+    await ctx.db.insert("activity", { userId: agent.userId, kind: "agent", title: `New access key for ${agent.name}`, detail: "Issued by the operator for a demo", tone: "neutral" });
+    return token;
+  },
+});
+
 export const updateGrant = mutation({
   args: {
     agentId: v.id("agents"),

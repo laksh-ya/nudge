@@ -110,6 +110,17 @@ Contract v2, one full run of `packages/domain/src/onchain.e2e.test.ts` (7 of 7 p
 | Unfreeze applied after the 2-minute delay | relayer (`finalize`) | [`0x8ddbdbd8…`](https://sepolia.basescan.org/tx/0x8ddbdbd817fe4fb900c4e1e67820a85f2a97846b8bd8d8f4c9153fccfc02807c) |
 | Disconnected agent's key removed from the vault | passkey | [`0x569ff396…`](https://sepolia.basescan.org/tx/0x569ff39695b5c1a1fe62275302f584f2a67f1c7a286520d82d95657266d31979) |
 
+Contract v2 on the live app with a passkey on a real phone (Android, Chrome), vault [`0x5169E18E…`](https://sepolia.basescan.org/address/0x5169E18E11682316978BDdc430a781f62d586284). The passkey counted only after the code the phone showed was typed into the app.
+
+| Step | Who signs | Transaction |
+|---|---|---|
+| Vault deployed for the confirmed phone passkey | relayer | [`0x79a892af…`](https://sepolia.basescan.org/tx/0x79a892af8886faaec747e795faf204894f797aefe219ca608406009afd47851f) |
+| Setup: agents, contacts and rules | phone passkey | [`0x00c3e632…`](https://sepolia.basescan.org/tx/0x00c3e632d88f6c83d038c9c44aff118d80cb07f8aa089d23b1e76b2b413d9eac) |
+| Claude pays $3 over MCP, at once | Claude's agent key | [`0x6977e395…`](https://sepolia.basescan.org/tx/0x6977e3957d2d1ba4562410b6235ff71f3fd2a6c0e0fb3ecc517b28660683886b) |
+| Claude pays $8: above $5, so the vault holds it | Claude's agent key | [`0xddf143e6…`](https://sepolia.basescan.org/tx/0xddf143e6270ef3dfca7a89a0416873c4cc1bb3901b687bcea058248b133a5d5f) |
+| Held $8 released after 2 minutes | relayer (`release`) | [`0x14e713bf…`](https://sepolia.basescan.org/tx/0x14e713bf678a85b00eca778e047d907d45127c0702e4245ae7826162a5eb5fb2) |
+| Claude asks for $12, over its $10 limit; owner approves on the phone | phone passkey | [`0xb671f42d…`](https://sepolia.basescan.org/tx/0xb671f42d4bffae21aeff37ce9edf82740b7cb5543467ccffa74ed4b9acc6fce1) |
+
 Contract v1, one run of the earlier end-to-end test:
 
 | Step | Who signs | Transaction |
