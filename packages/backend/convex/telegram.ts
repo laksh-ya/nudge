@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { httpAction, internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { spendAssistantTurn } from "./lib/budget";
 
 /**
  * Telegram adapter for the same assistant. Linking starts in the app (a one-time code);
@@ -86,7 +87,9 @@ export const inbound = internalMutation({
       return;
     }
     await ctx.db.insert("messages", { userId: link.userId, role: "user", text, channel: "telegram" });
-    await ctx.scheduler.runAfter(0, internal.assistant.respond, { userId: link.userId, text, channel: "telegram" });
+    const user = await ctx.db.get(link.userId);
+    const useModel = user ? await spendAssistantTurn(ctx, user) : false;
+    await ctx.scheduler.runAfter(0, internal.assistant.respond, { userId: link.userId, text, channel: "telegram", useModel });
   },
 });
 

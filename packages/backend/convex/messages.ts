@@ -10,6 +10,7 @@ import { computeOverview } from "./lib/overview";
 import { newApprovalToken } from "./lib/seed";
 import { ownerPayTask } from "./lib/actions";
 import { withNames } from "./tasks";
+import { spendAssistantTurn } from "./lib/budget";
 
 export const list = query({
   args: {},
@@ -37,7 +38,8 @@ export const send = mutation({
     const clean = text.trim().slice(0, 500);
     if (!clean) return;
     await ctx.db.insert("messages", { userId: user._id, role: "user", text: clean, channel: "app" });
-    await ctx.scheduler.runAfter(0, internal.assistant.respond, { userId: user._id, text: clean });
+    const useModel = await spendAssistantTurn(ctx, user);
+    await ctx.scheduler.runAfter(0, internal.assistant.respond, { userId: user._id, text: clean, useModel });
   },
 });
 

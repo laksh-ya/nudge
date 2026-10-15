@@ -19,12 +19,22 @@ function Splash() {
   );
 }
 
-function DemoBar() {
+function DemoBar({ readOnly }: { readOnly: boolean }) {
   const { setDemo } = useDemo();
   return (
     <div className="sticky top-0 z-40 flex h-9 items-center justify-center gap-3 bg-navy px-4 text-label text-white lg:pl-[248px]">
-      <span>You're in the demo account</span>
-      <Link href="/sign-up" className="font-semibold text-cyan">Create yours</Link>
+      {readOnly ? (
+        <>
+          <span>Team demo account, read-only</span>
+          {/* A route handler, not a page: it swaps cookies, so it needs a full navigation. */}
+          <a href="/sandbox" className="font-semibold text-cyan">Open your own sandbox</a>
+        </>
+      ) : (
+        <>
+          <span>You're in the demo account</span>
+          <Link href="/sign-up" className="font-semibold text-cyan">Create yours</Link>
+        </>
+      )}
       <button onClick={() => setDemo(false)} className="font-semibold text-white/70 hover:text-white">Exit</button>
     </div>
   );
@@ -105,7 +115,7 @@ export function Gate({ children }: { children: React.ReactNode }) {
   if (me.demo)
     return (
       <div style={{ "--bar": "36px" } as React.CSSProperties}>
-        <DemoBar />
+        <DemoBar readOnly={me.readOnly} />
         <Shell>{children}</Shell>
       </div>
     );

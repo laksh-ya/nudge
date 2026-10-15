@@ -11,4 +11,6 @@ crons.interval("expire unanswered approvals", { minutes: 5 }, internal.tasks.exp
 
 crons.interval("delete idle demo sandboxes", { hours: 1 }, internal.demo.sweep, {});
 
+crons.interval("relayer test-ETH runway", { minutes: 15 }, internal.chain.checkRunway, {});
+
 export default crons;

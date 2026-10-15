@@ -5,6 +5,7 @@ import type { ActionCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { freezeAll } from "./lib/control";
+import { isSandbox } from "./lib/auth";
 
 /**
  * The app's own assistant, backed by Claude. It has exactly the tools an outside assistant has over
@@ -14,6 +15,8 @@ import { freezeAll } from "./lib/control";
  */
 
 const MODEL = "claude-opus-5-5";
+/** Anonymous demo sandboxes get a smaller model; the behaviour rules are the same. */
+const SANDBOX_MODEL = "claude-sonnet-5-5";
 const MAX_STEPS = 8;
 
 const SYSTEM = `You are the assistant inside a personal-finance app with an agent wallet. You act for one person, the owner, who is talking to you now.
@@ -81,6 +84,7 @@ export const context = internalQuery({
       name: user?.name ?? "",
       currency: user?.currency ?? "INR",
       ownAgentId: own?._id ?? null,
+      sandbox: user ? isSandbox(user) : true,
       history: recent.reverse().map((m) => ({ role: m.role, text: m.text })),
     };
   },
@@ -142,13 +146,19 @@ async function runTool(ctx: ActionCtx, userId: Id<"users">, agentId: Id<"agents"
 }
 
 export const respond = internalAction({
-  args: { userId: v.id("users"), text: v.string(), channel: v.optional(v.union(v.literal("app"), v.literal("telegram"))) },
-  handler: async (ctx, { userId, text, channel = "app" }): Promise<void> => {
-    const c: { name: string; currency: string; ownAgentId: Id<"agents"> | null; history: { role: "user" | "assistant"; text: string }[] } = await ctx.runQuery(
+  args: {
+    userId: v.id("users"),
+    text: v.string(),
+    channel: v.optional(v.union(v.literal("app"), v.literal("telegram"))),
+    /** False once the account's daily model quota is spent; the rule-based reply answers instead. */
+    useModel: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { userId, text, channel = "app", useModel = true }): Promise<void> => {
+    const c: { name: string; currency: string; ownAgentId: Id<"agents"> | null; sandbox: boolean; history: { role: "user" | "assistant"; text: string }[] } = await ctx.runQuery(
       internal.assistant.context,
       { userId },
     );
-    if (!process.env.ANTHROPIC_API_KEY || !c.ownAgentId) {
+    if (!process.env.ANTHROPIC_API_KEY || !c.ownAgentId || !useModel) {
       await ctx.runMutation(internal.messages.reply, { userId, text, channel });
       return;
     }
@@ -168,7 +178,7 @@ export const respond = internalAction({
     try {
       for (let step = 0; step < MAX_STEPS; step++) {
         const response = await client.beta.messages.create({
-          model: MODEL,
+          model: c.sandbox ? SANDBOX_MODEL : MODEL,
           max_tokens: 4000,
           betas: ["server-side-fallback-2026-07-01"],
           fallbacks: "default",

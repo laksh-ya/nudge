@@ -1,5 +1,5 @@
 import { mutation, query } from "./_generated/server";
-import { DEMO_ISSUER, isDemo, isSandbox, viewer } from "./lib/auth";
+import { DEMO_ISSUER, isDemo, isSandbox, viewer, judgeReadOnly } from "./lib/auth";
 import { seedUser } from "./lib/seed";
 
 const DAY = 86_400_000;
@@ -20,6 +20,7 @@ export const me = query({
       onboardingStep: user.onboardingStep ?? null,
       demo: isDemo(user),
       sandbox: isSandbox(user),
+      readOnly: await judgeReadOnly(ctx, user),
     };
   },
 });

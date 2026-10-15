@@ -470,6 +470,30 @@ export const reconcile = internalAction({
   },
 });
 
+// ---------------------------------------------------------------- runway
+
+/** Gas one sandbox uses from the relayer: vault deploy (about 5M), faucet, setup approval, margin. */
+const SANDBOX_GAS = 7_000_000n;
+/** Agent keys a sandbox usually funds on their first payment. */
+const SANDBOX_AGENTS = 2n;
+
+/** Read the relayer's test ETH and estimate how many more sandboxes it covers. */
+export const checkRunway = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    if (!chainReady()) return;
+    const { pub, account } = clients();
+    const [balance, gasPrice] = await Promise.all([pub.getBalance({ address: account.address }), pub.getGasPrice()]);
+    const perSandbox = gasPrice * SANDBOX_GAS + AGENT_GAS * SANDBOX_AGENTS;
+    await ctx.runMutation(internal.ops.record, {
+      address: account.address,
+      balancesWei: [balance.toString()],
+      perSandboxWei: perSandbox.toString(),
+      runway: Number(balance / perSandbox),
+    });
+  },
+});
+
 // ---------------------------------------------------------------- reads
 
 /** Read what the vault enforces right now and store it, so screens show the chain, not our wishes. */

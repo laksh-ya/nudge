@@ -10,13 +10,11 @@ import { newApprovalToken } from "./lib/seed";
 import { addKeyTask, contactCapTask, setupTask } from "./lib/actions";
 import { relayer } from "./lib/relayer";
 import { hit } from "./lib/limits";
+import { spendDeploy } from "./lib/budget";
 import { chainReady } from "./chain";
 
 const HEX32 = /^0x[0-9a-fA-F]{64}$/;
 const ENROL_MINUTES = 15;
-/** Vault deployments across every account, per hour. Each costs the relayer real test ETH. */
-const DEPLOYS_PER_HOUR = 6;
-const SANDBOX_DEPLOYS_PER_DAY = 3;
 
 function allowedRpIds() {
   return (process.env.RP_IDS ?? "agent-wallet-approve.vercel.app,localhost").split(",").map((s) => s.trim());
@@ -238,9 +236,8 @@ export const confirmEnrol = mutation({
     }
 
     if (!chainReady()) throw new Error("The wallet network isn't configured yet");
-    await hit(ctx, "deploys", DEPLOYS_PER_HOUR, 3600_000, "Too many wallets are being created right now. Try again in a few minutes.");
-    // Each vault costs the relayer real test ETH; anonymous sandboxes share a small daily budget.
-    if (isSandbox(user)) await hit(ctx, "deploys:sandbox", SANDBOX_DEPLOYS_PER_DAY, 86_400_000, "Demo vaults are used up for today. Sign up, or try again tomorrow.");
+    // Each vault costs the relayer test ETH: per visitor, per day for all sandboxes, and a reserve.
+    await spendDeploy(ctx, user);
     await ctx.db.patch(w._id, {
       status: "deploying",
       candidate: undefined,
@@ -279,7 +276,7 @@ export const upgradeVault = mutation({
     const user = await requireViewer(ctx);
     const w = await walletOf(ctx, user._id);
     if (!w || w.status !== "live" || (w.version ?? 1) >= VAULT_VERSION || !w.keyX) throw new Error("Nothing to upgrade");
-    await hit(ctx, "deploys", DEPLOYS_PER_HOUR, 3600_000, "Too many wallets are being created right now. Try again in a few minutes.");
+    await spendDeploy(ctx, user);
     const agents = await ctx.db.query("agents").withIndex("by_user", (q) => q.eq("userId", user._id)).take(50);
     for (const a of agents) {
       for (const k of await ctx.db.query("agentKeys").withIndex("by_agent", (q) => q.eq("agentId", a._id)).take(5)) await ctx.db.delete(k._id);
