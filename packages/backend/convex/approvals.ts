@@ -25,13 +25,19 @@ export const get = query({
     ]);
     let onchain = null;
     if (task.action && wallet?.address && wallet.keyId) {
-      // Names for the addresses that appear in the signed bytes. The bytes themselves are rendered by the page.
+      // Names only for addresses that appear in the signed bytes; nothing else about the account.
+      // The page checks payees against the vault itself (contacts are keyed by contactIdOf(payeeId)).
+      const bytes = task.action.data.toLowerCase();
+      const inBytes = (addr?: string) => Boolean(addr && bytes.includes(addr.slice(2).toLowerCase()));
       const names: Record<string, string> = {};
+      const contacts: { payeeId: string; name: string; address: string }[] = [];
       for (const p of await ctx.db.query("payees").withIndex("by_user", (q) => q.eq("userId", task.userId)).take(200)) {
-        if (p.address) names[p.address.toLowerCase()] = p.name;
+        if (!p.address || !inBytes(p.address)) continue;
+        names[p.address.toLowerCase()] = p.name;
+        contacts.push({ payeeId: p._id, name: p.name, address: p.address });
       }
       for (const a of await ctx.db.query("agents").withIndex("by_user", (q) => q.eq("userId", task.userId)).take(50)) {
-        if (a.chainAddress) names[a.chainAddress.toLowerCase()] = a.name;
+        if (a.chainAddress && inBytes(a.chainAddress)) names[a.chainAddress.toLowerCase()] = a.name;
       }
       const keys = (wallet.passkeys ?? []).filter((k) => k.status !== "removed");
       for (const k of keys) names[k.keyId] = k.label;
@@ -50,6 +56,7 @@ export const get = query({
         credentialId: wallet.credentialId ?? null,
         rpId: wallet.rpId ?? null,
         names,
+        contacts,
       };
     }
     return {
@@ -67,9 +74,8 @@ export const get = query({
       channel: task.channel,
       expiresAt: task.expiresAt,
       owner: user?.name,
-      payee: payee ? { name: payee.name, handle: payee.handle, trusted: payee.trusted, kind: payee.kind } : null,
+      payee: payee ? { name: payee.name, handle: payee.handle, trusted: payee.trusted, kind: payee.kind, address: payee.address ?? null } : null,
       agent: agent?.name,
-      wallet: wallet ? { address: wallet.address, balanceMinor: wallet.balanceMinor, chain: wallet.chain } : null,
     };
   },
 });
