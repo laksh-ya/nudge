@@ -121,6 +121,17 @@ Contract v2 on the live app with a passkey on a real phone (Android, Chrome), va
 | Held $8 released after 2 minutes | relayer (`release`) | [`0x14e713bf…`](https://sepolia.basescan.org/tx/0x14e713bf678a85b00eca778e047d907d45127c0702e4245ae7826162a5eb5fb2) |
 | Claude asks for $12, over its $10 limit; owner approves on the phone | phone passkey | [`0xb671f42d…`](https://sepolia.basescan.org/tx/0xb671f42d4bffae21aeff37ce9edf82740b7cb5543467ccffa74ed4b9acc6fce1) |
 
+The judge account (opened with `/judge?key=…`) moved from its v1 vault [`0xd71b81a1…`](https://sepolia.basescan.org/address/0xd71b81a157Ce1D4651D2B1CF0CCb59bea789Ae40) to v2 vault [`0xC9746222…`](https://sepolia.basescan.org/address/0xC9746222bdf0959B8ce3cE0F21C26c7c217f1EB1) with the same phone passkey; the old vault stays on-chain as history.
+
+| Step | Who signs | Transaction |
+|---|---|---|
+| v2 vault deployed for the existing phone passkey | relayer | [`0x156869e9…`](https://sepolia.basescan.org/tx/0x156869e9977d19e8d6f3b6dcbe7af21b6047c32b6107151547e360f677cb5c6e) |
+| Setup: agents, contacts and rules | phone passkey | [`0xa8ba0f39…`](https://sepolia.basescan.org/tx/0xa8ba0f394c0244ff3ae90234b21eab6ecf43413ba31a7c429bc90ff0cda84f9b) |
+| Claude pays $3 over MCP, at once | Claude's agent key | [`0x615d6621…`](https://sepolia.basescan.org/tx/0x615d6621f0e186cb9870e533b6df0a8a26395d5c2f62b256d09e72bb5aa8a539) |
+| Claude pays $8: held for 2 minutes | Claude's agent key | [`0xbedd4d5f…`](https://sepolia.basescan.org/tx/0xbedd4d5f1d10c155300394e618ee297f63c762bb42ed4a5576932371ff014b50) |
+| Held $8 released | relayer (`release`) | [`0x79f7dd41…`](https://sepolia.basescan.org/tx/0x79f7dd41d37521a8402c3e8cb65d6876ba443c91ab394777b9905c909c3900e4) |
+| Claude asks for $12, over its $10 limit; owner approves on the phone | phone passkey | [`0xcda7773e…`](https://sepolia.basescan.org/tx/0xcda7773e0408da8e958bddbff7ec595a91587221e02a08120ec6135de99a8be9) |
+
 Contract v1, one run of the earlier end-to-end test:
 
 | Step | Who signs | Transaction |
