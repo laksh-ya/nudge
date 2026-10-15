@@ -51,8 +51,15 @@ export const inbound = internalMutation({
     if (start) {
       const code = start[1]?.toUpperCase();
       const link = code ? await ctx.db.query("chatLinks").withIndex("by_code", (q) => q.eq("code", code)).unique() : null;
+      if (!code) {
+        await ctx.scheduler.runAfter(0, internal.telegram.send, {
+          chatId,
+          text: "Hi! To link this chat to your wallet, open the app, go to Settings → Telegram, tap \"Get a linking code\", then tap \"Open Telegram\". The code is filled in for you.",
+        });
+        return;
+      }
       if (!link || link.channel !== "telegram" || (link.codeExpiresAt ?? 0) < Date.now()) {
-        await ctx.scheduler.runAfter(0, internal.telegram.send, { chatId, text: "That code isn't valid any more. Get a new linking code in the app, then send it here as /start CODE." });
+        await ctx.scheduler.runAfter(0, internal.telegram.send, { chatId, text: "That code isn't valid any more (codes last 10 minutes and work once). Get a new one in the app: Settings → Telegram." });
         return;
       }
       // One use only: the code is gone the moment a chat claims it.
