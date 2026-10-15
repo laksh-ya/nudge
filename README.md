@@ -132,6 +132,7 @@ The judge account (opened with `/judge?key=…`) moved from its v1 vault [`0xd71
 | Claude pays $8: held for 2 minutes | Claude's agent key | [`0xbedd4d5f…`](https://sepolia.basescan.org/tx/0xbedd4d5f1d10c155300394e618ee297f63c762bb42ed4a5576932371ff014b50) |
 | Held $8 released | relayer (`release`) | [`0x79f7dd41…`](https://sepolia.basescan.org/tx/0x79f7dd41d37521a8402c3e8cb65d6876ba443c91ab394777b9905c909c3900e4) |
 | Claude asks for $12, over its $10 limit; owner approves on the phone | phone passkey | [`0xcda7773e…`](https://sepolia.basescan.org/tx/0xcda7773e0408da8e958bddbff7ec595a91587221e02a08120ec6135de99a8be9) |
+| Claude asks for $12 again; the approval arrives in Telegram and the owner approves from it | phone passkey | [`0x33c12bbc…`](https://sepolia.basescan.org/tx/0x33c12bbce3cb6ebf32b6972302af3ea697eb2eda10565ed0d3fe2836b8f1aeae) |
 
 Contract v1, one run of the earlier end-to-end test:
 
