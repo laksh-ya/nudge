@@ -1,12 +1,15 @@
 /// <reference types="vite/client" />
-import { convexTest } from "convex-test";
+import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import schema from "./schema";
 import { api, internal } from "./_generated/api";
 import { ASSISTANT_TURNS, VISITOR_DEPLOYS_PER_DAY } from "./lib/budget";
 import { JUDGE_READ_ONLY } from "./lib/auth";
 
-vi.mock("./lib/relayer", () => ({ relayer: { enqueueAction: vi.fn(async () => "queued") } }));
+vi.mock("./lib/relayer", () => {
+  const pool = { enqueueAction: vi.fn(async () => "queued") };
+  return { relayer: pool, agentPool: pool, lanePool: () => pool, laneOf: () => 0, laneCount: () => 1, MAX_LANES: 4 };
+});
 const modules = import.meta.glob(["./**/*.ts", "./**/*.js", "!./**/*.test.ts"]);
 
 const NOW = Date.UTC(2026, 9, 16, 6);
@@ -21,11 +24,11 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 
-const sandbox = (t: ReturnType<typeof convexTest>, sub: string, vis = "ab".repeat(16)) =>
+const sandbox = (t: TestConvex<typeof schema>, sub: string, vis = "ab".repeat(16)) =>
   t.withIdentity({ subject: sub, issuer: ISSUER, tokenIdentifier: `${ISSUER}|${sub}`, vis });
 
 /** A sandbox whose passkey is enrolled and confirmed, so the next confirm deploys. */
-async function readyToDeploy(t: ReturnType<typeof convexTest>, who: ReturnType<typeof sandbox>) {
+async function readyToDeploy(t: TestConvex<typeof schema>, who: ReturnType<typeof sandbox>) {
   const userId = (await who.mutation(api.users.ensure, {}))!;
   await t.run(async (ctx) => {
     const w = (await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", userId)).unique())!;
@@ -66,7 +69,7 @@ describe("demo deploy budgets", () => {
 });
 
 describe("the judge account", () => {
-  const judge = (t: ReturnType<typeof convexTest>, admin: boolean) =>
+  const judge = (t: TestConvex<typeof schema>, admin: boolean) =>
     t.withIdentity({ subject: "judge", issuer: ISSUER, tokenIdentifier: `${ISSUER}|judge`, judgeAdmin: admin });
 
   it("is read-only for visitors: no key rotation, no freezing, no settings", async () => {

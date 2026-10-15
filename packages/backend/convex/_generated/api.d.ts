@@ -122,4 +122,8 @@ export declare const internal: FilterApi<
 
 export declare const components: {
   relayer: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"relayer">;
+  lane1: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"lane1">;
+  lane2: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"lane2">;
+  lane3: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"lane3">;
+  agents: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"agents">;
 };

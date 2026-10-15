@@ -4,7 +4,7 @@ import { internal } from "./_generated/api";
 import { CHAIN_ID, EXPLORER, Op, actionDigest, assertionProblem } from "@agent-wallet/domain";
 import type { Address, Hex } from "viem";
 import { requireViewer } from "./lib/auth";
-import { relayer } from "./lib/relayer";
+import { laneOf, lanePool } from "./lib/relayer";
 
 /**
  * The approval link carries an opaque token. Opening it only reads; nothing is
@@ -168,7 +168,8 @@ export const submit = mutation({
       return "rejected";
     }
     await ctx.db.patch(task._id, { state: "reserved", updatedAt: Date.now() });
-    await relayer.enqueueAction(ctx, internal.chain.relayOwner, { taskId: task._id, auth, keyId });
+    const lane = laneOf(task.userId);
+    await lanePool(lane).enqueueAction(ctx, internal.chain.relayOwner, { taskId: task._id, auth, keyId, lane });
     return "reserved";
   },
 });

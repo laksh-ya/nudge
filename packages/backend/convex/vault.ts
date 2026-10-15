@@ -8,7 +8,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { isSandbox, requireViewer, viewer } from "./lib/auth";
 import { newApprovalToken } from "./lib/seed";
 import { addKeyTask, contactCapTask, setupTask } from "./lib/actions";
-import { relayer } from "./lib/relayer";
+import { laneOf, lanePool, relayer } from "./lib/relayer";
 import { hit } from "./lib/limits";
 import { spendDeploy } from "./lib/budget";
 import { chainReady } from "./chain";
@@ -249,7 +249,7 @@ export const confirmEnrol = mutation({
       deployRequestedAt: Date.now(),
     });
     await ctx.db.insert("activity", { userId: user._id, kind: "security", title: "Payment passkey confirmed", detail: `${entry.label} · for ${c.rpId}`, tone: "good" });
-    await relayer.enqueueAction(ctx, internal.chain.deployVault, { walletId: w._id });
+    await lanePool(laneOf(user._id)).enqueueAction(ctx, internal.chain.deployVault, { walletId: w._id, lane: laneOf(user._id) });
     return { approvalToken: null };
   },
 });
@@ -297,7 +297,7 @@ export const upgradeVault = mutation({
       ],
     });
     await ctx.db.insert("activity", { userId: user._id, kind: "setting", title: "Moving to the current vault contract", detail: `Old vault ${w.address.slice(0, 10)}… kept as history`, tone: "neutral" });
-    await relayer.enqueueAction(ctx, internal.chain.deployVault, { walletId: w._id });
+    await lanePool(laneOf(user._id)).enqueueAction(ctx, internal.chain.deployVault, { walletId: w._id, lane: laneOf(user._id) });
   },
 });
 
@@ -441,6 +441,7 @@ export const agentTaskForChain = internalQuery({
     const w = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", t.userId)).unique();
     if (!key || !w?.address) return null;
     return {
+      userId: t.userId,
       agentId: t.agentId,
       agentKey: key.privateKey,
       agentAddress: key.address,
@@ -451,6 +452,25 @@ export const agentTaskForChain = internalQuery({
       paymentId: t.paymentId,
       walletId: w._id,
     };
+  },
+});
+
+/** One send at a time per agent key. The lock lapses by itself if an action dies mid-send. */
+export const lockAgentKey = internalMutation({
+  args: { agentId: v.id("agents"), until: v.number() },
+  handler: async (ctx, { agentId, until }) => {
+    const key = await ctx.db.query("agentKeys").withIndex("by_agent", (q) => q.eq("agentId", agentId)).unique();
+    if (!key || (key.sendingUntil ?? 0) > Date.now()) return false;
+    await ctx.db.patch(key._id, { sendingUntil: until });
+    return true;
+  },
+});
+
+export const unlockAgentKey = internalMutation({
+  args: { agentId: v.id("agents") },
+  handler: async (ctx, { agentId }) => {
+    const key = await ctx.db.query("agentKeys").withIndex("by_agent", (q) => q.eq("agentId", agentId)).unique();
+    if (key?.sendingUntil) await ctx.db.patch(key._id, { sendingUntil: undefined });
   },
 });
 

@@ -331,6 +331,8 @@ export default defineSchema({
     agentId: v.id("agents"),
     address: v.string(),
     privateKey: v.string(),
+    /** Set while a payment from this key is being sent, so two can't take the same nonce. */
+    sendingUntil: v.optional(v.number()),
   }).index("by_agent", ["agentId"]),
 
   tasks: defineTable({

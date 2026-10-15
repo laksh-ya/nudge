@@ -10,7 +10,10 @@ import type { Id } from "./_generated/dataModel";
 // before expiry or cancellation is even checked), and task ids are typed.
 
 // Only the external relayer queue is stubbed. Production DB handlers and schema run unchanged.
-vi.mock("./lib/relayer", () => ({ relayer: { enqueueAction: vi.fn(async () => "test-queue-id") } }));
+vi.mock("./lib/relayer", () => {
+  const pool = { enqueueAction: vi.fn(async () => "queued") };
+  return { relayer: pool, agentPool: pool, lanePool: () => pool, laneOf: () => 0, laneCount: () => 1, MAX_LANES: 4 };
+});
 const modules = import.meta.glob(["./**/*.ts", "./**/*.js", "!./**/*.test.ts"]);
 const NOW = Date.UTC(2026,9,16,6);
 const DAY = 86400000;

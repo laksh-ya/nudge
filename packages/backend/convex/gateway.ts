@@ -10,7 +10,7 @@ import { newApprovalToken } from "./lib/seed";
 import { sha256 } from "./lib/hash";
 import { ownerPayTask, paymentIdFor } from "./lib/actions";
 import { changeLimits, revokeAgent } from "./lib/control";
-import { relayer } from "./lib/relayer";
+import { agentPool, laneOf } from "./lib/relayer";
 import { hit } from "./lib/limits";
 
 /**
@@ -351,7 +351,7 @@ export const proposePayment = internalMutation({
         updatedAt: Date.now(),
       });
       await ctx.db.patch(taskId, { paymentId: paymentIdFor(taskId, agent._id, requestId) });
-      await relayer.enqueueAction(ctx, internal.chain.agentPay, { taskId });
+      await agentPool.enqueueAction(ctx, internal.chain.agentPay, { taskId, lane: laneOf(user._id) });
       await record(ctx, user, agent, `${agent.name} is paying ${payee.name} ${formatMoney(minor, "USDC")} within its limits.`, taskId);
       const held = vault && vault.holdFor > 0 && minor > vault.holdAboveMinor;
       return {
