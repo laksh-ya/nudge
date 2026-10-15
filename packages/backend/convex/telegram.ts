@@ -104,8 +104,11 @@ export const send = internalAction({
     const token = process.env.TELEGRAM_BOT_TOKEN;
     if (!token) return;
     const chat = chatId ?? (userId ? await ctx.runQuery(internal.telegram.chatFor, { userId }) : null);
-    if (!chat) return;
-    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    if (!chat) {
+      console.warn("telegram.send: no linked chat", userId);
+      return { ok: false, reason: "no linked chat" };
+    }
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -115,6 +118,9 @@ export const send = internalAction({
         ...(approvalUrl ? { reply_markup: { inline_keyboard: [[{ text: "Review and approve", url: approvalUrl }]] } } : {}),
       }),
     });
+    const body = (await res.json().catch(() => ({}))) as { ok?: boolean; description?: string };
+    if (!body.ok) console.error("telegram.send failed", res.status, body.description);
+    return { ok: Boolean(body.ok), reason: body.description };
   },
 });
 
