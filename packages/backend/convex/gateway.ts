@@ -11,7 +11,7 @@ import { sha256 } from "./lib/hash";
 import { ownerPayTask, paymentIdFor } from "./lib/actions";
 import { changeLimits, revokeAgent } from "./lib/control";
 import { agentPool, laneOf } from "./lib/relayer";
-import { hit } from "./lib/limits";
+import { tryHit } from "./lib/limits";
 
 /**
  * The single path outside assistants (MCP) and chat channels use to touch money.
@@ -98,16 +98,14 @@ export const revoke = mutation({
   },
 });
 
-/** 60 calls a minute per assistant. */
+/** 60 calls a minute per assistant, counting every call in a batch. */
 export const allow = internalMutation({
-  args: { agentId: v.id("agents") },
-  handler: async (ctx, { agentId }) => {
-    try {
-      await hit(ctx, `mcp:${agentId}`, 60, 60_000);
-      return true;
-    } catch {
-      return false;
+  args: { agentId: v.id("agents"), calls: v.optional(v.number()) },
+  handler: async (ctx, { agentId, calls = 1 }) => {
+    for (let i = 0; i < Math.max(1, calls); i++) {
+      if (!(await tryHit(ctx, `mcp:${agentId}`, 60, 60_000))) return false;
     }
+    return true;
   },
 });
 
@@ -291,6 +289,8 @@ export const proposePayment = internalMutation({
     }
     if (!Number.isFinite(amount) || amount <= 0 || amount > 1e6) return { outcome: "refused", code: "2003", reason: "Amount must be a positive number of dollars" };
     const minor = Math.round(amount * 100);
+    // $0.004 would round to nothing, pass every check and then be refused on-chain as a strike.
+    if (minor < 1 || Math.abs(amount * 100 - minor) > 1e-6) return { outcome: "refused", code: "2003", reason: "Amounts are whole cents, at least $0.01" };
     const payeeId = ctx.db.normalizeId("payees", contactId);
     const payee = payeeId ? await ctx.db.get(payeeId) : null;
     if (!payee || payee.userId !== user._id) {

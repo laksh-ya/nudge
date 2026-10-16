@@ -32,6 +32,8 @@ export const paymentState = v.union(
   v.literal("queued"),
   /** An agent payment above the hold threshold, waiting so the owner can cancel it. */
   v.literal("held"),
+  /** Paid outside the app (a UPI handoff) and marked paid by the owner; no bank has confirmed it. */
+  v.literal("reported"),
 );
 
 /** What the vault itself currently enforces, read back from the chain. */

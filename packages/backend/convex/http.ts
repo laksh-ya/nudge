@@ -6,6 +6,9 @@ import type { Id } from "./_generated/dataModel";
 import { sha256 } from "./lib/hash";
 import { telegramWebhook } from "./telegram";
 
+/** JSON-RPC batches are capped; MCP itself dropped batching in 2025-06-18. */
+const MAX_BATCH = 5;
+
 const http = httpRouter();
 
 /**
@@ -151,17 +154,21 @@ http.route({
     const agent = await ctx.runQuery(internal.gateway.agentByToken, { tokenHash: await sha256(token) });
     if (!agent) return json({ jsonrpc: "2.0", id: null, error: { code: -32001, message: "This access key isn't valid any more" } }, 401);
     if (agent.status === "frozen") return json({ jsonrpc: "2.0", id: null, error: { code: -32003, message: "This assistant is frozen by its owner" } }, 403);
-    if (!(await ctx.runMutation(internal.gateway.allow, { agentId: agent._id }))) {
-      return json({ jsonrpc: "2.0", id: null, error: { code: -32029, message: "Too many requests. Slow down and try again in a minute." } }, 429);
-    }
     let body: Rpc | Rpc[];
     try {
       body = (await req.json()) as Rpc | Rpc[];
     } catch {
       return json({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } }, 400);
     }
+    if (Array.isArray(body) && (body.length === 0 || body.length > MAX_BATCH)) {
+      return json({ jsonrpc: "2.0", id: null, error: { code: -32600, message: `Send 1 to ${MAX_BATCH} calls per request` } }, 400);
+    }
+    // Every call counts against the rate limit, batched or not.
+    if (!(await ctx.runMutation(internal.gateway.allow, { agentId: agent._id, calls: Array.isArray(body) ? body.length : 1 }))) {
+      return json({ jsonrpc: "2.0", id: null, error: { code: -32029, message: "Too many requests. Slow down and try again in a minute." } }, 429);
+    }
     if (Array.isArray(body)) {
-      const out = (await Promise.all(body.slice(0, 20).map((m) => handle(ctx, agent._id, m)))).filter(Boolean);
+      const out = (await Promise.all(body.map((m) => handle(ctx, agent._id, m)))).filter(Boolean);
       return out.length ? json(out) : new Response(null, { status: 202 });
     }
     const out = await handle(ctx, agent._id, body);

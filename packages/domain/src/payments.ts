@@ -13,11 +13,12 @@ export const PAYMENT_STATES = [
   "unknown",
   "queued",
   "held",
+  "reported",
 ] as const;
 
 export type PaymentState = (typeof PAYMENT_STATES)[number];
 
-export const TERMINAL_STATES: readonly PaymentState[] = ["confirmed", "failed", "cancelled", "expired"];
+export const TERMINAL_STATES: readonly PaymentState[] = ["confirmed", "failed", "cancelled", "expired", "reported"];
 
 export const STATE_LABEL: Record<PaymentState, string> = {
   drafted: "Draft",
@@ -33,4 +34,5 @@ export const STATE_LABEL: Record<PaymentState, string> = {
   unknown: "Checking outcome",
   queued: "Waiting to apply",
   held: "Held, cancellable",
+  reported: "You marked it paid",
 };

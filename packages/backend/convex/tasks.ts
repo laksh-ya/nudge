@@ -56,7 +56,13 @@ export const settle = internalMutation({
   handler: async (ctx, { taskId }) => {
     const task = await ctx.db.get(taskId);
     if (!task || task.state !== "submitted") return;
-    await ctx.db.patch(taskId, { state: "confirmed", updatedAt: Date.now() });
+    // A UPI handoff happened in the owner's bank app. Only their word says it was paid.
+    const handoff = task.rail === "handoff";
+    await ctx.db.patch(taskId, {
+      state: handoff ? "reported" : "confirmed",
+      reason: handoff ? "You marked this paid. Your bank hasn't confirmed it; it will match when your statement arrives." : task.reason,
+      updatedAt: Date.now(),
+    });
     const payee = task.payeeId ? await ctx.db.get(task.payeeId) : null;
     if (task.currency === "USDC" && task.amountMinor) {
       const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", task.userId)).unique();
@@ -101,14 +107,16 @@ export const settle = internalMutation({
     await ctx.db.insert("activity", {
       userId: task.userId,
       kind: "payment",
-      title: `Paid ${payee?.name ?? task.title} ${label}`,
-      detail: task.rail === "simulator" ? "Simulated payment" : undefined,
-      tone: "good",
+      title: handoff ? `You marked ${payee?.name ?? task.title} ${label} as paid` : `Paid ${payee?.name ?? task.title} ${label}`,
+      detail: task.rail === "simulator" ? "Simulated payment" : handoff ? "Not confirmed by your bank yet" : undefined,
+      tone: handoff ? "neutral" : "good",
     });
     await ctx.db.insert("messages", {
       userId: task.userId,
       role: "assistant",
-      text: `Done. ${payee?.name ?? task.title} has been paid ${label}.`,
+      text: handoff
+        ? `Noted: you paid ${payee?.name ?? task.title} ${label} in your UPI app. I can't confirm it with your bank; it will match when your statement comes in.`
+        : `Done. ${payee?.name ?? task.title} has been paid ${label}.`,
       channel: "app",
       taskId,
     });
