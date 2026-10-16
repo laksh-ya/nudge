@@ -133,7 +133,7 @@ async function handle(ctx: ActionCtx, agentId: Id<"agents">, msg: Rpc) {
       const args = (msg.params?.arguments ?? {}) as Record<string, unknown>;
       try {
         const out = await callTool(ctx, agentId, name, args);
-        return reply({ content: [{ type: "text", text: JSON.stringify(out, null, 2) }], structuredContent: out, isError: false });
+        return reply({ content: [{ type: "text", text: JSON.stringify(out, null, 2) }], structuredContent: structured(out), isError: false });
       } catch (e) {
         return reply({ content: [{ type: "text", text: cleanError(e) }], isError: true });
       }
@@ -142,6 +142,13 @@ async function handle(ctx: ActionCtx, agentId: Id<"agents">, msg: Rpc) {
       if (msg.method?.startsWith("notifications/")) return null;
       return { jsonrpc: "2.0", id: msg.id ?? null, error: { code: -32601, message: `Method not found: ${msg.method}` } };
   }
+}
+
+/** MCP requires structuredContent to be an object; clients now reject a bare array (list_contacts, list_bills). */
+function structured(out: unknown): Record<string, unknown> {
+  if (Array.isArray(out)) return { items: out };
+  if (out !== null && typeof out === "object") return out as Record<string, unknown>;
+  return { result: out ?? null };
 }
 
 http.route({
