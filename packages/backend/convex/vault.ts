@@ -634,7 +634,7 @@ export const onAgentResult = internalMutation({
     await ctx.db.insert("activity", {
       userId: t.userId,
       kind: "payment",
-      title: ok ? `${agent?.name ?? "Agent"} paid ${payee?.name ?? ""} ${formatMoney(t.amountMinor ?? 0, "USDC")}` : `${agent?.name ?? "Agent"}'s payment refused`,
+      title: ok ? `${agent?.name ?? "Agent"} paid ${payee?.name ?? ""} ${formatMoney(t.amountMinor ?? 0, "USDC")}` : code ? `${agent?.name ?? "Agent"}'s payment refused` : `${agent?.name ?? "Agent"}'s payment wasn't sent`,
       detail: ok ? "Within its limits · on Base Sepolia" : why,
       tone: ok ? "good" : "bad",
     });

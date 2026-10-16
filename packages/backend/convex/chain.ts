@@ -141,8 +141,27 @@ async function send(pub: Pub, wallet: ReturnType<typeof clients>["wallet"], call
     await pub.simulateContract(call);
     return await pub.estimateContractGas(call as Parameters<Pub["estimateContractGas"]>[0]);
   });
-  return await wallet.writeContract({ ...(call as Parameters<typeof wallet.writeContract>[0]), gas: (gas * 13n) / 10n });
+  try {
+    return await wallet.writeContract({ ...(call as Parameters<typeof wallet.writeContract>[0]), gas: (gas * 13n) / 10n });
+  } catch (e) {
+    // The node may have taken it even though we got an error back, so this is never retried blindly.
+    throw new BroadcastError(e);
+  }
 }
+
+class BroadcastError extends Error {
+  constructor(readonly cause: unknown) {
+    super(reason(cause));
+  }
+}
+
+/** Failed before anything was broadcast, for a network reason: safe to try again. */
+function retryable(e: unknown) {
+  return !(e instanceof BroadcastError) && transient(e);
+}
+
+const SEND_ATTEMPTS = 4;
+const backoff = (attempt: number) => Date.now() + 3_000 * 2 ** attempt;
 
 /** After broadcast, a lost receipt is "unknown", never "failed": the transaction may still land. */
 async function receipt(ctx: ActionCtx, pub: Pub, taskId: Id<"tasks">, hash: Hex, kind: "owner" | "agent" | "finalize" | "release", lane = 0) {
@@ -213,8 +232,8 @@ async function releaseOutcome(ctx: ActionCtx, taskId: Id<"tasks">, r: Transactio
 // ---------------------------------------------------------------- deploy
 
 export const deployVault = internalAction({
-  args: { walletId: v.id("wallets"), lane: v.optional(v.number()) },
-  handler: async (ctx, { walletId, lane = 0 }) => {
+  args: { walletId: v.id("wallets"), lane: v.optional(v.number()), attempt: v.optional(v.number()) },
+  handler: async (ctx, { walletId, lane = 0, attempt = 1 }) => {
     const w = await ctx.runQuery(internal.vault.walletForChain, { walletId });
     if (!w || !w.keyX || !w.keyY || !w.rpId) return;
     try {
@@ -261,6 +280,11 @@ export const deployVault = internalAction({
       });
       await readVaultTwice(ctx, pub, walletId);
     } catch (e) {
+      // Safe to repeat: an existing vault is found by its predicted address, not deployed twice.
+      if (transient(e) && attempt < SEND_ATTEMPTS) {
+        await lanePool(lane).enqueueAction(ctx, internal.chain.deployVault, { walletId, lane, attempt: attempt + 1 }, { runAt: backoff(attempt) });
+        return;
+      }
       await ctx.runMutation(internal.vault.onError, { walletId, note: reason(e) });
     }
   },
@@ -279,8 +303,8 @@ const auth = v.object({
 
 /** Submit an action the owner signed with their passkey. */
 export const relayOwner = internalAction({
-  args: { taskId: v.id("tasks"), auth, keyId: v.string(), lane: v.optional(v.number()) },
-  handler: async (ctx, { taskId, auth: a, keyId, lane = 0 }) => {
+  args: { taskId: v.id("tasks"), auth, keyId: v.string(), lane: v.optional(v.number()), attempt: v.optional(v.number()) },
+  handler: async (ctx, { taskId, auth: a, keyId, lane = 0, attempt = 1 }) => {
     const t = await ctx.runQuery(internal.vault.taskForChain, { taskId });
     if (!t?.action || !t.vault) return;
     const c = await laneClients(ctx, lane, (l) => lanePool(l).enqueueAction(ctx, internal.chain.relayOwner, { taskId, auth: a, keyId, lane: l }));
@@ -307,6 +331,10 @@ export const relayOwner = internalAction({
         account,
       });
     } catch (e) {
+      if (retryable(e) && attempt < SEND_ATTEMPTS) {
+        await lanePool(lane).enqueueAction(ctx, internal.chain.relayOwner, { taskId, auth: a, keyId, lane, attempt: attempt + 1 }, { runAt: backoff(attempt) });
+        return;
+      }
       // Nothing was broadcast, so nothing changed.
       await ctx.runMutation(internal.vault.onOwnerResult, { taskId, ok: false, note: reason(e) });
       return;
@@ -339,7 +367,7 @@ export const finalizeChange = internalAction({
       });
     } catch (e) {
       const why = reason(e);
-      if (why === "NotReady") await lanePool(lane).enqueueAction(ctx, internal.chain.finalizeChange, { taskId, lane }, { runAt: Date.now() + RECHECK_MS });
+      if (why === "NotReady" || retryable(e)) await lanePool(lane).enqueueAction(ctx, internal.chain.finalizeChange, { taskId, lane }, { runAt: Date.now() + RECHECK_MS });
       else await ctx.runMutation(internal.vault.onOwnerResult, { taskId, ok: false, note: why === "NotQueued" ? "Cancelled before it applied" : why });
       return;
     }
@@ -355,13 +383,13 @@ export const finalizeChange = internalAction({
 
 /** An agent pays inside its limits with its own key. The contract decides; refusals are recorded on-chain. */
 export const agentPay = internalAction({
-  args: { taskId: v.id("tasks"), lane: v.optional(v.number()), funded: v.optional(v.boolean()) },
-  handler: async (ctx, { taskId, lane = 0, funded }) => {
+  args: { taskId: v.id("tasks"), lane: v.optional(v.number()), funded: v.optional(v.boolean()), attempt: v.optional(v.number()) },
+  handler: async (ctx, { taskId, lane = 0, funded, attempt = 1 }) => {
     const t = await ctx.runQuery(internal.vault.agentTaskForChain, { taskId });
     if (!t) return;
     // One send at a time per agent key; others wait their turn without holding up other agents.
     if (!(await ctx.runMutation(internal.vault.lockAgentKey, { agentId: t.agentId, until: Date.now() + AGENT_LOCK_MS }))) {
-      await agentPool.enqueueAction(ctx, internal.chain.agentPay, { taskId, lane, funded }, { runAt: Date.now() + 2_000 });
+      await agentPool.enqueueAction(ctx, internal.chain.agentPay, { taskId, lane, funded, attempt }, { runAt: Date.now() + 2_000 });
       return;
     }
     try {
@@ -383,6 +411,10 @@ export const agentPay = internalAction({
           account,
         });
       } catch (e) {
+        if (retryable(e) && attempt < SEND_ATTEMPTS) {
+          await agentPool.enqueueAction(ctx, internal.chain.agentPay, { taskId, lane, funded, attempt: attempt + 1 }, { runAt: backoff(attempt) });
+          return;
+        }
         await ctx.runMutation(internal.vault.onAgentResult, { taskId, ok: false, note: reason(e) });
         return;
       }
@@ -399,8 +431,8 @@ export const agentPay = internalAction({
 
 /** Give an agent key gas for its payment from this lane's relayer key, then send the payment. */
 export const fundAgent = internalAction({
-  args: { taskId: v.id("tasks"), lane: v.number() },
-  handler: async (ctx, { taskId, lane }) => {
+  args: { taskId: v.id("tasks"), lane: v.number(), attempt: v.optional(v.number()) },
+  handler: async (ctx, { taskId, lane, attempt = 1 }) => {
     const t = await ctx.runQuery(internal.vault.agentTaskForChain, { taskId });
     if (!t) return;
     const c = await laneClients(ctx, lane, (l) => lanePool(l).enqueueAction(ctx, internal.chain.fundAgent, { taskId, lane: l }));
@@ -411,6 +443,11 @@ export const fundAgent = internalAction({
         await c.pub.waitForTransactionReceipt({ hash: top, timeout: RECEIPT_TIMEOUT });
       }
     } catch (e) {
+      // At worst a retry sends one more small top-up.
+      if (transient(e) && attempt < SEND_ATTEMPTS) {
+        await lanePool(lane).enqueueAction(ctx, internal.chain.fundAgent, { taskId, lane, attempt: attempt + 1 }, { runAt: backoff(attempt) });
+        return;
+      }
       await ctx.runMutation(internal.vault.onAgentResult, { taskId, ok: false, note: reason(e) });
       return;
     }
@@ -433,7 +470,7 @@ export const releaseHeld = internalAction({
       hash = await send(pub, wallet, { address: t.vault as Address, abi: policyVaultAbi, functionName: "release", args: [t.paymentId as Hex], account });
     } catch (e) {
       const why = reason(e);
-      if (why === "NotReady") {
+      if (why === "NotReady" || retryable(e)) {
         await lanePool(lane).enqueueAction(ctx, internal.chain.releaseHeld, { taskId, lane }, { runAt: Date.now() + RECHECK_MS });
       } else if (why === "AgentFrozen" || why === "BadAction" || why === "BreachesProtected") {
         // Frozen since, the contact changed, or it would now dip into the protected amount: don't
