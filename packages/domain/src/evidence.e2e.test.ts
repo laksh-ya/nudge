@@ -5,8 +5,9 @@
  * For each table row in README.md, docs/SECURITY.md and evals/README.md that links a transaction,
  * the row's wording is turned into the events it must contain ("refused, code 2003" means a
  * PaymentRefused with code 2003, "held" a PaymentHeld, "approves $12" an OwnerPaid of 12 tUSD, ...)
- * and the receipt is decoded with the contract ABIs. It also compares the deployed v2 vault's code
- * with a local `forge build` (immutables masked), so the source in this repo is what runs on-chain.
+ * and the receipt is decoded with the contract ABIs. It also compares the example vault the README
+ * names (v3 when listed, else v2) with a local `forge build` (immutables masked), so the source in
+ * this repo is what runs on-chain.
  *
  *   EVIDENCE_RPC=https://sepolia.base.org pnpm --filter @agent-wallet/domain exec vitest run evidence.e2e
  *
@@ -25,7 +26,17 @@ const root = resolve(__dirname, "../../..");
 const DOCS = ["README.md", "docs/SECURITY.md", "evals/README.md"];
 const FACTORY_V2 = "0x672DcD9A822030371d017673403edc290c9d8975";
 const TOKEN = "0xB0ee01235A8e7903519B029c1530332f5847D932";
-const EXAMPLE_V2_VAULT = "0xa395739975fd3F66b83cbcF6Ad535029e5A94E73";
+const EXAMPLE_V2_VAULT = "0xa395739975fd3f66b83cbcf6ad535029e5a94e73";
+/** The newest example vault the README lists: the build in this repo should match it. */
+function exampleVault(): { version: string; address: Address } {
+  const readme = readFileSync(resolve(root, "README.md"), "utf8");
+  for (const version of ["v3", "v2"]) {
+    const row = readme.split("\n").find((l) => l.includes(`Example ${version} vault`));
+    const address = row?.match(/0x[0-9a-fA-F]{40}/)?.[0];
+    if (address) return { version, address: address.toLowerCase() as Address };
+  }
+  return { version: "v2", address: EXAMPLE_V2_VAULT };
+}
 
 type Row = { doc: string; line: number; text: string; hash: Hex };
 type Expect = { event: string; check?: (args: Record<string, unknown>) => boolean; why: string };
@@ -140,11 +151,12 @@ run("on-chain execution evidence", () => {
     }
   });
 
-  it("the example v2 vault runs the PolicyVault in this repo (immutables masked)", async () => {
+  it("the README's example vault runs the PolicyVault in this repo (immutables masked)", async () => {
     const artifact = resolve(root, "contracts/out/PolicyVault.sol/PolicyVault.json");
     if (!existsSync(artifact)) return console.log("run forge build first; skipped");
     const built = JSON.parse(readFileSync(artifact, "utf8")).deployedBytecode as { object: Hex; immutableReferences?: Record<string, { start: number; length: number }[]> };
-    const onchain = (await client.getCode({ address: EXAMPLE_V2_VAULT }))!;
+    const example = exampleVault();
+    const onchain = (await client.getCode({ address: example.address }))!;
     const mask = (code: Hex) => {
       const bytes = Buffer.from(code.slice(2), "hex");
       for (const refs of Object.values(built.immutableReferences ?? {})) for (const { start, length } of refs) bytes.fill(0, start, start + length);
@@ -155,7 +167,7 @@ run("on-chain execution evidence", () => {
     // The trailing CBOR metadata differs only if the sources or settings differ; compare it separately.
     const cbor = (hex: string) => parseInt(hex.slice(-4), 16) * 2 + 4;
     const sameLogic = a.slice(0, a.length - cbor(a)) === b.slice(0, b.length - cbor(b));
-    console.log(`runtime ${b.length / 2} bytes on-chain; logic ${sameLogic ? "matches" : "DIFFERS"}; metadata ${a.slice(-cbor(a)) === b.slice(-cbor(b)) ? "matches" : "differs"}`);
+    console.log(`${example.version} example ${example.address}: runtime ${b.length / 2} bytes on-chain; logic ${sameLogic ? "matches" : "DIFFERS"}; metadata ${a.slice(-cbor(a)) === b.slice(-cbor(b)) ? "matches" : "differs"}`);
     expect(sameLogic).toBe(true);
   }, 60_000);
 });
