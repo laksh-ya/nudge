@@ -76,6 +76,9 @@ export async function ingest(
 
   let added = 0;
   let duplicates = 0;
+  // One row from one source stands for at most one row from another: two real coffees an hour
+  // apart can't both hide behind a single bank line.
+  const twinned = new Set(window.flatMap((t) => (t.duplicateOf ? [t.duplicateOf] : [])));
   const seen = new Map<string, number>();
   const fresh: Doc<"transactions">[] = [];
 
@@ -99,6 +102,7 @@ export async function ingest(
       (t) =>
         t.accountId !== account._id &&
         !t.duplicateOf &&
+        !twinned.has(t._id) &&
         !t.pairId &&
         t.currency === account.currency &&
         t.amountMinor === r.amountMinor &&
@@ -132,7 +136,10 @@ export async function ingest(
       raw: r.description.slice(0, 160),
     });
     byFingerprint.set(fingerprint, (await ctx.db.get(id))!);
-    if (twin) duplicates++;
+    if (twin) {
+      duplicates++;
+      twinned.add(twin._id);
+    }
     else added++;
     const doc = (await ctx.db.get(id))!;
     fresh.push(doc);

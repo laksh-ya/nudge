@@ -276,7 +276,18 @@ export const proposePayment = internalMutation({
       // The same request again (a retry, a duplicate invoice): report the first one, never pay twice.
       // Scoped to the wallet, not the agent: one invoice forwarded to two assistants is paid once.
       const earlier = await ctx.db.query("tasks").withIndex("by_user_request", (q) => q.eq("userId", user._id).eq("requestId", requestId)).first();
-      if (earlier) return { outcome: "duplicate", taskId: earlier._id, state: earlier.state, message: "A payment with this requestId already exists. Check get_task_status instead of retrying." };
+      if (earlier) {
+        // The same id must mean the same payment; anything else is a conflict, not a duplicate.
+        const samePayee = earlier.payeeId === ctx.db.normalizeId("payees", contactId);
+        if (!samePayee || earlier.amountMinor !== Math.round(amount * 100)) {
+          return { outcome: "refused", code: "2013", reason: "This requestId was already used for a different payment (another contact or amount). Use a new requestId." };
+        }
+        // Only an assistant handed this task as a duplicate may read its status.
+        if (earlier.agentId !== agent._id && !(earlier.sharedWith ?? []).includes(agent._id)) {
+          await ctx.db.patch(earlier._id, { sharedWith: [...(earlier.sharedWith ?? []), agent._id].slice(-10) });
+        }
+        return { outcome: "duplicate", taskId: earlier._id, state: earlier.state, message: "A payment with this requestId already exists. Check get_task_status instead of retrying." };
+      }
     }
     if (!Number.isFinite(amount) || amount <= 0 || amount > 1e6) return { outcome: "refused", code: "2003", reason: "Amount must be a positive number of dollars" };
     const minor = Math.round(amount * 100);
@@ -436,7 +447,7 @@ export const taskStatus = internalQuery({
     const id = ctx.db.normalizeId("tasks", taskId);
     const task = id ? await ctx.db.get(id) : null;
     // Another assistant's task is visible only when it was handed back as a duplicate of the same invoice.
-    const shared = task?.requestId !== undefined && task.channel === "mcp";
+    const shared = Boolean(task?.sharedWith?.includes(agent._id));
     if (!task || task.userId !== user._id || (task.agentId !== agent._id && !shared)) throw new Error("No such task for this assistant");
     return {
       taskId: task._id,

@@ -279,4 +279,5 @@ export const REFUSAL: Record<number, string> = {
   2009: "Too many payments in 24 hours",
   2010: "Not one of your contacts",
   2012: "Above this contact's limit for all agents in 24 hours",
+  2013: "This requestId was already used for a different payment",
 };

@@ -7,6 +7,7 @@ const DAY = 86_400_000;
 /** Far above any real household; past these the totals say they are partial instead of being cut. */
 const MAX_ACCOUNTS = 1000;
 const MAX_RECENT = 20_000;
+const MAX_OBLIGATIONS = 5_000;
 
 async function upTo<T>(rows: AsyncIterable<T>, max: number) {
   const out: T[] = [];
@@ -53,12 +54,11 @@ export async function computeOverview(ctx: QueryCtx, user: Doc<"users">) {
     .take(200);
   const active = obligations.filter((o) => o.status === "active");
   // Everything due before payday, including bills already overdue and still unpaid.
-  const beforeIncome = (
-    await ctx.db
-      .query("obligations")
-      .withIndex("by_user_due", (q) => q.eq("userId", user._id).lte("nextDueAt", user.nextIncomeAt))
-      .take(500)
-  ).filter((o) => o.status === "active");
+  const dueRows = await upTo(
+    ctx.db.query("obligations").withIndex("by_user_due", (q) => q.eq("userId", user._id).lte("nextDueAt", user.nextIncomeAt)),
+    MAX_OBLIGATIONS,
+  );
+  const beforeIncome = dueRows.rows.filter((o) => o.status === "active");
   const commitments = beforeIncome.reduce((s, o) => s + to(o.amountMinor, o.currency), 0);
 
   const recentRows = await upTo(
@@ -145,7 +145,7 @@ export async function computeOverview(ctx: QueryCtx, user: Doc<"users">) {
     /** Currencies with no exchange rate today; their amounts are left out of the totals above. */
     unconverted: [...unconverted],
     /** True if there were more accounts or transactions than one read covers; totals are then partial. */
-    partial: accountRows.partial || recentRows.partial,
+    partial: accountRows.partial || recentRows.partial || dueRows.partial,
     suggested: obligations.filter((o) => o.status === "suggested").length,
     agentAuthority,
     walletCurrency: "USDC" as const,
