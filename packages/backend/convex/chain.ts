@@ -165,7 +165,7 @@ async function send(
   const raw = await wallet.signTransaction(request as Parameters<typeof wallet.signTransaction>[0]);
   const hash = keccak256(raw);
   // Recorded before broadcast: whatever the network answers, we know which transaction to look for.
-  await persist?.({ hash, raw, nonce: Number(request.nonce), from: account.address });
+  if ((await persist?.({ hash, raw, nonce: Number(request.nonce), from: account.address })) === false) throw new Error("Already settled; not sent");
   try {
     await pub.sendRawTransaction({ serializedTransaction: raw });
   } catch (e) {
@@ -653,6 +653,15 @@ export const reconcile = internalAction({
         const mined = await pub.getTransactionCount({ address: t.txFrom as Address, blockTag: "latest" }).catch(() => 0);
         const again = mined > t.txNonce ? await pub.getTransactionReceipt({ hash: t.txHash as Hex }).catch(() => null) : null;
         if (mined > t.txNonce && !again) {
+          // A release or finalize that never ran leaves the payment held (or the change queued): send it again.
+          if (kind === "release" && (await ctx.runMutation(internal.vault.onReplaced, { taskId, state: "held" }))) {
+            await lanePool(lane).enqueueAction(ctx, internal.chain.releaseHeld, { taskId, lane });
+            return;
+          }
+          if (kind === "finalize" && (await ctx.runMutation(internal.vault.onReplaced, { taskId, state: "queued" }))) {
+            await lanePool(lane).enqueueAction(ctx, internal.chain.finalizeChange, { taskId, lane });
+            return;
+          }
           const note = "Not sent: another transaction from the same key took its place";
           if (kind === "owner" || kind === "finalize") await ctx.runMutation(internal.vault.onOwnerResult, { taskId, ok: false, note });
           else await ctx.runMutation(internal.vault.onAgentResult, { taskId, ok: false, note });

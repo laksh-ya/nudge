@@ -378,6 +378,8 @@ export default defineSchema({
     paymentId: v.optional(v.string()),
     /** The signed transaction, stored before broadcast: reconciliation looks for exactly this one. */
     rawTx: v.optional(v.string()),
+    /** The task's transaction before a release or finalize was signed, restored if that one never runs. */
+    priorTxHash: v.optional(v.string()),
     /** Callbacks that arrived after the task settled: kept as history, never applied. */
     attempts: v.optional(v.array(v.object({ at: v.number(), ignored: v.string(), txHash: v.optional(v.string()), note: v.optional(v.string()) }))),
     txNonce: v.optional(v.number()),

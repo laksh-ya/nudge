@@ -509,8 +509,36 @@ export const onSigned = internalMutation({
   args: { taskId: v.id("tasks"), txHash: v.string(), rawTx: v.string(), txNonce: v.number(), txFrom: v.string() },
   handler: async (ctx, { taskId, ...tx }) => {
     const t = await ctx.db.get(taskId);
-    if (!t || TERMINAL.has(t.state)) return;
-    await ctx.db.patch(taskId, { ...tx, updatedAt: Date.now() });
+    // Settled since the job started: tell the sender not to broadcast.
+    if (!t || TERMINAL.has(t.state)) return false;
+    // A release or finalize replaces the hold's (or queue's) hash; keep that one in case this never runs.
+    const prior = (t.state === "held" || t.state === "queued") && t.txHash && t.txHash !== tx.txHash ? { priorTxHash: t.txHash } : {};
+    await ctx.db.patch(taskId, { ...tx, ...prior, updatedAt: Date.now() });
+    return true;
+  },
+});
+
+/**
+ * A release or finalize whose nonce another transaction used never ran: the payment is still held in
+ * the vault (or the change still queued). Put the task back so it can be sent again or cancelled.
+ */
+export const onReplaced = internalMutation({
+  args: { taskId: v.id("tasks"), state: v.union(v.literal("held"), v.literal("queued")) },
+  handler: async (ctx, { taskId, state }) => {
+    const t = await ctx.db.get(taskId);
+    if (!t || t.state !== "unknown") return false;
+    await ctx.db.patch(taskId, {
+      state,
+      txHash: t.priorTxHash ?? t.txHash,
+      priorTxHash: undefined,
+      rawTx: undefined,
+      txNonce: undefined,
+      txFrom: undefined,
+      checks: 0,
+      reason: state === "held" ? "Held so you can cancel it before it leaves" : "Approved. Loosening waits before it applies; you can still cancel.",
+      updatedAt: Date.now(),
+    });
+    return true;
   },
 });
 
