@@ -62,7 +62,7 @@ contract AttacksTest is Passkey {
         token.faucet(address(vault), START);
         sign(PolicyVault.Op.SetAgent, abi.encode(agentA, uint128(10e6), uint128(15e6), uint64(block.timestamp + 365 days)));
         sign(PolicyVault.Op.SetAgent, abi.encode(agentB, uint128(10e6), uint128(30e6), uint64(block.timestamp + 365 days)));
-        sign(PolicyVault.Op.AddContact, abi.encode(shopId, shop, true));
+        sign(PolicyVault.Op.AddContact, abi.encode(shopId, shop, true, uint128(0)));
     }
 
     // ------------------------------------------------------------- helpers

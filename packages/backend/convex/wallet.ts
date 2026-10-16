@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { isVaultVersion } from "@agent-wallet/domain";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { unfreezeTask } from "./lib/actions";
@@ -24,7 +25,7 @@ export const setFrozen = mutation({
     const user = await requireViewer(ctx);
     const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
     if (!wallet) throw new Error("No wallet");
-    if (wallet.status === "live" && wallet.version === 2) {
+    if (wallet.status === "live" && isVaultVersion(wallet.version)) {
       if (frozen) {
         await ctx.db.patch(wallet._id, { frozen: true });
         await relayer.enqueueAction(ctx, internal.chain.guardianFreeze, { walletId: wallet._id });

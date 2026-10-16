@@ -1,4 +1,5 @@
 import { internal } from "../_generated/api";
+import { isVaultVersion } from "@agent-wallet/domain";
 import type { Doc } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { grantTask, removeAgentTask } from "./actions";
@@ -15,7 +16,7 @@ async function walletOf(ctx: MutationCtx, user: Doc<"users">) {
 }
 
 function onChain(wallet: Doc<"wallets"> | null, agent: Doc<"agents">) {
-  return Boolean(wallet?.status === "live" && wallet.version === 2 && agent.chainAddress);
+  return Boolean(wallet?.status === "live" && isVaultVersion(wallet.version) && agent.chainAddress);
 }
 
 /** Freeze one agent: our gateway stops at once; the guardian freezes its key in the vault. */
@@ -77,7 +78,7 @@ export async function changeLimits(
   const spends = next.scopes.includes("spend");
   if (!chain) {
     await ctx.db.patch(agent._id, { ...next, perPaymentMinor: spends ? next.perPaymentMinor : 0, dailyCapMinor: spends ? next.dailyCapMinor : 0 });
-    if (spends && wallet?.status === "live" && wallet.version === 2 && !agent.chainAddress && agent.status === "active") {
+    if (spends && wallet?.status === "live" && isVaultVersion(wallet.version) && !agent.chainAddress && agent.status === "active") {
       await ctx.scheduler.runAfter(0, internal.chain.provisionAgent, { agentId: agent._id });
     }
     return null;

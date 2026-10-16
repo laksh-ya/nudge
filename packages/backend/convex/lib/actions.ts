@@ -1,4 +1,4 @@
-import { Op, encode, contactIdOf, paymentIdOf, testPayeeAddress, toTokenUnits, type Policy } from "@agent-wallet/domain";
+import { Op, encode, contactIdOf, formatMoney, paymentIdOf, testPayeeAddress, toTokenUnits, type Policy } from "@agent-wallet/domain";
 import type { Address, Hex } from "viem";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
@@ -29,6 +29,11 @@ export function deadline(minutes = APPROVAL_MINUTES) {
 
 export function payeeAddress(p: Doc<"payees">): Address {
   return (p.address ?? testPayeeAddress(p.name)) as Address;
+}
+
+/** A contact as this vault's version encodes it; v3 adds the contact's daily cap. */
+function contactData(p: Doc<"payees">, version: number | undefined, dailyCapMinor = p.dailyCapMinor) {
+  return encode.addContact(contactIdOf(p._id), payeeAddress(p), p.trusted, { version, dailyCap: toTokenUnits(dailyCapMinor ?? 0) });
 }
 
 type Effects = NonNullable<Doc<"tasks">["effects"]>;
@@ -148,10 +153,12 @@ export async function setupTask(
   payees: Doc<"payees">[],
   title: string,
   wallet?: Doc<"wallets"> | null,
+  /** The vault's contract version, when `wallet` is left out to skip the policy step. */
+  version = wallet?.version,
 ) {
   const items: { op: Op; data: Hex }[] = [
     ...agents.map((a) => ({ op: Op.SetAgent, data: setAgentData(a, a.perPaymentMinor, a.dailyCapMinor, a.expiresAt) })),
-    ...payees.map((p) => ({ op: Op.AddContact, data: encode.addContact(contactIdOf(p._id), payeeAddress(p), p.trusted) })),
+    ...payees.map((p) => ({ op: Op.AddContact, data: contactData(p, version) })),
   ];
   const firstSetup = wallet && (!wallet.vault || wallet.vault.changeDelay === 0);
   if (wallet && firstSetup) items.push({ op: Op.SetPolicy, data: encode.setPolicy(policyOf(wallet)) });
@@ -194,6 +201,20 @@ export async function grantTask(
     data: setAgentData(agent, next.perPaymentMinor, next.dailyCapMinor, next.expiresAt),
     agentId: agent._id,
     effects: { grant: { agentId: agent._id, ...next } },
+  });
+}
+
+/**
+ * A new daily cap for one contact (v3 vaults). Same address, so the contact keeps any waiting
+ * period it already served. Lowering applies when signed; raising or removing waits.
+ */
+export async function contactCapTask(ctx: MutationCtx, user: Doc<"users">, payee: Doc<"payees">, wallet: Doc<"wallets">, dailyCapMinor: number) {
+  return await ownerTask(ctx, user, {
+    title: dailyCapMinor ? `Limit ${payee.name} to ${formatMoney(dailyCapMinor, "USDC")} a day` : `Remove ${payee.name}'s daily limit`,
+    reason: "The vault enforces each contact's limit, so changing it needs your passkey",
+    op: Op.AddContact,
+    data: contactData(payee, wallet.version, dailyCapMinor),
+    effects: { contactCap: { payeeId: payee._id, dailyCapMinor } },
   });
 }
 

@@ -64,7 +64,7 @@ contract PolicyVaultInvariant is Passkey {
         bytes32 shopId = keccak256("shop");
         sign(PolicyVault.Op.SetAgent, abi.encode(a, uint128(10e6), uint128(25e6), uint64(block.timestamp + 365 days)));
         sign(PolicyVault.Op.SetAgent, abi.encode(b, uint128(20e6), uint128(30e6), uint64(block.timestamp + 365 days)));
-        sign(PolicyVault.Op.AddContact, abi.encode(shopId, makeAddr("shop"), true));
+        sign(PolicyVault.Op.AddContact, abi.encode(shopId, makeAddr("shop"), true, uint128(0)));
         handler = new Handler(vault, token, a, b, shopId);
         targetContract(address(handler));
     }

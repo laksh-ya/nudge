@@ -280,6 +280,8 @@ export default defineSchema({
     holdUntil: v.optional(v.number()),
     address: v.optional(v.string()),
     onchain: v.optional(v.boolean()),
+    /** All agents together, per 24 hours, to this contact. Enforced by v3 vaults (refusal 2012). */
+    dailyCapMinor: v.optional(v.number()),
   }).index("by_user", ["userId"]),
 
   agents: defineTable({
@@ -354,6 +356,8 @@ export default defineSchema({
         /** Limits to record for an agent once the vault applies them. */
         grant: v.optional(v.object({ agentId: v.id("agents"), perPaymentMinor: v.number(), dailyCapMinor: v.number(), expiresAt: v.number(), scopes: v.optional(v.array(v.string())) })),
         removeAgent: v.optional(v.id("agents")),
+        /** A contact's daily cap to record once the vault applies it (0 = none). */
+        contactCap: v.optional(v.object({ payeeId: v.id("payees"), dailyCapMinor: v.number() })),
         policy: v.optional(v.boolean()),
         passkey: v.optional(v.string()),
       }),
@@ -377,7 +381,8 @@ export default defineSchema({
     .index("by_user_state", ["userId", "state"])
     .index("by_approval_token", ["approvalToken"])
     .index("by_state_expires", ["state", "expiresAt"])
-    .index("by_agent_request", ["agentId", "requestId"]),
+    .index("by_agent_request", ["agentId", "requestId"])
+    .index("by_payee", ["payeeId"]),
 
   messages: defineTable({
     userId: v.id("users"),

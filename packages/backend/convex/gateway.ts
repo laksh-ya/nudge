@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { formatMoney } from "@agent-wallet/domain";
+import { formatMoney, isVaultVersion } from "@agent-wallet/domain";
 import { internalMutation, internalQuery, mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -239,6 +239,16 @@ async function paymentsInFlight(ctx: QueryCtx, userId: Id<"users">) {
   return rows.flat().filter((t) => t.rail === "base-sepolia" && t.agentId && t.action === undefined);
 }
 
+/** What agents sent this contact in the last 24 hours, counting payments still on their way. */
+async function agentPaidTo(ctx: QueryCtx, payeeId: Id<"payees">) {
+  const counted = new Set(["reserved", "submitted", "unknown", "held", "confirmed"]);
+  const recent = await ctx.db
+    .query("tasks")
+    .withIndex("by_payee", (q) => q.eq("payeeId", payeeId).gt("_creationTime", Date.now() - 24 * 3600_000))
+    .take(500);
+  return recent.filter((t) => t.agentId && t.action === undefined && t.rail !== "handoff" && counted.has(t.state)).reduce((s, t) => s + (t.amountMinor ?? 0), 0);
+}
+
 type Decision =
   | { outcome: "paid"; taskId: Id<"tasks">; message: string }
   | { outcome: "duplicate"; taskId: Id<"tasks">; state: string; message: string }
@@ -275,7 +285,7 @@ export const proposePayment = internalMutation({
     const purpose = reason.trim().slice(0, 140) || undefined;
 
     // When the vault is live its own numbers win; our copy can only be stricter, never looser.
-    const vault = wallet.status === "live" && wallet.version === 2 ? wallet.vault : undefined;
+    const vault = wallet.status === "live" && isVaultVersion(wallet.version) ? wallet.vault : undefined;
     // Before the vault registers this agent its record reads as zeros; those aren't limits yet.
     const agentVault = vault && agent.vault?.active ? agent.vault : undefined;
     const perPayment = Math.min(agent.perPaymentMinor, agentVault?.perPaymentMinor ?? Infinity);
@@ -299,10 +309,14 @@ export const proposePayment = internalMutation({
     if (spentToday + minor > ceiling) blockers.push({ code: "2004", why: "Above the wallet's daily ceiling for all agents" });
     if (free - minor < protectedMinor) blockers.push({ code: "2005", why: "Would dip into the protected amount" });
     if (!payee.trusted || (payee.holdUntil && payee.holdUntil > Date.now())) blockers.push({ code: "2006", why: `${payee.name} is a new contact` });
+    if (payee.dailyCapMinor) {
+      const toPayee = await agentPaidTo(ctx, payee._id);
+      if (toPayee + minor > payee.dailyCapMinor) blockers.push({ code: "2012", why: `Above ${payee.name}'s ${formatMoney(payee.dailyCapMinor, "USDC")} daily limit for all agents` });
+    }
 
     if (free < minor) return { outcome: "refused", code: "2005", reason: "Not enough in the wallet" };
 
-    const live = wallet.status === "live" && wallet.version === 2;
+    const live = wallet.status === "live" && isVaultVersion(wallet.version);
     if (blockers.length === 0 && live && agent.onchain && payee.onchain) {
       // The vault decides. Our checks passed; the contract checks again with the agent's own key.
       const taskId = await ctx.db.insert("tasks", {

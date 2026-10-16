@@ -3,12 +3,13 @@
 import { useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { ArrowUpCircle, Clock, ExternalLink, Fingerprint, KeyRound, LoaderCircle, Plus, RefreshCw, ShieldAlert, ShieldCheck, TriangleAlert, X } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, type Id } from "@/lib/api";
 import { APPROVE_URL, approvalLink } from "@/lib/config";
 import { cn } from "@/lib/cn";
 import { ago, formatMoney } from "@/lib/format";
 import { Button, ButtonLink, Card, Chip, Divided, IconTile, Row } from "@/components/ui";
 import { ErrorText, Input, MoneyInput, Select, errorMessage, toMinorUnits } from "@/components/form";
+import { VAULT_VERSION, isVaultVersion } from "@agent-wallet/domain";
 
 export type ChainStatus = NonNullable<ReturnType<typeof useQuery<typeof api.vault.status>>>;
 type Vault = NonNullable<NonNullable<ChainStatus["wallet"]>["vault"]>;
@@ -122,7 +123,7 @@ export function PasskeyCard({ chain }: { chain: ChainStatus }) {
     );
   }
 
-  if (w.status === "live" && w.version !== 2) {
+  if (w.status === "live" && !isVaultVersion(w.version)) {
     return (
       <Card>
         <div className="flex items-start gap-3">
@@ -164,6 +165,17 @@ export function PasskeyCard({ chain }: { chain: ChainStatus }) {
             <ButtonLink href={approvalLink(chain.setup.token!)} size="sm">
               Approve
             </ButtonLink>
+          </div>
+        )}
+        {(w.version ?? 1) < VAULT_VERSION && (
+          <div className="mt-3 rounded-btn bg-sky-soft p-3">
+            <div className="text-label font-semibold">A newer vault contract is available (v{VAULT_VERSION})</div>
+            <div className="text-label text-ink-2">
+              Disconnecting an agent also stops its held payments, revoking voids older approvals, and paying a new address waits so it can be cancelled. Same passkey; your current vault stays on-chain as history.
+            </div>
+            <Button size="sm" className="mt-2" disabled={busy} onClick={() => run(() => upgrade())}>
+              Move with my passkey
+            </Button>
           </div>
         )}
         <Divided className="mt-2">
@@ -363,5 +375,62 @@ export function RulesCard({ chain }: { chain: ChainStatus }) {
         </div>
       )}
     </Card>
+  );
+}
+
+type Payee = { _id: Id<"payees">; name: string; onchain?: boolean; dailyCapMinor?: number };
+
+/** One limit per contact for all agents together, per 24 hours. Enforced by v3 vaults. */
+export function ContactLimitForm({ chain, payees }: { chain: ChainStatus; payees: Payee[] }) {
+  const setCap = useMutation(api.vault.setContactCap);
+  const inVault = payees.filter((p) => p.onchain);
+  const [payeeId, setPayeeId] = useState<string>("");
+  const [amount, setAmount] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const w = chain.wallet;
+  if (!w || w.status !== "live" || (w.version ?? 0) < 3 || inVault.length === 0) return null;
+  const chosen = inVault.find((p) => p._id === payeeId) ?? inVault[0]!;
+
+  async function save(capMinor: number) {
+    setBusy(true);
+    setError(null);
+    try {
+      const token = await setCap({ payeeId: chosen._id, dailyCapMinor: capMinor });
+      window.location.assign(approvalLink(token));
+    } catch (e) {
+      setError(errorMessage(e));
+      setBusy(false);
+    }
+  }
+
+  const minor = toMinorUnits(amount, "USDC");
+  return (
+    <div className="mx-4 mb-4 rounded-btn border border-line p-3">
+      <div className="text-label font-semibold">Limit what agents pay one contact</div>
+      <p className="text-micro text-mute">All agents together, per 24 hours. Lowering applies when you approve; raising waits out the vault&apos;s delay.</p>
+      <div className="mt-2 grid grid-cols-[1fr_110px] gap-2">
+        <Select value={chosen._id} onChange={(e) => setPayeeId(e.target.value)} aria-label="Contact">
+          {inVault.map((p) => (
+            <option key={p._id} value={p._id}>
+              {p.name}
+              {p.dailyCapMinor ? ` (now ${formatMoney(p.dailyCapMinor, "USDC")})` : ""}
+            </option>
+          ))}
+        </Select>
+        <MoneyInput currency="USDC" value={amount} onChange={setAmount} placeholder="20" />
+      </div>
+      <ErrorText>{error}</ErrorText>
+      <div className="mt-2 flex gap-2">
+        <Button size="sm" disabled={busy || !minor || minor <= 0} onClick={() => minor && save(minor)}>
+          Set limit with my passkey
+        </Button>
+        {chosen.dailyCapMinor ? (
+          <Button size="sm" tone="ghost" disabled={busy} onClick={() => save(0)}>
+            Remove limit
+          </Button>
+        ) : null}
+      </div>
+    </div>
   );
 }

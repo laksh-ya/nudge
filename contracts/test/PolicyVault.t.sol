@@ -74,7 +74,7 @@ contract PolicyVaultTest is Passkey {
             PolicyVault.Op.SetAgent,
             abi.encode(chatgpt, uint128(10e6), uint128(30e6), uint64(block.timestamp + 30 days))
         );
-        sign(PolicyVault.Op.AddContact, abi.encode(shopId, shop, true));
+        sign(PolicyVault.Op.AddContact, abi.encode(shopId, shop, true, uint128(0)));
     }
 
     function action(PolicyVault.Op op, bytes memory data) internal returns (PolicyVault.Action memory) {
@@ -105,7 +105,8 @@ contract PolicyVaultTest is Passkey {
     function test_ownerPaysWithPasskey() public {
         sign(PolicyVault.Op.Pay, abi.encode(shop, 120e6, bytes32("invoice-1")));
         assertEq(token.balanceOf(shop), 120e6);
-        assertTrue(vault.paymentUsed(bytes32("invoice-1")));
+        assertTrue(vault.ownerPaid(bytes32("invoice-1")));
+        assertFalse(vault.paymentUsed(bytes32("invoice-1")), "owner and agent payment ids are separate");
     }
 
     function test_tamperedActionIsRejected() public {
@@ -169,7 +170,7 @@ contract PolicyVaultTest is Passkey {
         ops[0] = uint8(PolicyVault.Op.SetAgent);
         datas[0] = abi.encode(gemini, uint128(2e6), uint128(4e6), uint64(block.timestamp + 1 days));
         ops[1] = uint8(PolicyVault.Op.AddContact);
-        datas[1] = abi.encode(cafeId, makeAddr("cafe"), true);
+        datas[1] = abi.encode(cafeId, makeAddr("cafe"), true, uint128(0));
         sign(PolicyVault.Op.Batch, abi.encode(ops, datas));
         vm.prank(gemini);
         assertTrue(vault.agentPay(cafeId, 2e6, "b1", 0));
@@ -246,7 +247,7 @@ contract PolicyVaultTest is Passkey {
     function test_newContactWaits() public {
         address fresh = makeAddr("fresh");
         bytes32 freshId = keccak256("contact:fresh");
-        sign(PolicyVault.Op.AddContact, abi.encode(freshId, fresh, false));
+        sign(PolicyVault.Op.AddContact, abi.encode(freshId, fresh, false, uint128(0)));
         vm.prank(claude);
         assertFalse(vault.agentPay(freshId, 1e6, "n1", 0));
         vm.warp(block.timestamp + 1 days + 1);
@@ -450,7 +451,8 @@ contract PolicyVaultTest is Passkey {
         sign(PolicyVault.Op.Unfreeze, abi.encode(address(0)));
         uint256 unfreezeNonce = nonce;
         vm.warp(block.timestamp + 1 hours);
-        vm.expectRevert(PolicyVault.AgentFrozen.selector);
+        // v3: the freeze started a new generation, so the withdrawal approved before it is void.
+        vm.expectRevert(PolicyVault.Stale.selector);
         vault.finalize(PolicyVault.Op.Withdraw, abi.encode(address(this), 10e6), withdrawNonce);
         vault.finalize(PolicyVault.Op.Unfreeze, abi.encode(address(0)), unfreezeNonce);
         assertFalse(vault.frozen());
@@ -519,12 +521,17 @@ contract PolicyVaultTest is Passkey {
         pay(chatgpt, 9e6, "h4");
         vm.prank(guardian);
         vault.freezeAgent(claude);
-        sign(PolicyVault.Op.RemoveContact, abi.encode(shopId));
         vm.warp(block.timestamp + 1 hours);
+        // A frozen agent's hold waits: unfreezing (by passkey, after the delay) can still let it go.
         vm.expectRevert(PolicyVault.AgentFrozen.selector);
         vault.release("h3");
-        vm.expectRevert(PolicyVault.BadAction.selector);
+        // v3: a hold whose contact was removed is cancelled and its money freed, not just blocked.
+        sign(PolicyVault.Op.RemoveContact, abi.encode(shopId));
         vault.release("h4");
+        assertEq(token.balanceOf(shop), 0);
+        (,,, uint128 left,,) = vault.held("h4");
+        assertEq(left, 0);
+        assertEq(vault.heldTotal(), 8e6);
     }
 
     function test_heldMoneyCountsAgainstProtected() public {

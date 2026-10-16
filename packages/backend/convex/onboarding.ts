@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { changeLimits, revokeAgent } from "./lib/control";
 import { policyTask } from "./lib/actions";
-import { country as countryInfo } from "@agent-wallet/domain";
+import { country as countryInfo, isVaultVersion } from "@agent-wallet/domain";
 import { mutation, query } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
@@ -178,7 +178,7 @@ export const setupWallet = mutation({
     for (const n of Object.values(args)) if (!minorOk(n)) throw new Error("Amount is out of range");
     if (args.perPaymentMinor > args.dailyCeilingMinor) throw new Error("A single payment can't exceed the daily ceiling");
     const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
-    if (wallet?.status === "live" && wallet.version === 2) {
+    if (wallet?.status === "live" && isVaultVersion(wallet.version)) {
       // The vault enforces these. Our gateway takes whichever is stricter right away; the vault
       // changes when the owner signs (and, for looser limits, after its delay).
       const task = await policyTask(ctx, user, wallet, { protectedMinor: args.protectedMinor, dailyCeilingMinor: args.dailyCeilingMinor });

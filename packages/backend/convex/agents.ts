@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { isVaultVersion } from "@agent-wallet/domain";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { unfreezeTask } from "./lib/actions";
 import { freezeAgent, freezeAll as freezeAll_ } from "./lib/control";
@@ -26,7 +27,7 @@ export const setStatus = mutation({
       return null;
     }
     const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
-    if (wallet?.status === "live" && wallet.version === 2 && agent.chainAddress) {
+    if (wallet?.status === "live" && isVaultVersion(wallet.version) && agent.chainAddress) {
       // Loosening needs the passkey. The agent stays frozen until the vault applies it.
       const taskId = await unfreezeTask(ctx, user, agent);
       return (await ctx.db.get(taskId))?.approvalToken ?? null;

@@ -16,7 +16,7 @@ import {
   type TransactionReceipt,
 } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
-import { CHAIN_ID, contactIdOf, fromTokenUnits, keyIdOf, policyVaultAbi, testUsdAbi, toTokenUnits, vaultFactoryAbi } from "@agent-wallet/domain";
+import { CHAIN_ID, contactIdOf, fromTokenUnits, isVaultVersion, keyIdOf, policyVaultAbi, testUsdAbi, toTokenUnits, vaultFactoryAbi } from "@agent-wallet/domain";
 import { internalAction } from "./_generated/server";
 import type { ActionCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -161,6 +161,21 @@ async function agentOutcome(ctx: ActionCtx, taskId: Id<"tasks">, r: TransactionR
   if (selfFrozen) await ctx.runMutation(internal.vault.onStruckOut, { walletId, agentAddress: selfFrozen.args.agent });
 }
 
+/**
+ * A release that went through either paid the contact or, on v3, cancelled the hold because its
+ * agent was removed or expired, its contact changed, or it was settled more than a day late.
+ */
+async function releaseOutcome(ctx: ActionCtx, taskId: Id<"tasks">, r: TransactionReceipt) {
+  const released = parseEventLogs({ abi: policyVaultAbi, logs: r.logs as Log[], eventName: "PaymentReleased" }).length > 0;
+  const cancelled = parseEventLogs({ abi: policyVaultAbi, logs: r.logs as Log[], eventName: "PaymentCancelled" }).length > 0;
+  await ctx.runMutation(internal.vault.onAgentResult, {
+    taskId,
+    txHash: r.transactionHash,
+    ok: r.status === "success" && released,
+    note: r.status !== "success" ? "Reverted" : cancelled ? "Not sent: the agent or contact changed while it was held" : released ? undefined : "Not sent",
+  });
+}
+
 // ---------------------------------------------------------------- deploy
 
 export const deployVault = internalAction({
@@ -183,6 +198,11 @@ export const deployVault = internalAction({
         const r = await pub.waitForTransactionReceipt({ hash: deployTx, timeout: RECEIPT_TIMEOUT });
         if (r.status !== "success") throw new Error("Vault deployment reverted");
       }
+      // v2 vaults have no VERSION(); the encodings we send depend on which one this is.
+      const version = await pub
+        .readContract({ address: vault, abi: policyVaultAbi, functionName: "VERSION" })
+        .then(Number)
+        .catch(() => 2);
       // Test dollars so the demo has something to spend. Anyone can mint these; they're worthless.
       const fund = await wallet.writeContract({ address: token, abi: testUsdAbi, functionName: "faucet", args: [vault, toTokenUnits(10_000)] });
       await pub.waitForTransactionReceipt({ hash: fund, timeout: RECEIPT_TIMEOUT });
@@ -198,6 +218,7 @@ export const deployVault = internalAction({
         walletId,
         address: vault,
         keyId: keyIdOf(w.keyX as Hex, w.keyY as Hex),
+        version,
         tokenAddress: token,
         deployTx: deployTx ?? fund,
         agentKeys: keys,
@@ -341,9 +362,11 @@ export const releaseHeld = internalAction({
       const why = reason(e);
       if (why === "NotReady") {
         await relayer.enqueueAction(ctx, internal.chain.releaseHeld, { taskId }, { runAt: Date.now() + RECHECK_MS });
-      } else if (why === "AgentFrozen" || why === "BadAction") {
-        // Frozen since, or the contact changed: don't send. Cancel so the money is free again.
-        await ctx.runMutation(internal.vault.onAgentResult, { taskId, ok: false, note: why === "AgentFrozen" ? "Not sent: frozen while it was held" : "Not sent: the contact changed" });
+      } else if (why === "AgentFrozen" || why === "BadAction" || why === "BreachesProtected") {
+        // Frozen since, the contact changed, or it would now dip into the protected amount: don't
+        // send. Cancel so the money is free again.
+        const note = { AgentFrozen: "Not sent: frozen while it was held", BadAction: "Not sent: the contact changed", BreachesProtected: "Not sent: it would dip into the protected amount" }[why];
+        await ctx.runMutation(internal.vault.onAgentResult, { taskId, ok: false, note });
         await relayer.enqueueAction(ctx, internal.chain.cancelHeld, { taskId, quiet: true });
       } else {
         await ctx.runMutation(internal.vault.onAgentResult, { taskId, ok: false, note: why === "NotQueued" ? "Cancelled" : why });
@@ -353,7 +376,7 @@ export const releaseHeld = internalAction({
     await ctx.runMutation(internal.vault.onSubmitted, { taskId, txHash: hash, keepState: true });
     const r = await receipt(ctx, pub, taskId, hash, "release");
     if (!r) return;
-    await ctx.runMutation(internal.vault.onAgentResult, { taskId, txHash: hash, ok: r.status === "success", note: r.status === "success" ? undefined : "Reverted" });
+    await releaseOutcome(ctx, taskId, r);
     await readVaultTwice(ctx, pub, t.walletId);
   },
 });
@@ -442,7 +465,7 @@ export const reconcile = internalAction({
     if (kind === "owner") await ownerOutcome(ctx, taskId, r);
     else if (kind === "agent") await agentOutcome(ctx, taskId, r, t.walletId);
     else if (kind === "finalize") await ctx.runMutation(internal.vault.onOwnerResult, { taskId, txHash: r.transactionHash, ok: r.status === "success", note: r.status === "success" ? undefined : "Reverted" });
-    else await ctx.runMutation(internal.vault.onAgentResult, { taskId, txHash: r.transactionHash, ok: r.status === "success", note: r.status === "success" ? undefined : "Reverted" });
+    else await releaseOutcome(ctx, taskId, r);
     await readVaultTwice(ctx, pub, t.walletId);
   },
 });
@@ -452,7 +475,7 @@ export const reconcile = internalAction({
 /** Read what the vault enforces right now and store it, so screens show the chain, not our wishes. */
 async function readVault(ctx: ActionCtx, pub: Pub, walletId: Id<"wallets">) {
   const w = await ctx.runQuery(internal.vault.walletForChain, { walletId });
-  if (!w?.address || !w.tokenAddress || w.version !== 2) return;
+  if (!w?.address || !w.tokenAddress || !isVaultVersion(w.version)) return;
   const vault = { address: w.address as Address, abi: policyVaultAbi } as const;
   try {
     const [balance, frozen, protectedAmount, ceiling, contactDelay, changeDelay, holdAbove, holdFor, held, spent, headroom, ownerKeys] = await settled(() =>
@@ -496,7 +519,7 @@ async function readVault(ctx: ActionCtx, pub: Pub, walletId: Id<"wallets">) {
     await ctx.runMutation(internal.vault.onVaultState, {
       walletId,
       vault: {
-        version: 2,
+        version: w.version!,
         protectedMinor: fromTokenUnits(protectedAmount),
         ceilingMinor: fromTokenUnits(ceiling),
         contactDelay: Number(contactDelay),
