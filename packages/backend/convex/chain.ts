@@ -430,7 +430,8 @@ export const agentPay = internalAction({
   args: { taskId: v.id("tasks"), lane: v.optional(v.number()), funded: v.optional(v.boolean()), attempt: v.optional(v.number()) },
   handler: async (ctx, { taskId, lane = 0, funded, attempt = 1 }) => {
     const t = await ctx.runQuery(internal.vault.agentTaskForChain, { taskId });
-    if (!t) return;
+    // A settled task is never sent again, whatever a duplicate job asks.
+    if (!t || SETTLED.has(t.state)) return;
     // One send at a time per agent key; others wait their turn without holding up other agents.
     if (!(await ctx.runMutation(internal.vault.lockAgentKey, { agentId: t.agentId, until: Date.now() + AGENT_LOCK_MS }))) {
       await agentPool.enqueueAction(ctx, internal.chain.agentPay, { taskId, lane, funded, attempt }, { runAt: Date.now() + 2_000 });

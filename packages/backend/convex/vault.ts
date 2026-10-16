@@ -458,8 +458,8 @@ export const agentTaskForChain = internalQuery({
     const key = await ctx.db.query("agentKeys").withIndex("by_agent", (q) => q.eq("agentId", t.agentId!)).unique();
     const w = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", t.userId)).unique();
     if (!key || !w?.address) return null;
-    if (TERMINAL.has(t.state)) return null;
     return {
+      state: t.state,
       userId: t.userId,
       agentId: t.agentId,
       agentKey: key.privateKey,
