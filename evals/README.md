@@ -16,6 +16,17 @@ All 68 P0 attacks from our attack corpus, each mapped to the tests, eval cases a
 
 [`TASKS.md`](TASKS.md): all 54 eval tasks as "owner said → right outcome → what the assistant did → money settled", from the Claude Opus run over MCP (53 of 54 correct). Regenerate with `(cd packages/domain && npx tsx src/eval/task-table.ts)`.
 
+## Any AI, one wallet (17 Oct)
+
+Two assistants from different vendors on one vault, each with its own key and limits, through the same MCP door: Claude Code (Anthropic, Sonnet) and Hermes Agent (Nous Research, running Zhipu AI's GLM-5.3 on NVIDIA NIM). Each was asked to pay the saved contact Blue Tokai; both payments were above $5, so the vault held them for 2 minutes and then released them, and both count toward the one $40 daily ceiling for all agents ($13 used). Vault [`0x31F68A8d…`](https://sepolia.basescan.org/address/0x31F68A8d36e4392725d2F09261D42a529e6aDc32); details in [`results/multi-agent.md`](results/multi-agent.md); test `packages/domain/src/multi-agent.e2e.test.ts`.
+
+| Assistant | Vault key | Held | Released |
+|---|---|---|---|
+| Claude Code | `0x90550efb…` | [`0x4789873e…`](https://sepolia.basescan.org/tx/0x4789873e59d32bae28a9960b50f66c0109a2cf089729a0134184ac8706bec44c) $6 | [`0x6ada88b4…`](https://sepolia.basescan.org/tx/0x6ada88b4296443c895af6a9f8482a3c99cc262c0830617d859ac3c8caa81e0f0) |
+| Hermes (GLM-5.3) | `0x66E7FC51…` | [`0x89220313…`](https://sepolia.basescan.org/tx/0x892203135b4d83bd0da98a6cbd83c0a627a91f593ad2bb630a8f25f7f2c708ae) $7 | [`0x2ce1ea19…`](https://sepolia.basescan.org/tx/0x2ce1ea19e768ce0b6583556dd68288cd5b8770325a9db1bfc54c8fda8966a29b) |
+
+Any other assistant that can add a remote MCP server with an Authorization header connects the same way; the Agents page now takes any name ("Other assistant").
+
 ## Live attacks on the deployed app (16 Oct)
 
 `packages/domain/src/live-attacks.e2e.test.ts` against the production deployment, from a fresh demo sandbox with a live v3 vault ([`0x041A6Acb…`](https://sepolia.basescan.org/address/0x041A6AcbAcD14a6C501C995d1fe78456D9D22216)) and a second sandbox as the stranger; never the judge account. Results: [`results/live-attacks.csv`](results/live-attacks.csv), 12 of 12 as intended.
