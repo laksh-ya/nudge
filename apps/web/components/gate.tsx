@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { api } from "@/lib/api";
+import { cn } from "@/lib/cn";
 import { useDemo } from "@/lib/demo";
 import { Wordmark } from "./brand";
 import { Shell } from "./shell";
@@ -21,13 +22,31 @@ function Splash() {
 
 function DemoBar({ readOnly }: { readOnly: boolean }) {
   const { setDemo } = useDemo();
+  // Any change on the read-only account is refused by the server; say so here, whichever screen tried.
+  const [refused, setRefused] = useState(false);
+  useEffect(() => {
+    if (!readOnly) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onRejection = (e: PromiseRejectionEvent) => {
+      if (!String(e.reason?.message ?? e.reason).includes("read-only")) return;
+      e.preventDefault();
+      setRefused(true);
+      clearTimeout(timer);
+      timer = setTimeout(() => setRefused(false), 6000);
+    };
+    window.addEventListener("unhandledrejection", onRejection);
+    return () => {
+      window.removeEventListener("unhandledrejection", onRejection);
+      clearTimeout(timer);
+    };
+  }, [readOnly]);
   return (
-    <div className="sticky top-0 z-40 flex h-9 items-center justify-center gap-3 bg-navy px-4 text-label text-white lg:pl-[248px]">
+    <div className={cn("sticky top-0 z-40 flex h-9 items-center justify-center gap-3 px-4 text-label text-white lg:pl-[248px]", refused ? "bg-amber" : "bg-navy")}>
       {readOnly ? (
         <>
-          <span>Team demo account, read-only</span>
+          <span role="status">{refused ? "Changes are off here. Open your own sandbox to try that." : "Team demo account, read-only"}</span>
           {/* A route handler, not a page: it swaps cookies, so it needs a full navigation. */}
-          <a href="/sandbox" className="font-semibold text-cyan">Open your own sandbox</a>
+          <a href="/sandbox" className={cn("font-semibold", refused ? "text-white underline" : "text-cyan")}>Open your own sandbox</a>
         </>
       ) : (
         <>
