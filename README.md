@@ -1,4 +1,4 @@
-# agent-wallet (working name)
+# agent-wallet (working name) 
 
 A testnet wallet that lets AI agents pay saved contacts within owner-set limits. The vault contract enforces those limits even if an agent's key is stolen. Anything larger, and any change that loosens a rule, needs the owner's passkey signature over the exact action, and loosening then waits out a delay the owner can cancel. Around it sits a personal-finance app (dashboard, imports, bills) with its own assistant. Bank feeds, family transfers and some demo history are simulated.
 
