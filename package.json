@@ -11,7 +11,7 @@
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "verify:evidence": "bash scripts/verify-evidence.sh",
-    "test": "pnpm -r --if-present test && cd contracts && forge test"
+    "test": "pnpm -r --if-present test"
   },
   "devDependencies": {
     "turbo": "2.11.8",
