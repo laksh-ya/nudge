@@ -90,6 +90,20 @@ Same tests, run against the fixes in progress. Posted on the issues.
 | `build/4` @ `925bba8` (contract v3, #4) | 125 pass, 6 fail. F1–F5 fixed; hold-aware invariants pass. Still open: F5b, F6, F6b, F7, F8. **F9 fails, new in v3:** `freezeAgent` accepts `msg.sender == agent` and every freeze starts a new generation, so any address can void every queued owner change, including the vault's own unfreeze. Needs fixing before deploy. Tests needed two encoding updates for v3 (`AddContact` cap, six-field `held()`); no assertion changed. |
 | `build/6` @ `5eedfff` (approval tokens, #6) | 15 pass, 4 fail. G1 and G2 fixed; all 13 controls hold; its own backend tests pass 5/5. Open: G3, G6 (#7), G4, G5 (#9). |
 
+## Retest after the merge (`main` @ `29bd103`, 16 Oct)
+
+The build branches (#41–#43, #45, #50, #54, #55) are merged. These tests now run against the v3 interface: `AddContact` carries a per-contact cap, `held()` returns six fields, and the gateway reports `submitted` instead of `paid`. Where v3 refuses an attack call outright (a stale queued change, a stranger's freeze), the test catches the revert and checks the outcome; no property changed.
+
+| Suite | Result |
+|---|---|
+| All contract tests (`forge test`) | 151 / 151 pass, including F1–F9 (11 / 11) and three new C5 checks: a second contact for the same address is refused, an owner payment to a contact still waiting queues, and removing and re-adding a contact restarts the wait |
+| Invariants with holds (`AuditInvariant`) | 4 / 4 pass |
+| Gateway and approval link (`gateway.audit`) | 19 / 19 pass: 13 controls hold and G1–G6 are fixed |
+| Backend (`convex-test`) | 48 / 48 pass |
+| Typecheck, all four packages | 4 / 4 pass |
+
+Not yet rerun: the Base Sepolia suites, because v3 is not deployed. After the deploy, rerun `evidence.e2e` and the end-to-end suites and replace the transaction links in the README.
+
 ## Not covered
 
 - Prompt injection with a real model. `agent.eval.test.ts` is written (seven attacks, six legitimate tasks) but needs `ANTHROPIC_API_KEY` locally and on the dev deployment. Its scoring also needs repair before results are published: it never calls `liveVault()`, so payments settle on the simulator, and benign failures don't fail the test (Codex review, point 4).
@@ -102,9 +116,9 @@ Same tests, run against the fixes in progress. Posted on the issues.
 ```bash
 pnpm install
 cd contracts && forge build && forge test --no-match-contract AuditFindings   # green baseline, 59 tests
-forge test --match-contract AuditFindings                                     # F1–F9, red until fixed
+forge test --match-contract AuditFindings                                     # F1–F9 and C5, green on main
 cd .. && pnpm typecheck
-pnpm --filter @agent-wallet/domain exec vitest run                            # unit + gateway audit (G1–G6 red until fixed)
+pnpm --filter @agent-wallet/domain exec vitest run                            # unit + gateway audit (G1–G6 green on main)
 EVIDENCE_RPC=https://sepolia.base.org pnpm --filter @agent-wallet/domain exec vitest run evidence.e2e
 ```
 
@@ -112,7 +126,7 @@ For the local-chain passkey test: `anvil --chain-id 84532 --port 8546`, deploy w
 
 ## Files added by this review
 
-- `contracts/test/AuditFindings.t.sol`: F1–F9 as requirements.
+- `contracts/test/AuditFindings.t.sol`: F1–F9 and C5 as requirements.
 - `contracts/test/AuditInvariant.t.sol`: stateful fuzzing with holds, releases, cancels, freezes and a stolen key.
 - `packages/domain/src/gateway.audit.test.ts`: 13 gateway controls and G1–G6, against an in-memory database.
 - `packages/domain/src/evidence.e2e.test.ts`: checks every cited transaction on Base Sepolia and compares deployed bytecode with the source. Writes `evals/results/onchain-evidence.csv`.

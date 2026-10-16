@@ -2,6 +2,7 @@
 pragma solidity ^0.8.30;
 
 import {PolicyVault} from "../src/PolicyVault.sol";
+import {WebAuthn} from "@openzeppelin/contracts/utils/cryptography/WebAuthn.sol";
 import {VaultFactory} from "../src/VaultFactory.sol";
 import {TestUSD} from "../src/TestUSD.sol";
 import {Passkey} from "./PolicyVault.t.sol";
@@ -31,7 +32,7 @@ abstract contract AuditBase is Passkey {
         token.faucet(address(vault), 250e6);
         sign(PolicyVault.Op.SetAgent, abi.encode(claude, uint128(10e6), uint128(15e6), uint64(block.timestamp + 30 days)));
         sign(PolicyVault.Op.SetAgent, abi.encode(chatgpt, uint128(10e6), uint128(30e6), uint64(block.timestamp + 30 days)));
-        sign(PolicyVault.Op.AddContact, abi.encode(shopId, shop, true));
+        sign(PolicyVault.Op.AddContact, abi.encode(shopId, shop, true, uint128(0)));
     }
 
     function action(PolicyVault.Op op, bytes memory data) internal returns (PolicyVault.Action memory) {
@@ -169,7 +170,7 @@ contract AuditFindings is AuditBase {
         policy(200e6, 40e6, 1 days, 120, 0, 0); // tighter: applies now
         assertEq(vault.protectedAmount(), 200e6);
         vm.warp(block.timestamp + 121);
-        vault.finalize(PolicyVault.Op.SetPolicy, looser, looserNonce);
+        try vault.finalize(PolicyVault.Op.SetPolicy, looser, looserNonce) {} catch {}
         assertEq(vault.protectedAmount(), 200e6, "an older queued change silently lowered the protected amount");
     }
 
@@ -223,10 +224,39 @@ contract AuditFindings is AuditBase {
         uint256 unfreezeNonce = nonce;
         address stranger = makeAddr("stranger");
         vm.prank(stranger);
-        vault.freezeAgent(stranger); // allowed: msg.sender == agent
+        try vault.freezeAgent(stranger) {} catch {} // v2 allowed it; v3 refuses non-agents
         vm.warp(block.timestamp + 121);
         try vault.finalize(PolicyVault.Op.Unfreeze, abi.encode(address(0)), unfreezeNonce) {} catch {}
         assertFalse(vault.frozen(), "a stranger kept the vault frozen by voiding the owner's unfreeze");
+    }
+
+    // ------------------------------------------------------------ contact aliases (review C5)
+
+    /// C5. v3 keeps one contact per address, so a second, cooling alias can't sit next to a mature one.
+    function test_C5_secondContactForSameAddressIsRefused() public {
+        PolicyVault.Action memory a = action(PolicyVault.Op.AddContact, abi.encode(keccak256("alias"), shop, false, uint128(0)));
+        WebAuthn.WebAuthnAuth memory auth = assertion(ownerPk, vault.digest(a), RP_ID, 0x05);
+        vm.expectRevert(PolicyVault.BadAction.selector);
+        vault.execute(a, keyId, auth);
+    }
+
+    /// C5. An owner payment to an address whose only contact is still waiting queues; it doesn't pay at once.
+    function test_C5_ownerPayToCoolingContactQueues() public {
+        address fresh = makeAddr("fresh-payee");
+        sign(PolicyVault.Op.AddContact, abi.encode(keccak256("fresh"), fresh, false, uint128(0)));
+        policy(50e6, 40e6, 1 days, 120, 0, 0);
+        sign(PolicyVault.Op.Pay, abi.encode(fresh, uint256(3e6), bytes32("fresh-pay")));
+        assertEq(token.balanceOf(fresh), 0, "owner payment to a cooling contact must queue");
+    }
+
+    /// C5. Removing a mature contact and adding the same address again restarts the wait.
+    function test_C5_removeThenReAddRestartsTheWait() public {
+        sign(PolicyVault.Op.RemoveContact, abi.encode(shopId));
+        sign(PolicyVault.Op.AddContact, abi.encode(keccak256("again"), shop, false, uint128(0)));
+        policy(50e6, 40e6, 1 days, 120, 0, 0);
+        sign(PolicyVault.Op.Pay, abi.encode(shop, uint256(3e6), bytes32("again-pay")));
+        assertEq(token.balanceOf(shop), 0, "re-added contact must wait again");
+        assertFalse(pay(claude, 1e6, bytes32("agent-again")), "agent can't pay a contact still waiting");
     }
 
     // ------------------------------------------------------------ griefing (new)

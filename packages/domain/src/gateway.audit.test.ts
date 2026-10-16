@@ -7,8 +7,8 @@
  * Two groups:
  *  - "holds": controls the gateway already enforces. These pass.
  *  - "finding": properties found missing in the 16 Oct review (docs/TESTING.md, G1-G6). They state
- *    the intended behaviour, so they fail on 680daf9 and pass once fixed. Issues: G1 and G2 #6,
- *    G4 and G5 #9, G3 and G6 #7.
+ *    the intended behaviour: they failed on 680daf9 and pass on main since the fixes merged. Issues:
+ *    G1 and G2 #6, G4 and G5 #9, G3 and G6 #7.
  *
  *   pnpm --filter @agent-wallet/domain exec vitest run gateway.audit
  *
@@ -17,9 +17,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const sent: { fn: unknown; args: Record<string, unknown> }[] = [];
-vi.mock("../../backend/convex/lib/relayer", () => ({
-  relayer: { enqueueAction: async (_ctx: unknown, fn: unknown, args: Record<string, unknown>) => (sent.push({ fn, args }), "work") },
-}));
+vi.mock("../../backend/convex/lib/relayer", () => {
+  const pool = { enqueueAction: async (_ctx: unknown, fn: unknown, args: Record<string, unknown>) => (sent.push({ fn, args }), "work") };
+  return { relayer: pool, agentPool: pool, lanePool: () => pool, laneOf: () => 0, laneCount: () => 1, MAX_LANES: 4 };
+});
 
 const { proposePayment, canAfford, overview } = await import("../../backend/convex/gateway");
 const approvals = await import("../../backend/convex/approvals");
@@ -65,6 +66,9 @@ function db(seed: Record<string, Doc[]>) {
           collect: async () => rows,
           first: async () => rows[0] ?? null,
           unique: async () => rows[0] ?? null,
+          [Symbol.asyncIterator]: async function* () {
+            yield* rows;
+          },
         };
         return q;
       },
@@ -138,7 +142,7 @@ describe("holds: what the gateway already enforces", () => {
   it("pays within limits by sending the agent's own key to the vault", async () => {
     const { ctx, tables } = world();
     const out = await call(proposePayment, ctx, { agentId: "agents-1", contactId: "payees-1", amount: 3, reason: "coffee" });
-    expect(out.outcome).toBe("paid");
+    expect(out.outcome).toBe("submitted");
     expect(sent).toHaveLength(1);
     expect(tables.tasks![0]).toMatchObject({ state: "reserved", rail: "base-sepolia", amountMinor: 300 });
   });
@@ -161,7 +165,7 @@ describe("holds: what the gateway already enforces", () => {
     const { ctx } = world();
     const outs = [];
     for (let i = 0; i < 4; i++) outs.push(await call(proposePayment, ctx, { agentId: "agents-1", contactId: "payees-1", amount: 5, reason: `r${i}` }));
-    expect(outs.filter((o) => o.outcome === "paid")).toHaveLength(3); // 3 x $5 = $15 cap
+    expect(outs.filter((o) => o.outcome === "submitted")).toHaveLength(3); // 3 x $5 = $15 cap
     expect(outs[3].outcome).toBe("needs_approval");
   });
 
@@ -182,7 +186,7 @@ describe("holds: what the gateway already enforces", () => {
   it("an assistant without 'spend' cannot move money on its own", async () => {
     const { ctx } = world({ scopes: ["read", "prepare", "request"] });
     const out = await call(proposePayment, ctx, { agentId: "agents-1", contactId: "payees-1", amount: 3, reason: "x" });
-    expect(out.outcome).not.toBe("paid");
+    expect(out.outcome).not.toBe("submitted");
     expect(sent).toHaveLength(0);
   });
 
@@ -198,7 +202,7 @@ describe("holds: what the gateway already enforces", () => {
     const { ctx, tables } = world();
     tables.wallets![0]!.vault.balanceMinor = 5_200; // $52 in the vault, $50 protected
     const out = await call(proposePayment, ctx, { agentId: "agents-1", contactId: "payees-1", amount: 3, reason: "x" });
-    expect(out.outcome).not.toBe("paid");
+    expect(out.outcome).not.toBe("submitted");
   });
 
   it("the owner's Telegram notice never repeats the agent's own words", async () => {
@@ -284,6 +288,7 @@ describe("finding: properties missing today", () => {
     const { ctx } = world();
     const out = await call(proposePayment, ctx, { agentId: "agents-1", contactId: "payees-1", amount: 8, reason: "above hold" });
     expect(out.outcome).not.toBe("paid");
+    expect(out.message, "the agent is told the vault holds it for the owner").toMatch(/holds it/);
   });
 
   // G6. requestId de-duplication is per agent. Two assistants handed the same invoice both pay it.
@@ -291,7 +296,7 @@ describe("finding: properties missing today", () => {
     const { ctx } = world();
     const a = await call(proposePayment, ctx, { agentId: "agents-1", contactId: "payees-1", amount: 3, reason: "inv 42", requestId: "INV-42" });
     const b = await call(proposePayment, ctx, { agentId: "agents-2", contactId: "payees-1", amount: 3, reason: "inv 42", requestId: "INV-42" });
-    expect(a.outcome).toBe("paid");
-    expect(b.outcome, "a second assistant paid the same invoice").not.toBe("paid");
+    expect(a.outcome).toBe("submitted");
+    expect(b.outcome, "a second assistant paid the same invoice").not.toBe("submitted");
   });
 });

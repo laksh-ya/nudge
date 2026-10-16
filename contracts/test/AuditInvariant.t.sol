@@ -107,7 +107,7 @@ contract AuditInvariant is Passkey {
         bytes32 shopId = keccak256("shop");
         sign(PolicyVault.Op.SetAgent, abi.encode(a, uint128(10e6), uint128(25e6), uint64(block.timestamp + 365 days)));
         sign(PolicyVault.Op.SetAgent, abi.encode(b, uint128(20e6), uint128(30e6), uint64(block.timestamp + 365 days)));
-        sign(PolicyVault.Op.AddContact, abi.encode(shopId, shop, true));
+        sign(PolicyVault.Op.AddContact, abi.encode(shopId, shop, true, uint128(0)));
         // Holds above $5 for 10 minutes.
         sign(PolicyVault.Op.SetPolicy, abi.encode(uint256(50e6), uint256(40e6), uint64(0), uint64(0), uint256(5e6), uint64(10 minutes)));
         handler = new HoldHandler(vault, token, guardian, a, b, shopId, attacker);
@@ -140,7 +140,7 @@ contract AuditInvariant is Passkey {
         uint256 sum;
         uint256 c = handler.count();
         for (uint256 i; i < c; ++i) {
-            (,,, uint128 amount,) = vault.held(handler.idAt(i));
+            (,,, uint128 amount,,) = vault.held(handler.idAt(i));
             sum += amount;
         }
         assertEq(sum, vault.heldTotal());
