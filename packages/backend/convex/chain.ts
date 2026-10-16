@@ -3,6 +3,7 @@ import {
   BaseError,
   ContractFunctionRevertedError,
   concat,
+  encodeFunctionData,
   createPublicClient,
   createWalletClient,
   formatEther,
@@ -57,6 +58,9 @@ const RECEIPT_TIMEOUT = 60_000;
 const receiptTimeout = () => Number(process.env.CHAIN_RECEIPT_TIMEOUT_MS ?? RECEIPT_TIMEOUT);
 const RECHECK_MS = 30_000;
 const MAX_CHECKS = 20;
+const SETTLED = new Set<string>(["confirmed", "failed", "cancelled", "expired", "reported"]);
+/** Checks before a missing receipt plus a used nonce is believed (a lagging node can show either). */
+const REPLACED_AFTER_CHECKS = 3;
 
 function env(name: string) {
   const value = process.env[name];
@@ -147,28 +151,65 @@ function reason(e: unknown): string {
   return e instanceof Error ? e.message.slice(0, 160) : "Transaction failed";
 }
 
+/** A transaction signed here, before anything is broadcast. Its hash is known from the bytes. */
+type Signed = { hash: Hex; raw: Hex; nonce: number; from: Address };
+
 /**
- * Send a contract call: simulate on a node that sees the vault, estimate with headroom, broadcast.
- * Throws before broadcast (nothing sent); returns the hash once broadcast.
+ * Send a contract call: simulate on a node that sees the vault, estimate with headroom, sign here,
+ * let `persist` record the signed transaction, then broadcast it. Throws a plain error if nothing
+ * could have been broadcast, or a BroadcastError carrying the hash if the node may have taken it.
  */
-async function send(pub: Pub, wallet: ReturnType<typeof clients>["wallet"], call: Parameters<Pub["simulateContract"]>[0] & { address: Address }) {
+async function send(
+  pub: Pub,
+  wallet: ReturnType<typeof clients>["wallet"],
+  call: Parameters<Pub["simulateContract"]>[0] & { address: Address },
+  persist?: (signed: Signed) => Promise<unknown>,
+) {
   const gas = await settled(async () => {
     await ready(pub, call.address);
     await pub.simulateContract(call);
     return await pub.estimateContractGas(call as Parameters<Pub["estimateContractGas"]>[0]);
   });
+  const account = wallet.account;
+  const request = await wallet.prepareTransactionRequest({
+    account,
+    chain: wallet.chain,
+    to: call.address,
+    data: encodeFunctionData({ abi: call.abi, functionName: call.functionName, args: call.args } as Parameters<typeof encodeFunctionData>[0]),
+    gas: (gas * 13n) / 10n,
+  });
+  const raw = await wallet.signTransaction(request as Parameters<typeof wallet.signTransaction>[0]);
+  const hash = keccak256(raw);
+  // Recorded before broadcast: whatever the network answers, we know which transaction to look for.
+  if ((await persist?.({ hash, raw, nonce: Number(request.nonce), from: account.address })) === false) throw new Error("Already settled; not sent");
   try {
-    return await wallet.writeContract({ ...(call as Parameters<typeof wallet.writeContract>[0]), gas: (gas * 13n) / 10n });
+    await pub.sendRawTransaction({ serializedTransaction: raw });
   } catch (e) {
     // The node may have taken it even though we got an error back, so this is never retried blindly.
-    throw new BroadcastError(e);
+    throw new BroadcastError(e, hash);
   }
+  return hash;
 }
 
 class BroadcastError extends Error {
-  constructor(readonly cause: unknown) {
+  constructor(
+    readonly cause: unknown,
+    readonly hash: Hex,
+  ) {
     super(reason(cause));
   }
+}
+
+/** Store a task's signed transaction before it is broadcast. */
+const signedFor = (ctx: ActionCtx, taskId: Id<"tasks">) => (s: Signed) =>
+  ctx.runMutation(internal.vault.onSigned, { taskId, txHash: s.hash, rawTx: s.raw, txNonce: s.nonce, txFrom: s.from });
+
+type Kind = "owner" | "agent" | "finalize" | "release";
+
+/** The broadcast may or may not have landed: keep the task unknown and follow that exact transaction. */
+async function ambiguous(ctx: ActionCtx, taskId: Id<"tasks">, e: BroadcastError, kind: Kind, lane: number) {
+  await ctx.runMutation(internal.vault.onUnknown, { taskId, txHash: e.hash, note: e.message });
+  await ctx.scheduler.runAfter(RECHECK_MS, internal.chain.reconcile, { taskId, kind, lane });
 }
 
 /** Failed before anything was broadcast, for a network reason: safe to try again. */
@@ -180,7 +221,7 @@ const SEND_ATTEMPTS = 4;
 const backoff = (attempt: number) => Date.now() + 3_000 * 2 ** attempt;
 
 /** After broadcast, a lost receipt is "unknown", never "failed": the transaction may still land. */
-async function receipt(ctx: ActionCtx, pub: Pub, taskId: Id<"tasks">, hash: Hex, kind: "owner" | "agent" | "finalize" | "release", lane = 0) {
+async function receipt(ctx: ActionCtx, pub: Pub, taskId: Id<"tasks">, hash: Hex, kind: Kind, lane = 0) {
   try {
     return await pub.waitForTransactionReceipt({ hash, timeout: receiptTimeout() });
   } catch (e) {
@@ -319,7 +360,8 @@ export const relayOwner = internalAction({
   args: { taskId: v.id("tasks"), auth, keyId: v.string(), lane: v.optional(v.number()), attempt: v.optional(v.number()) },
   handler: async (ctx, { taskId, auth: a, keyId, lane = 0, attempt = 1 }) => {
     const t = await ctx.runQuery(internal.vault.taskForChain, { taskId });
-    if (!t?.action || !t.vault) return;
+    // A settled task is never sent again, whatever a duplicate job asks.
+    if (!t?.action || !t.vault || SETTLED.has(t.state)) return;
     const c = await laneClients(ctx, lane, (l) => lanePool(l).enqueueAction(ctx, internal.chain.relayOwner, { taskId, auth: a, keyId, lane: l }));
     if (!c) return;
     const { pub, wallet, account } = c;
@@ -342,8 +384,9 @@ export const relayOwner = internalAction({
           },
         ],
         account,
-      });
+      }, signedFor(ctx, taskId));
     } catch (e) {
+      if (e instanceof BroadcastError) return await ambiguous(ctx, taskId, e, "owner", lane);
       if (retryable(e) && attempt < SEND_ATTEMPTS) {
         await lanePool(lane).enqueueAction(ctx, internal.chain.relayOwner, { taskId, auth: a, keyId, lane, attempt: attempt + 1 }, { runAt: backoff(attempt) });
         return;
@@ -377,8 +420,9 @@ export const finalizeChange = internalAction({
         functionName: "finalize",
         args: [t.action.op, t.action.data as Hex, BigInt(t.action.nonce)],
         account,
-      });
+      }, signedFor(ctx, taskId));
     } catch (e) {
+      if (e instanceof BroadcastError) return await ambiguous(ctx, taskId, e, "finalize", lane);
       const why = reason(e);
       if (why === "NotReady" || retryable(e)) await lanePool(lane).enqueueAction(ctx, internal.chain.finalizeChange, { taskId, lane }, { runAt: Date.now() + RECHECK_MS });
       else await ctx.runMutation(internal.vault.onOwnerResult, { taskId, ok: false, note: why === "NotQueued" ? "Cancelled before it applied" : why });
@@ -399,7 +443,8 @@ export const agentPay = internalAction({
   args: { taskId: v.id("tasks"), lane: v.optional(v.number()), funded: v.optional(v.boolean()), attempt: v.optional(v.number()) },
   handler: async (ctx, { taskId, lane = 0, funded, attempt = 1 }) => {
     const t = await ctx.runQuery(internal.vault.agentTaskForChain, { taskId });
-    if (!t) return;
+    // A settled task is never sent again, whatever a duplicate job asks.
+    if (!t || SETTLED.has(t.state)) return;
     // One send at a time per agent key; others wait their turn without holding up other agents.
     if (!(await ctx.runMutation(internal.vault.lockAgentKey, { agentId: t.agentId, until: Date.now() + AGENT_LOCK_MS }))) {
       await agentPool.enqueueAction(ctx, internal.chain.agentPay, { taskId, lane, funded, attempt }, { runAt: Date.now() + 2_000 });
@@ -422,8 +467,9 @@ export const agentPay = internalAction({
           // The purpose is hashed with the task id, so a guessable purpose can't be read off the chain.
           args: [contactIdOf(t.payeeId), toTokenUnits(t.amountMinor), t.paymentId as Hex, sha256(toBytes(`${taskId}:${t.purpose ?? ""}`))],
           account,
-        });
+        }, signedFor(ctx, taskId));
       } catch (e) {
+        if (e instanceof BroadcastError) return await ambiguous(ctx, taskId, e, "agent", lane);
         if (retryable(e) && attempt < SEND_ATTEMPTS) {
           await agentPool.enqueueAction(ctx, internal.chain.agentPay, { taskId, lane, funded, attempt: attempt + 1 }, { runAt: backoff(attempt) });
           return;
@@ -480,8 +526,9 @@ export const releaseHeld = internalAction({
     const { pub, wallet, account } = c;
     let hash: Hex;
     try {
-      hash = await send(pub, wallet, { address: t.vault as Address, abi: policyVaultAbi, functionName: "release", args: [t.paymentId as Hex], account });
+      hash = await send(pub, wallet, { address: t.vault as Address, abi: policyVaultAbi, functionName: "release", args: [t.paymentId as Hex], account }, signedFor(ctx, taskId));
     } catch (e) {
+      if (e instanceof BroadcastError) return await ambiguous(ctx, taskId, e, "release", lane);
       const why = reason(e);
       if (why === "NotReady" || retryable(e)) {
         await lanePool(lane).enqueueAction(ctx, internal.chain.releaseHeld, { taskId, lane }, { runAt: Date.now() + RECHECK_MS });
@@ -610,7 +657,30 @@ export const reconcile = internalAction({
     const { pub } = clients();
     const r = await pub.getTransactionReceipt({ hash: t.txHash as Hex }).catch(() => null);
     if (!r) {
+      // The same signed bytes again: if the first broadcast never arrived, this one can; if it did,
+      // the node refuses a duplicate. Either way it can't pay twice.
+      if (t.rawTx) await pub.sendRawTransaction({ serializedTransaction: t.rawTx as Hex }).catch(() => undefined);
       const checks = await ctx.runMutation(internal.vault.onChecked, { taskId });
+      // Our nonce used by something else, and still no receipt for ours after a few looks: it never ran.
+      if (t.txFrom && t.txNonce !== undefined && checks >= REPLACED_AFTER_CHECKS) {
+        const mined = await pub.getTransactionCount({ address: t.txFrom as Address, blockTag: "latest" }).catch(() => 0);
+        const again = mined > t.txNonce ? await pub.getTransactionReceipt({ hash: t.txHash as Hex }).catch(() => null) : null;
+        if (mined > t.txNonce && !again) {
+          // A release or finalize that never ran leaves the payment held (or the change queued): send it again.
+          if (kind === "release" && (await ctx.runMutation(internal.vault.onReplaced, { taskId, state: "held" }))) {
+            await lanePool(lane).enqueueAction(ctx, internal.chain.releaseHeld, { taskId, lane });
+            return;
+          }
+          if (kind === "finalize" && (await ctx.runMutation(internal.vault.onReplaced, { taskId, state: "queued" }))) {
+            await lanePool(lane).enqueueAction(ctx, internal.chain.finalizeChange, { taskId, lane });
+            return;
+          }
+          const note = "Not sent: another transaction from the same key took its place";
+          if (kind === "owner" || kind === "finalize") await ctx.runMutation(internal.vault.onOwnerResult, { taskId, ok: false, note });
+          else await ctx.runMutation(internal.vault.onAgentResult, { taskId, ok: false, note });
+          return;
+        }
+      }
       if (checks < MAX_CHECKS) await ctx.scheduler.runAfter(RECHECK_MS, internal.chain.reconcile, { taskId, kind, lane });
       return;
     }
