@@ -7,7 +7,10 @@ import schema from "./schema";
 import { api, internal } from "./_generated/api";
 
 // Only the transaction queue is stubbed; every handler and the schema run unchanged.
-vi.mock("./lib/relayer", () => ({ relayer: { enqueueAction: vi.fn(async () => "queued") } }));
+vi.mock("./lib/relayer", () => {
+  const pool = { enqueueAction: vi.fn(async () => "queued") };
+  return { relayer: pool, agentPool: pool, lanePool: () => pool, laneOf: () => 0, laneCount: () => 1, MAX_LANES: 4 };
+});
 const modules = import.meta.glob(["./**/*.ts", "./**/*.js", "!./**/*.test.ts"]);
 
 const NOW = Date.UTC(2026, 9, 16, 6);

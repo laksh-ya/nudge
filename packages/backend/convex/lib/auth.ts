@@ -27,9 +27,20 @@ export async function viewer(ctx: QueryCtx | MutationCtx): Promise<Doc<"users"> 
     .unique();
 }
 
+export const JUDGE_READ_ONLY = "This is the team's demo account, so it's read-only. Open your own sandbox to try changes.";
+
+/** The judge account is shared by everyone with the judge link; only the team's admin token may change it. */
+export async function judgeReadOnly(ctx: QueryCtx | MutationCtx, user: Pick<Doc<"users">, "tokenIdentifier">) {
+  if (user.tokenIdentifier !== JUDGE) return false;
+  const identity = await ctx.auth.getUserIdentity();
+  return identity?.judgeAdmin !== true;
+}
+
 export async function requireViewer(ctx: QueryCtx | MutationCtx): Promise<Doc<"users">> {
   const user = await viewer(ctx);
   if (!user) throw new Error("Not signed in");
+  // Every public mutation starts here, so this one check keeps visitors from changing the judge account.
+  if ("insert" in ctx.db && (await judgeReadOnly(ctx, user))) throw new Error(JUDGE_READ_ONLY);
   return user;
 }
 

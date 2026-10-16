@@ -331,6 +331,8 @@ export default defineSchema({
     agentId: v.id("agents"),
     address: v.string(),
     privateKey: v.string(),
+    /** Set while a payment from this key is being sent, so two can't take the same nonce. */
+    sendingUntil: v.optional(v.number()),
   }).index("by_agent", ["agentId"]),
 
   tasks: defineTable({
@@ -468,4 +470,18 @@ export default defineSchema({
 
   /** Fixed-window counters for abuse limits. */
   limits: defineTable({ key: v.string(), windowStart: v.number(), count: v.number() }).index("by_key", ["key"]),
+
+  /** What the operator needs to know about the demo's own accounts: the relayer's test-ETH runway. */
+  ops: defineTable({
+    key: v.literal("relayer"),
+    address: v.string(),
+    /** Every sending key's balance in wei: the guardian relayer first, then any extra lanes. */
+    balancesWei: v.array(v.string()),
+    /** Estimated test ETH one demo sandbox uses (deploy, funding, setup, agent gas), in wei. */
+    perSandboxWei: v.string(),
+    /** How many more sandboxes the total balance covers. */
+    runway: v.number(),
+    checkedAt: v.number(),
+    alertedAt: v.optional(v.number()),
+  }).index("by_key", ["key"]),
 });

@@ -4,6 +4,19 @@ A testnet wallet that lets AI agents pay saved contacts within owner-set limits.
 
 Entry for FinTechathon 2026, Topic F (Agent Wallet). Product spec: `reports/Full product plan.md` in the research workspace. This file is the stack decision record that Claude and Codex both follow; change a row here instead of writing a second architecture.
 
+## For judges
+
+You don't need our phone. Everything below runs on Base Sepolia test money, in your own private sandbox.
+
+1. Open the web app and choose **Try the demo**. You get a sandbox only your browser can open, with sample accounts, bills and connected assistants.
+2. Go to **Wallet → Put this wallet on-chain**. Create the passkey on your phone (scan the QR) or on this laptop (Touch ID, Windows Hello, or a security key), then type the six-digit code the passkey screen shows. Your own vault is deployed in about a minute.
+3. Approve the setup with that passkey. From then on the vault enforces the limits: ask the assistant to pay Blue Tokai a few dollars (it goes through), then more than Claude's limit (it waits for your passkey), and open the approval link to see exactly what you'd sign.
+4. Try to break it: freeze Claude, change limits, or connect your own assistant over MCP (section below).
+
+Each visitor can make 3 demo vaults a day. If the demo's test ETH runs low, new vaults wait until it's topped up; nothing you already have stops working.
+
+The team's own account (with the phone-passkey vault and recorded history) opens read-only at `/judge` with the judge key, typed into the form there. The key is never part of a link. From it, **Open your own sandbox** switches to a fresh sandbox.
+
 ## What is live and what is simulated
 
 | Area | State |
@@ -190,7 +203,7 @@ pnpm --dir apps/approve dev         # http://localhost:3001
 
 Env files (not committed): `apps/web/.env.local` needs `NEXT_PUBLIC_CONVEX_URL`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `NEXT_PUBLIC_APPROVE_URL`. `apps/approve/.env.local` needs `VITE_CONVEX_URL`, `VITE_WEB_URL`. The Convex deployment needs `CLERK_JWT_ISSUER_DOMAIN`.
 
-Demo visitors get private sandboxes (needs `DEMO_JWT_PRIVATE_KEY` in the web app and the matching `DEMO_JWKS` on Convex). The judge account (the phone-passkey vault) opens with `/judge?key=<JUDGE_KEY>`. Other Convex env: `AGENT_KEY_SECRET` (32 bytes, base64) seals agent keys.
+Demo visitors get private sandboxes (needs `DEMO_JWT_PRIVATE_KEY` in the web app and the matching `DEMO_JWKS` on Convex). The judge account (the phone-passkey vault) opens at `/judge` by typing `JUDGE_KEY` (read-only) or `JUDGE_ADMIN_KEY` (the team's, can change it) into the form; only a hash goes in the cookie. Rotate `JUDGE_KEY` after judging. Web env `VISITOR_SALT` salts the per-visitor id used for demo budgets. Convex env `RELAYER_LANES` (1-4) turns on extra relayer keys once funded, and `OPS_TELEGRAM_CHAT_ID` receives low-runway alerts (`npx convex run ops:status` shows the runway). Other Convex env: `AGENT_KEY_SECRET` (32 bytes, base64) seals agent keys.
 
 ## Open decisions
 

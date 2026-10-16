@@ -24,6 +24,7 @@ import type * as http from "../http.js";
 import type * as imports from "../imports.js";
 import type * as lib_actions from "../lib/actions.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_budget from "../lib/budget.js";
 import type * as lib_control from "../lib/control.js";
 import type * as lib_hash from "../lib/hash.js";
 import type * as lib_ledger from "../lib/ledger.js";
@@ -38,6 +39,7 @@ import type * as messages from "../messages.js";
 import type * as migrations from "../migrations.js";
 import type * as money from "../money.js";
 import type * as onboarding from "../onboarding.js";
+import type * as ops from "../ops.js";
 import type * as rates from "../rates.js";
 import type * as tasks from "../tasks.js";
 import type * as telegram from "../telegram.js";
@@ -68,6 +70,7 @@ declare const fullApi: ApiFromModules<{
   imports: typeof imports;
   "lib/actions": typeof lib_actions;
   "lib/auth": typeof lib_auth;
+  "lib/budget": typeof lib_budget;
   "lib/control": typeof lib_control;
   "lib/hash": typeof lib_hash;
   "lib/ledger": typeof lib_ledger;
@@ -82,6 +85,7 @@ declare const fullApi: ApiFromModules<{
   migrations: typeof migrations;
   money: typeof money;
   onboarding: typeof onboarding;
+  ops: typeof ops;
   rates: typeof rates;
   tasks: typeof tasks;
   telegram: typeof telegram;
@@ -118,4 +122,8 @@ export declare const internal: FilterApi<
 
 export declare const components: {
   relayer: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"relayer">;
+  lane1: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"lane1">;
+  lane2: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"lane2">;
+  lane3: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"lane3">;
+  agents: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"agents">;
 };
