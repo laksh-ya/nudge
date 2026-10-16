@@ -1,0 +1,163 @@
+Compiling 48 files with Solc 0.8.30
+Solc 0.8.30 finished in 2.12s
+Compiler run successful!
+
+Ran 9 tests for test/Attacks.t.sol:AttacksTest
+[PASS] test_attack_approvalSubstitution() (gas: 837327)
+[PASS] test_attack_compromisedContact48h() (gas: 10994838)
+[PASS] test_attack_duplicateInvoice() (gas: 2451959)
+[PASS] test_attack_midnightDoubleSpend() (gas: 1720403)
+[PASS] test_attack_payAttackerAddress() (gas: 3838105)
+[PASS] test_attack_serverCompromise() (gas: 915877)
+[PASS] test_attack_slowDrainTenDays() (gas: 21410940)
+[PASS] test_attack_twoStolenKeys24h() (gas: 8699561)
+[PASS] test_attack_unitError() (gas: 863130)
+Suite result: ok. 9 passed; 0 failed; 0 skipped; finished in 165.86ms (40.28ms CPU time)
+
+Ran 44 tests for test/PolicyVault.t.sol:PolicyVaultTest
+[PASS] testFuzz_stolenKeyIsBounded(uint256[12],uint256[12]) (runs: 512, μ: 2655877, ~: 2399478)
+[PASS] test_agentCanFreezeItselfOnly() (gas: 87934)
+[PASS] test_agentDailyCap() (gas: 792177)
+[PASS] test_agentPaysWithinLimits() (gas: 448525)
+[PASS] test_approvalForOneVaultFailsOnAnother() (gas: 4649895)
+[PASS] test_batchCannotNest() (gas: 347203)
+[PASS] test_batchSetsUpInOneApproval() (gas: 899562)
+[PASS] test_cannotRemoveLastKey() (gas: 344809)
+[PASS] test_changingLimitsDoesNotUnfreeze() (gas: 447661)
+[PASS] test_duplicatePaymentIdIsRefused() (gas: 437543)
+[PASS] test_expiredAgentIsRefused() (gas: 48891)
+[PASS] test_expiredApprovalIsRejected() (gas: 73596)
+[PASS] test_fiveRefusalsFreezeTheAgent() (gas: 1399069)
+[PASS] test_freezeOrRemovedContactBlocksRelease() (gas: 1854016)
+[PASS] test_frozenVaultOnlyLetsUnfreezeApply() (gas: 1300567)
+[PASS] test_guardianCancelsAQueuedLoosening() (gas: 874297)
+[PASS] test_guardianFreezesButCannotUnfreeze() (gas: 826212)
+[PASS] test_heldMoneyCountsAgainstProtected() (gas: 2369410)
+[PASS] test_largeAgentPaymentWaitsThenReleases() (gas: 1378519)
+[PASS] test_looseningWaitsAndTighteningIsInstant() (gas: 1266562)
+[PASS] test_newContactWaits() (gas: 863610)
+[PASS] test_noMidnightDoubleSpend() (gas: 792980)
+[PASS] test_onlyGuardianFreezesVault() (gas: 31977)
+[PASS] test_onlyWithdrawGoesBelowProtected() (gas: 378786)
+[PASS] test_otherKeyIsRejected() (gas: 318468)
+[PASS] test_overPerPaymentIsRefusedOnChain() (gas: 68012)
+[PASS] test_ownerCancelsAHeldPayment() (gas: 1042294)
+[PASS] test_ownerCancelsAQueuedChangeWithPasskey() (gas: 1117502)
+[PASS] test_ownerPaymentLeavesProtectedAmount() (gas: 764502)
+[PASS] test_ownerPaysWithPasskey() (gas: 429567)
+[PASS] test_passkeyFromAnotherSiteIsRejected() (gas: 74364)
+[PASS] test_paymentCountLimit() (gas: 5935848)
+[PASS] test_predictedAddressMatches() (gas: 33128)
+[PASS] test_protectedAmountIsUntouchable() (gas: 984809)
+[PASS] test_replayIsRejected() (gas: 447344)
+[PASS] test_setupBatchIsInstantBeforeADelayExists() (gas: 519908)
+[PASS] test_sharedCeilingAcrossAgents() (gas: 1692440)
+[PASS] test_strikesFadeAfterAQuietDay() (gas: 237229)
+[PASS] test_tamperedActionIsRejected() (gas: 82876)
+[PASS] test_unknownAgentReverts() (gas: 37184)
+[PASS] test_unknownContactIsRefused() (gas: 48243)
+[PASS] test_userVerificationIsRequired() (gas: 81518)
+[PASS] test_vaultFreezeStopsEveryAgent() (gas: 115487)
+[PASS] test_windowRollsAfter24Hours() (gas: 792946)
+Suite result: ok. 44 passed; 0 failed; 0 skipped; finished in 167.62ms (216.04ms CPU time)
+
+Ran 68 tests for test/PolicyVaultV3.t.sol:PolicyVaultV3Test
+[PASS] testFuzz_stolenKeyIsBounded(uint256[12],uint256[12]) (runs: 512, μ: 2640777, ~: 2398986)
+[PASS] test_agentCanFreezeItselfOnly() (gas: 87956)
+[PASS] test_agentCannotBurnTheOwnersPaymentId() (gas: 788376)
+[PASS] test_agentDailyCap() (gas: 792266)
+[PASS] test_agentPaysWithinLimits() (gas: 448536)
+[PASS] test_approvalForOneVaultFailsOnAnother() (gas: 4649953)
+[PASS] test_batchCannotNest() (gas: 347232)
+[PASS] test_batchSetsUpInOneApproval() (gas: 899633)
+[PASS] test_cannotRemoveLastKey() (gas: 344838)
+[PASS] test_capChangeKeepsAnEstablishedContactPayable() (gas: 1538010)
+[PASS] test_changingLimitsDoesNotUnfreeze() (gas: 447742)
+[PASS] test_contactCapSpansAgents() (gas: 1388100)
+[PASS] test_duplicatePaymentIdIsRefused() (gas: 437521)
+[PASS] test_expiredAgentHeldPaymentIsCancelled() (gas: 1304929)
+[PASS] test_expiredAgentIsRefused() (gas: 48936)
+[PASS] test_expiredApprovalIsRejected() (gas: 73603)
+[PASS] test_fiveRefusalsFreezeTheAgent() (gas: 1399159)
+[PASS] test_freezeOrRemovedContactBlocksRelease() (gas: 1854118)
+[PASS] test_freezeVoidsAnOlderQueuedUnfreeze() (gas: 898664)
+[PASS] test_frozenVaultOnlyLetsUnfreezeApply() (gas: 1300632)
+[PASS] test_guardianCancelsAQueuedLoosening() (gas: 874377)
+[PASS] test_guardianCancelsOwnerPayToUnknownAddress() (gas: 849603)
+[PASS] test_guardianFreezesButCannotUnfreeze() (gas: 826263)
+[PASS] test_heldMoneyCountsAgainstProtected() (gas: 2369572)
+[PASS] test_heldOutflowStaysUnderTheCeilingInAny24Hours() (gas: 2905624)
+[PASS] test_largeAgentPaymentWaitsThenReleases() (gas: 1378570)
+[PASS] test_lateReleaseCountsFromWhenMoneyLeaves() (gas: 2905681)
+[PASS] test_laterAgentChangeVoidsAnOlderQueuedGrant() (gas: 1176046)
+[PASS] test_laterTighteningVoidsAnOlderQueuedPolicy() (gas: 1162264)
+[PASS] test_looseningWaitsAndTighteningIsInstant() (gas: 1266856)
+[PASS] test_newContactWaits() (gas: 863739)
+[PASS] test_noMidnightDoubleSpend() (gas: 793002)
+[PASS] test_onlyGuardianFreezesVault() (gas: 31999)
+[PASS] test_onlyWithdrawGoesBelowProtected() (gas: 378859)
+[PASS] test_otherKeyIsRejected() (gas: 318497)
+[PASS] test_overPerPaymentIsRefusedOnChain() (gas: 68067)
+[PASS] test_ownerCancelsAHeldPayment() (gas: 1042367)
+[PASS] test_ownerCancelsAQueuedChangeWithPasskey() (gas: 1117589)
+[PASS] test_ownerPayToSavedContactIsInstant() (gas: 791214)
+[PASS] test_ownerPayToUnknownAddressIsQueued() (gas: 891305)
+[PASS] test_ownerPaymentLeavesProtectedAmount() (gas: 764560)
+[PASS] test_ownerPaysWithPasskey() (gas: 429641)
+[PASS] test_passkeyFromAnotherSiteIsRejected() (gas: 74386)
+[PASS] test_paymentCountLimit() (gas: 5935981)
+[PASS] test_predictedAddressMatches() (gas: 33224)
+[PASS] test_protectedAmountIsUntouchable() (gas: 984838)
+[PASS] test_raisingAContactCapWaits() (gas: 1592394)
+[PASS] test_readdedContactCancelsAnOlderHold() (gas: 1738038)
+[PASS] test_releaseCannotBreachARaisedProtectedAmount() (gas: 1763817)
+[PASS] test_releaseMoreThanADayLateIsCancelled() (gas: 953512)
+[PASS] test_removeAndReaddCannotSkipTheUnfreezeDelay() (gas: 846167)
+[PASS] test_removedAgentHeldPaymentIsCancelled() (gas: 1374026)
+[PASS] test_removedContactAddressIsUnknownAgain() (gas: 1147227)
+[PASS] test_removedOwnerKeyVoidsChangesItApproved() (gas: 1713990)
+[PASS] test_replayIsRejected() (gas: 447395)
+[PASS] test_revocationVoidsAnOlderQueuedGrant() (gas: 1248159)
+[PASS] test_setupBatchIsInstantBeforeADelayExists() (gas: 520036)
+[PASS] test_sharedCeilingAcrossAgents() (gas: 1692440)
+[PASS] test_strikesFadeAfterAQuietDay() (gas: 237308)
+[PASS] test_substitutedQueuedPayFailsTheSignature() (gas: 453726)
+[PASS] test_tamperedActionIsRejected() (gas: 82962)
+[PASS] test_unknownAgentReverts() (gas: 37162)
+[PASS] test_unknownContactIsRefused() (gas: 48177)
+[PASS] test_unrelatedChangeLeavesAQueuedGrantValid() (gas: 1187055)
+[PASS] test_userVerificationIsRequired() (gas: 81547)
+[PASS] test_vaultFreezeStopsEveryAgent() (gas: 115509)
+[PASS] test_version() (gas: 5733)
+[PASS] test_windowRollsAfter24Hours() (gas: 792990)
+Suite result: ok. 68 passed; 0 failed; 0 skipped; finished in 168.99ms (295.58ms CPU time)
+
+Ran 1 test for test/PolicyVault.invariant.t.sol:PolicyVaultInvariant
+[PASS]
+PolicyVaultInvariant invariants:
+[PASS] invariant_protectedAmountHolds
+[PASS] invariant_rollingCeilingHolds
+ PolicyVaultInvariant invariants (runs: 128, calls: 8192, reverts: 0)
+
+╭----------+----------+-------+---------+----------╮
+| Contract | Selector | Calls | Reverts | Discards |
++==================================================+
+| Handler  | pay      | 4122  | 0       | 0        |
+|----------+----------+-------+---------+----------|
+| Handler  | wait     | 4070  | 0       | 0        |
+╰----------+----------+-------+---------+----------╯
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 3.69s (3.66s CPU time)
+
+╭----------------------+--------+--------+---------╮
+| Test Suite           | Passed | Failed | Skipped |
++==================================================+
+| AttacksTest          | 9      | 0      | 0       |
+|----------------------+--------+--------+---------|
+| PolicyVaultInvariant | 1      | 0      | 0       |
+|----------------------+--------+--------+---------|
+| PolicyVaultTest      | 44     | 0      | 0       |
+|----------------------+--------+--------+---------|
+| PolicyVaultV3Test    | 68     | 0      | 0       |
+╰----------------------+--------+--------+---------╯
+

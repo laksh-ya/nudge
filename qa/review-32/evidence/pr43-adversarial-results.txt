@@ -1,0 +1,29 @@
+Compiling 1 files with Solc 0.8.30
+Solc 0.8.30 finished in 742.31ms
+Compiler run successful!
+
+Ran 7 tests for test/V3AdversarialReview.t.sol:V3AdversarialReview
+[FAIL: new grant must not revive a previously revoked hold: 8000000 != 0] test_review_agentRegrantDoesNotResurrectOldHold() (gas: 2107973)
+[PASS] test_review_capEnabledAfter17PaymentsCountsAllSpending() (gas: 5964097)
+[FAIL: revocation signed during the defence window must stop the older withdrawal: 250000000 != 0] test_review_keyRevocationProtectsBeforeAttackerQueueMatures() (gas: 1686130)
+[FAIL: agent cannot pay an already owner-paid invoice] test_review_ownerPaidIdCannotBePaidAgainByAgent() (gas: 777146)
+[FAIL: remaining contact is still cooling, owner payment must queue: 3000000 != 0] test_review_removedMatureAliasDoesNotTrustImmatureAlias() (gas: 1572042)
+[FAIL: equal block timestamps must not replace a contact generation check: 8000000 != 0] test_review_sameBlockContactRegrantDoesNotResurrectOldHold() (gas: 1819244)
+[FAIL: Stale()] test_review_strangerCannotInvalidateOwnerQueue() (gas: 875030)
+Suite result: FAILED. 1 passed; 6 failed; 0 skipped; finished in 28.88ms (41.20ms CPU time)
+
+Ran 1 test suite in 40.72ms (28.88ms CPU time): 1 tests passed, 6 failed, 0 skipped (7 total tests)
+
+Failing tests:
+Encountered 6 failing tests in test/V3AdversarialReview.t.sol:V3AdversarialReview
+[FAIL: new grant must not revive a previously revoked hold: 8000000 != 0] test_review_agentRegrantDoesNotResurrectOldHold() (gas: 2107973)
+[FAIL: revocation signed during the defence window must stop the older withdrawal: 250000000 != 0] test_review_keyRevocationProtectsBeforeAttackerQueueMatures() (gas: 1686130)
+[FAIL: agent cannot pay an already owner-paid invoice] test_review_ownerPaidIdCannotBePaidAgainByAgent() (gas: 777146)
+[FAIL: remaining contact is still cooling, owner payment must queue: 3000000 != 0] test_review_removedMatureAliasDoesNotTrustImmatureAlias() (gas: 1572042)
+[FAIL: equal block timestamps must not replace a contact generation check: 8000000 != 0] test_review_sameBlockContactRegrantDoesNotResurrectOldHold() (gas: 1819244)
+[FAIL: Stale()] test_review_strangerCannotInvalidateOwnerQueue() (gas: 875030)
+
+Encountered a total of 6 failing tests, 1 tests succeeded
+
+Tip: Run `forge test --rerun` to retry only the 6 failed tests
+Tip: Run `forge test --debug --match-test <TEST_NAME>` to inspect one failing test in the debugger

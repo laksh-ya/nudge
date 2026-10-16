@@ -1,0 +1,1680 @@
+{
+  "checkedAt": "2026-10-16T05:40:33.578Z",
+  "rpc": "https://sepolia.base.org",
+  "chainId": 84532,
+  "scope": "Receipt and decoded events; does not establish phone/MCP/Telegram provenance or compare every prose claim.",
+  "rows": [
+    {
+      "hash": "0x3e3c79c8dccd4bfb27d16070d19ec2ef2ad5888fb30539f8a8d6ecdd251e975c",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 99,
+          "claim": "| Vault deployed after the owner typed the phone's code | relayer | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151254",
+      "events": [
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "OwnerKeyAdded",
+          "args": {
+            "keyId": "0x014a7f4967fe170861850d7f46284d57e60627a5a8bd05047f4917b23437d3ff"
+          }
+        },
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "PolicyChanged",
+          "args": {
+            "protectedAmount": "50000000",
+            "dailyCeiling": "40000000",
+            "newContactDelay": "86400",
+            "changeDelay": "0",
+            "holdAbove": "0",
+            "holdFor": "0"
+          }
+        },
+        {
+          "address": "0x672dcd9a822030371d017673403edc290c9d8975",
+          "event": "VaultCreated",
+          "args": {
+            "vault": "0xa395739975FD3f66b83CbCf6ad535029e5a94e73",
+            "keyId": "0x014a7f4967fe170861850d7f46284d57e60627a5a8bd05047f4917b23437d3ff",
+            "token": "0xB0ee01235A8e7903519B029c1530332f5847D932"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0x80c2b3f851f0bd97c6351e71c001c999cd668daabb931767a87305e27f318765",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 100,
+          "claim": "| Setup: agents, contacts and rules (2-min loosening delay, holds above $5) | passkey | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151255",
+      "events": [
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "OwnerAction",
+          "args": {
+            "op": 12,
+            "nonce": "5833262842654086891",
+            "keyId": "0x014a7f4967fe170861850d7f46284d57e60627a5a8bd05047f4917b23437d3ff"
+          }
+        },
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "AgentSet",
+          "args": {
+            "agent": "0x356d9445370891b99b6ae0c84a82dd6d94B9ce08",
+            "perPayment": "15000000",
+            "dailyCap": "25000000",
+            "expiresAt": "1821014790"
+          }
+        },
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "AgentSet",
+          "args": {
+            "agent": "0xDb3e785D7A61ba94E689564c408e7639234a3151",
+            "perPayment": "10000000",
+            "dailyCap": "15000000",
+            "expiresAt": "1793885190"
+          }
+        },
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0xd25e1438deb4ffc2f512517754e5d62a1b665c3fb4457465a0027d47256ea66a",
+            "payee": "0x25c0a9C9E552dDC40f8964ADA9B19e889E7870Cd",
+            "activeAt": "1792070798"
+          }
+        },
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0xd9b3f9fe9e62bc8d9c8aca442d4fbed0493b7efd3742d92cc728fb803f55172a",
+            "payee": "0x14590D251053dda381070c857dCf2929EAEb2Bb1",
+            "activeAt": "1792070798"
+          }
+        },
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0x1b73facb2ecd6b2e1dd405a3c3f9b578c6fd5620fef18cbb4de82d862219686c",
+            "payee": "0x7Ef4B87D512aB6c34564a25188eF702f0bACBDce",
+            "activeAt": "1792070798"
+          }
+        },
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0xff28378884ef2dff35c8fc725c511c4ce1c24ec2dfa91da0fd5347c55ba3920c",
+            "payee": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "activeAt": "1792070798"
+          }
+        },
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0xa16d2afe9e28f4c882a943137ad2ab95bbcfede1599863e04ef16e6b032f30ae",
+            "payee": "0x3B9409698E7990bfab8e0d1ae687C0E6e2Dc0d89",
+            "activeAt": "1792070798"
+          }
+        },
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0x6ba48cea6efca67f9a70766f8d8a9d2261762c1078ab376b2ef10bec4394f170",
+            "payee": "0xBa445625aeD3b794FBE42dE84b2B274b3AaBcd98",
+            "activeAt": "1792157198"
+          }
+        },
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "PolicyChanged",
+          "args": {
+            "protectedAmount": "50000000",
+            "dailyCeiling": "40000000",
+            "newContactDelay": "86400",
+            "changeDelay": "120",
+            "holdAbove": "5000000",
+            "holdFor": "120"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0x6e4806e4564247d56b62c66ba8f66058d68283ab5a8d6340583a43a1caca08ca",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 101,
+          "claim": "| Claude pays $3 over MCP, at once | Claude's agent key | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151261",
+      "events": [
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "PaymentExecuted",
+          "args": {
+            "paymentId": "0x021b86725f70a368b30513374a9dcbe8c1a37684de10f2de03715dcded31ea73",
+            "agent": "0xDb3e785D7A61ba94E689564c408e7639234a3151",
+            "contactId": "0xff28378884ef2dff35c8fc725c511c4ce1c24ec2dfa91da0fd5347c55ba3920c",
+            "payee": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "amount": "3000000",
+            "purposeHash": "0xae08cd29d80674e979bcdeec7e66332e11651ae8120177fceb49003a175deb46"
+          }
+        },
+        {
+          "address": "0xb0ee01235a8e7903519b029c1530332f5847d932",
+          "event": "Transfer",
+          "args": {
+            "from": "0xa395739975FD3f66b83CbCf6ad535029e5a94e73",
+            "to": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "value": "3000000"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0xb545a44fbd1961ecbec312c7d53e03bc35d321a7a0130d625d11a5c8a622d6ea",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 102,
+          "claim": "| Claude pays $6: above $5, so the vault holds it | Claude's agent key | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151263",
+      "events": [
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "PaymentHeld",
+          "args": {
+            "paymentId": "0xea9e4dfb660804b18dcba783eb23480b96dc705f03a7be43bb7e7c3f5e1ff8e6",
+            "agent": "0xDb3e785D7A61ba94E689564c408e7639234a3151",
+            "contactId": "0xff28378884ef2dff35c8fc725c511c4ce1c24ec2dfa91da0fd5347c55ba3920c",
+            "payee": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "amount": "6000000",
+            "releaseAt": "1792070934",
+            "purposeHash": "0x7a2582f18af61aad0b8d59b6758d3dda368ef0ec03ee1283e63301c4c1243afb"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0x3c683069bf8fd44283e165b2663e0e819ec6c87563ca4f8262fae92a751faceb",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 103,
+          "claim": "| Held $6 released after the 2-minute window | relayer (`release`) | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151326",
+      "events": [
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "PaymentReleased",
+          "args": {
+            "paymentId": "0xea9e4dfb660804b18dcba783eb23480b96dc705f03a7be43bb7e7c3f5e1ff8e6",
+            "payee": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "amount": "6000000"
+          }
+        },
+        {
+          "address": "0xb0ee01235a8e7903519b029c1530332f5847d932",
+          "event": "Transfer",
+          "args": {
+            "from": "0xa395739975FD3f66b83CbCf6ad535029e5a94e73",
+            "to": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "value": "6000000"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0x85e01b5803549bc26f304aa5617393360b512ee3501555d3e2f4faed2e871676",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 104,
+          "claim": "| Owner approves $12, keeping the protected amount | passkey | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151328",
+      "events": [
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "OwnerAction",
+          "args": {
+            "op": 0,
+            "nonce": "14945403695926399081",
+            "keyId": "0x014a7f4967fe170861850d7f46284d57e60627a5a8bd05047f4917b23437d3ff"
+          }
+        },
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "OwnerPaid",
+          "args": {
+            "paymentId": "0x8985ee490de5efa5fb985d8eebbf89b2a9d810a827b475c90cb33c6443bc89ab",
+            "to": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "amount": "12000000",
+            "nonce": "14945403695926399081"
+          }
+        },
+        {
+          "address": "0xb0ee01235a8e7903519b029c1530332f5847d932",
+          "event": "Transfer",
+          "args": {
+            "from": "0xa395739975FD3f66b83CbCf6ad535029e5a94e73",
+            "to": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "value": "12000000"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0x3981ea8efdec559f3b322b737353f82a52ff908df87621f7964263ec05bfc176",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 105,
+          "claim": "| Stolen key tries $50: refused, code 2003 | agent key, bypassing our server | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151334",
+      "events": [
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "PaymentRefused",
+          "args": {
+            "paymentId": "0x1cd49a0f577a16ea3418dff3d10280abe7a33db751266bc9b3c3b106f10b03a5",
+            "agent": "0xDb3e785D7A61ba94E689564c408e7639234a3151",
+            "contactId": "0xff28378884ef2dff35c8fc725c511c4ce1c24ec2dfa91da0fd5347c55ba3920c",
+            "amount": "50000000",
+            "code": 2003
+          }
+        },
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "Struck",
+          "args": {
+            "agent": "0xDb3e785D7A61ba94E689564c408e7639234a3151",
+            "strikes": 1
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0x8022158ee900c5df2a8174162724283dc71e416555f9a2faeb95b5d7ca5a3811",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 106,
+          "claim": "| Stolen key reuses a paid payment id: refused, code 2007 | agent key | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151335",
+      "events": [
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "PaymentRefused",
+          "args": {
+            "paymentId": "0x8985ee490de5efa5fb985d8eebbf89b2a9d810a827b475c90cb33c6443bc89ab",
+            "agent": "0xDb3e785D7A61ba94E689564c408e7639234a3151",
+            "contactId": "0xff28378884ef2dff35c8fc725c511c4ce1c24ec2dfa91da0fd5347c55ba3920c",
+            "amount": "3000000",
+            "code": 2007
+          }
+        },
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "Struck",
+          "args": {
+            "agent": "0xDb3e785D7A61ba94E689564c408e7639234a3151",
+            "strikes": 2
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0xaf60bc92578e76687ae5ab26ea1924e4e0a6c8221c69f0be036113f130e3fea1",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 107,
+          "claim": "| Stolen key pays an unknown contact: refused, code 2010 | agent key | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151336",
+      "events": [
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "PaymentRefused",
+          "args": {
+            "paymentId": "0x3e5385818d64837c8314a464b13a0ba7b445b6e0ca12aea79e7f291c25f4845f",
+            "agent": "0xDb3e785D7A61ba94E689564c408e7639234a3151",
+            "contactId": "0x0a4e4f89149ca0518577a94990bda97c0dc21a5ce1f465912d70a36ca1b6cf8d",
+            "amount": "1000000",
+            "code": 2010
+          }
+        },
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "Struck",
+          "args": {
+            "agent": "0xDb3e785D7A61ba94E689564c408e7639234a3151",
+            "strikes": 3
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0xf07a86b4f0113f748cdd2c4794f1d692d7d3d79a43d5d5df384d1c1f9ec4e57e",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 108,
+          "claim": "| Fourth refusal | agent key | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151337",
+      "events": [
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "PaymentRefused",
+          "args": {
+            "paymentId": "0x7afb7aeec5227f4ba832f1ffec955b2d7642ed3727e4b535fb4e91999b8da784",
+            "agent": "0xDb3e785D7A61ba94E689564c408e7639234a3151",
+            "contactId": "0xff28378884ef2dff35c8fc725c511c4ce1c24ec2dfa91da0fd5347c55ba3920c",
+            "amount": "50000000",
+            "code": 2003
+          }
+        },
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "Struck",
+          "args": {
+            "agent": "0xDb3e785D7A61ba94E689564c408e7639234a3151",
+            "strikes": 4
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0x8558f8a6b677bdbc6ecfde942e8b78a7804eca39b595f1373b5ca85f9286d0ae",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 109,
+          "claim": "| Fifth refusal: the vault freezes that key itself | agent key | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151338",
+      "events": [
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "PaymentRefused",
+          "args": {
+            "paymentId": "0xe91dec10f94d3f920d5f1e2f64b2141c966b73186997fbb33290dae6a2e3ed6d",
+            "agent": "0xDb3e785D7A61ba94E689564c408e7639234a3151",
+            "contactId": "0xff28378884ef2dff35c8fc725c511c4ce1c24ec2dfa91da0fd5347c55ba3920c",
+            "amount": "50000000",
+            "code": 2003
+          }
+        },
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "Struck",
+          "args": {
+            "agent": "0xDb3e785D7A61ba94E689564c408e7639234a3151",
+            "strikes": 5
+          }
+        },
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "Frozen",
+          "args": {
+            "agent": "0xDb3e785D7A61ba94E689564c408e7639234a3151",
+            "by": "0xa395739975FD3f66b83CbCf6ad535029e5a94e73"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0xfbd828ef01f27fbad3c8acbf6c04bbb54d917c0efc6169599c6717d13f70f803",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 110,
+          "claim": "| Owner signs an unfreeze: queued, not applied | passkey | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151341",
+      "events": [
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "OwnerAction",
+          "args": {
+            "op": 6,
+            "nonce": "5930773482056791996",
+            "keyId": "0x014a7f4967fe170861850d7f46284d57e60627a5a8bd05047f4917b23437d3ff"
+          }
+        },
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "ChangeQueued",
+          "args": {
+            "changeId": "0x2d8b574765a7bf2d967fceadf6700ecb8c1e30e64eff5d344d02d065f1b5bba4",
+            "op": 6,
+            "nonce": "5930773482056791996",
+            "readyAt": "1792071090"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0x8ddbdbd817fe4fb900c4e1e67820a85f2a97846b8bd8d8f4c9153fccfc02807c",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 111,
+          "claim": "| Unfreeze applied after the 2-minute delay | relayer (`finalize`) | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151405",
+      "events": [
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "ChangeApplied",
+          "args": {
+            "changeId": "0x2d8b574765a7bf2d967fceadf6700ecb8c1e30e64eff5d344d02d065f1b5bba4"
+          }
+        },
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "Unfrozen",
+          "args": {
+            "agent": "0xDb3e785D7A61ba94E689564c408e7639234a3151"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0x569ff39695b5c1a1fe62275302f584f2a67f1c7a286520d82d95657266d31979",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 112,
+          "claim": "| Disconnected agent's key removed from the vault | passkey | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151413",
+      "events": [
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "OwnerAction",
+          "args": {
+            "op": 2,
+            "nonce": "9576579447578736180",
+            "keyId": "0x014a7f4967fe170861850d7f46284d57e60627a5a8bd05047f4917b23437d3ff"
+          }
+        },
+        {
+          "address": "0xa395739975fd3f66b83cbcf6ad535029e5a94e73",
+          "event": "AgentRemoved",
+          "args": {
+            "agent": "0xDb3e785D7A61ba94E689564c408e7639234a3151"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0x79a892af8886faaec747e795faf204894f797aefe219ca608406009afd47851f",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 118,
+          "claim": "| Vault deployed for the confirmed phone passkey | relayer | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151514",
+      "events": [
+        {
+          "address": "0x5169e18e11682316978bddc430a781f62d586284",
+          "event": "OwnerKeyAdded",
+          "args": {
+            "keyId": "0x9b7cd00930858d08d521b5f3cffe5bdf0d6e5887ca37f29a01d044039b7ac64f"
+          }
+        },
+        {
+          "address": "0x5169e18e11682316978bddc430a781f62d586284",
+          "event": "PolicyChanged",
+          "args": {
+            "protectedAmount": "50000000",
+            "dailyCeiling": "40000000",
+            "newContactDelay": "86400",
+            "changeDelay": "0",
+            "holdAbove": "0",
+            "holdFor": "0"
+          }
+        },
+        {
+          "address": "0x672dcd9a822030371d017673403edc290c9d8975",
+          "event": "VaultCreated",
+          "args": {
+            "vault": "0x5169E18E11682316978BDdc430a781f62d586284",
+            "keyId": "0x9b7cd00930858d08d521b5f3cffe5bdf0d6e5887ca37f29a01d044039b7ac64f",
+            "token": "0xB0ee01235A8e7903519B029c1530332f5847D932"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0x00c3e632d88f6c83d038c9c44aff118d80cb07f8aa089d23b1e76b2b413d9eac",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 119,
+          "claim": "| Setup: agents, contacts and rules | phone passkey | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151520",
+      "events": [
+        {
+          "address": "0x5169e18e11682316978bddc430a781f62d586284",
+          "event": "OwnerAction",
+          "args": {
+            "op": 12,
+            "nonce": "16090461283229986871",
+            "keyId": "0x9b7cd00930858d08d521b5f3cffe5bdf0d6e5887ca37f29a01d044039b7ac64f"
+          }
+        },
+        {
+          "address": "0x5169e18e11682316978bddc430a781f62d586284",
+          "event": "AgentSet",
+          "args": {
+            "agent": "0x595e8352fd6902026212343068EFAcF7F6be9D89",
+            "perPayment": "15000000",
+            "dailyCap": "25000000",
+            "expiresAt": "1821015214"
+          }
+        },
+        {
+          "address": "0x5169e18e11682316978bddc430a781f62d586284",
+          "event": "AgentSet",
+          "args": {
+            "agent": "0xCF7F747ED7B4C7De72784f2aC36231f48C403A86",
+            "perPayment": "10000000",
+            "dailyCap": "15000000",
+            "expiresAt": "1793885614"
+          }
+        },
+        {
+          "address": "0x5169e18e11682316978bddc430a781f62d586284",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0xc9c7457aac31f767aa4bf689dd2efcf2a4b5252a248128346418b5b379a36dd6",
+            "payee": "0x25c0a9C9E552dDC40f8964ADA9B19e889E7870Cd",
+            "activeAt": "1792071328"
+          }
+        },
+        {
+          "address": "0x5169e18e11682316978bddc430a781f62d586284",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0xaeb1aa45ca0af8fe46f28cc4c7dbaa017bfa613e64dcfbe908881db87a784186",
+            "payee": "0x14590D251053dda381070c857dCf2929EAEb2Bb1",
+            "activeAt": "1792071328"
+          }
+        },
+        {
+          "address": "0x5169e18e11682316978bddc430a781f62d586284",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0xc058ea582357456c91a7b15142473d486baad58c77e8f252673785414f41f69a",
+            "payee": "0x7Ef4B87D512aB6c34564a25188eF702f0bACBDce",
+            "activeAt": "1792071328"
+          }
+        },
+        {
+          "address": "0x5169e18e11682316978bddc430a781f62d586284",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0x7fd6966d9ac5fe690868aff7723cfd9cd38618b1cae747ccd89207d8815e2144",
+            "payee": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "activeAt": "1792071328"
+          }
+        },
+        {
+          "address": "0x5169e18e11682316978bddc430a781f62d586284",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0x6b067fdfdca7d2c82ca5854e75dd8b75b96694516d13aa6b20ba1fce1bbb3e3a",
+            "payee": "0x3B9409698E7990bfab8e0d1ae687C0E6e2Dc0d89",
+            "activeAt": "1792071328"
+          }
+        },
+        {
+          "address": "0x5169e18e11682316978bddc430a781f62d586284",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0xc89a5ca370e8ad4ab4ec7097c2422a708bcc78b64d18b315b275997a5b520dd7",
+            "payee": "0xBa445625aeD3b794FBE42dE84b2B274b3AaBcd98",
+            "activeAt": "1792157728"
+          }
+        },
+        {
+          "address": "0x5169e18e11682316978bddc430a781f62d586284",
+          "event": "PolicyChanged",
+          "args": {
+            "protectedAmount": "50000000",
+            "dailyCeiling": "40000000",
+            "newContactDelay": "86400",
+            "changeDelay": "120",
+            "holdAbove": "5000000",
+            "holdFor": "120"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0x6977e3957d2d1ba4562410b6235ff71f3fd2a6c0e0fb3ecc517b28660683886b",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 120,
+          "claim": "| Claude pays $3 over MCP, at once | Claude's agent key | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151557",
+      "events": [
+        {
+          "address": "0x5169e18e11682316978bddc430a781f62d586284",
+          "event": "PaymentExecuted",
+          "args": {
+            "paymentId": "0xc08766dafd5bcbc44c8014eb515baa8f7f2352dd0d0daec9a7f706a3df71c060",
+            "agent": "0xCF7F747ED7B4C7De72784f2aC36231f48C403A86",
+            "contactId": "0x7fd6966d9ac5fe690868aff7723cfd9cd38618b1cae747ccd89207d8815e2144",
+            "payee": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "amount": "3000000",
+            "purposeHash": "0xc4af5641cd75e794eca316200f289610182a1852d165a4c4d584e443a503d30c"
+          }
+        },
+        {
+          "address": "0xb0ee01235a8e7903519b029c1530332f5847d932",
+          "event": "Transfer",
+          "args": {
+            "from": "0x5169E18E11682316978BDdc430a781f62d586284",
+            "to": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "value": "3000000"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0xddf143e6270ef3dfca7a89a0416873c4cc1bb3901b687bcea058248b133a5d5f",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 121,
+          "claim": "| Claude pays $8: above $5, so the vault holds it | Claude's agent key | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151563",
+      "events": [
+        {
+          "address": "0x5169e18e11682316978bddc430a781f62d586284",
+          "event": "PaymentHeld",
+          "args": {
+            "paymentId": "0x196cbaabf961019b9939b51aa3a3991ddaabd022189e89638430e39b45be3184",
+            "agent": "0xCF7F747ED7B4C7De72784f2aC36231f48C403A86",
+            "contactId": "0x7fd6966d9ac5fe690868aff7723cfd9cd38618b1cae747ccd89207d8815e2144",
+            "payee": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "amount": "8000000",
+            "releaseAt": "1792071534",
+            "purposeHash": "0xe2c23b2a576b1fd09edc0d60735f8e25f46d3f7a5ffb38f7bc39e24eac197bfc"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0x14e713bf678a85b00eca778e047d907d45127c0702e4245ae7826162a5eb5fb2",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 122,
+          "claim": "| Held $8 released after 2 minutes | relayer (`release`) | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151626",
+      "events": [
+        {
+          "address": "0x5169e18e11682316978bddc430a781f62d586284",
+          "event": "PaymentReleased",
+          "args": {
+            "paymentId": "0x196cbaabf961019b9939b51aa3a3991ddaabd022189e89638430e39b45be3184",
+            "payee": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "amount": "8000000"
+          }
+        },
+        {
+          "address": "0xb0ee01235a8e7903519b029c1530332f5847d932",
+          "event": "Transfer",
+          "args": {
+            "from": "0x5169E18E11682316978BDdc430a781f62d586284",
+            "to": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "value": "8000000"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0xb671f42d4bffae21aeff37ce9edf82740b7cb5543467ccffa74ed4b9acc6fce1",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 123,
+          "claim": "| Claude asks for $12, over its $10 limit; owner approves on the phone | phone passkey | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151624",
+      "events": [
+        {
+          "address": "0x5169e18e11682316978bddc430a781f62d586284",
+          "event": "OwnerAction",
+          "args": {
+            "op": 0,
+            "nonce": "14864356749966614335",
+            "keyId": "0x9b7cd00930858d08d521b5f3cffe5bdf0d6e5887ca37f29a01d044039b7ac64f"
+          }
+        },
+        {
+          "address": "0x5169e18e11682316978bddc430a781f62d586284",
+          "event": "OwnerPaid",
+          "args": {
+            "paymentId": "0x8b5c3cbd19c958dd9111ec83798c9b867d9c79ecb11b9a303b35e3fa06ed0744",
+            "to": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "amount": "12000000",
+            "nonce": "14864356749966614335"
+          }
+        },
+        {
+          "address": "0xb0ee01235a8e7903519b029c1530332f5847d932",
+          "event": "Transfer",
+          "args": {
+            "from": "0x5169E18E11682316978BDdc430a781f62d586284",
+            "to": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "value": "12000000"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0x156869e9977d19e8d6f3b6dcbe7af21b6047c32b6107151547e360f677cb5c6e",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 129,
+          "claim": "| v2 vault deployed for the existing phone passkey | relayer | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151885",
+      "events": [
+        {
+          "address": "0xc9746222bdf0959b8ce3ce0f21c26c7c217f1eb1",
+          "event": "OwnerKeyAdded",
+          "args": {
+            "keyId": "0xa002ba7a2a107c1f781747308c88bd6ec3ac1fda7ae1fd449bec93d741878e53"
+          }
+        },
+        {
+          "address": "0xc9746222bdf0959b8ce3ce0f21c26c7c217f1eb1",
+          "event": "PolicyChanged",
+          "args": {
+            "protectedAmount": "50000000",
+            "dailyCeiling": "40000000",
+            "newContactDelay": "86400",
+            "changeDelay": "0",
+            "holdAbove": "0",
+            "holdFor": "0"
+          }
+        },
+        {
+          "address": "0x672dcd9a822030371d017673403edc290c9d8975",
+          "event": "VaultCreated",
+          "args": {
+            "vault": "0xC9746222bdf0959B8ce3cE0F21C26c7c217f1EB1",
+            "keyId": "0xa002ba7a2a107c1f781747308c88bd6ec3ac1fda7ae1fd449bec93d741878e53",
+            "token": "0xB0ee01235A8e7903519B029c1530332f5847D932"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0xa8ba0f394c0244ff3ae90234b21eab6ecf43413ba31a7c429bc90ff0cda84f9b",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 130,
+          "claim": "| Setup: agents, contacts and rules | phone passkey | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151889",
+      "events": [
+        {
+          "address": "0xc9746222bdf0959b8ce3ce0f21c26c7c217f1eb1",
+          "event": "OwnerAction",
+          "args": {
+            "op": 12,
+            "nonce": "11002753274311335391",
+            "keyId": "0xa002ba7a2a107c1f781747308c88bd6ec3ac1fda7ae1fd449bec93d741878e53"
+          }
+        },
+        {
+          "address": "0xc9746222bdf0959b8ce3ce0f21c26c7c217f1eb1",
+          "event": "AgentSet",
+          "args": {
+            "agent": "0x2831b0b66e87d177b36Ee3556b5d3Bc566116Bb9",
+            "perPayment": "15000000",
+            "dailyCap": "25000000",
+            "expiresAt": "1820996594"
+          }
+        },
+        {
+          "address": "0xc9746222bdf0959b8ce3ce0f21c26c7c217f1eb1",
+          "event": "AgentSet",
+          "args": {
+            "agent": "0xCbF00A941D2B157bdBB0ebe6116b9aed466D814E",
+            "perPayment": "10000000",
+            "dailyCap": "15000000",
+            "expiresAt": "1793866994"
+          }
+        },
+        {
+          "address": "0xc9746222bdf0959b8ce3ce0f21c26c7c217f1eb1",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0x0f3452c2f64fd63a0a8022cdd8855245c0180aa96f409b2e21b2aeb5dc25b90d",
+            "payee": "0x25c0a9C9E552dDC40f8964ADA9B19e889E7870Cd",
+            "activeAt": "1792072066"
+          }
+        },
+        {
+          "address": "0xc9746222bdf0959b8ce3ce0f21c26c7c217f1eb1",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0x347386068dc1201179a8da66eaaf6dfbda07ea59f841bca85ffb7723ec81b071",
+            "payee": "0x14590D251053dda381070c857dCf2929EAEb2Bb1",
+            "activeAt": "1792072066"
+          }
+        },
+        {
+          "address": "0xc9746222bdf0959b8ce3ce0f21c26c7c217f1eb1",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0xff6cecf2e1ea3e37a424ef6024ba70f67cb616b0c5430c845c5723a8f1370e8b",
+            "payee": "0x7Ef4B87D512aB6c34564a25188eF702f0bACBDce",
+            "activeAt": "1792072066"
+          }
+        },
+        {
+          "address": "0xc9746222bdf0959b8ce3ce0f21c26c7c217f1eb1",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0x077a7bf18c2e57ca98c16f0c91292add5d1fa7e1a25d9e8024ec80d0fe9b72c6",
+            "payee": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "activeAt": "1792072066"
+          }
+        },
+        {
+          "address": "0xc9746222bdf0959b8ce3ce0f21c26c7c217f1eb1",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0x64dec741bf9e4a5dbe1fd7ba255bf79b5547201fd8e197099da5066619a9bceb",
+            "payee": "0x3B9409698E7990bfab8e0d1ae687C0E6e2Dc0d89",
+            "activeAt": "1792072066"
+          }
+        },
+        {
+          "address": "0xc9746222bdf0959b8ce3ce0f21c26c7c217f1eb1",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0x05618c03428540b3b94fc480ad02226525693d1ad2ac058238dcb4851f15c0cd",
+            "payee": "0xBa445625aeD3b794FBE42dE84b2B274b3AaBcd98",
+            "activeAt": "1792158466"
+          }
+        },
+        {
+          "address": "0xc9746222bdf0959b8ce3ce0f21c26c7c217f1eb1",
+          "event": "PolicyChanged",
+          "args": {
+            "protectedAmount": "50000000",
+            "dailyCeiling": "40000000",
+            "newContactDelay": "86400",
+            "changeDelay": "120",
+            "holdAbove": "5000000",
+            "holdFor": "120"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0x615d6621f0e186cb9870e533b6df0a8a26395d5c2f62b256d09e72bb5aa8a539",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 131,
+          "claim": "| Claude pays $3 over MCP, at once | Claude's agent key | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151907",
+      "events": [
+        {
+          "address": "0xc9746222bdf0959b8ce3ce0f21c26c7c217f1eb1",
+          "event": "PaymentExecuted",
+          "args": {
+            "paymentId": "0x67ad4f94a428925fa1b163387f6762a1e9c7678b0ab4cc6ac21567af599fd6da",
+            "agent": "0xCbF00A941D2B157bdBB0ebe6116b9aed466D814E",
+            "contactId": "0x077a7bf18c2e57ca98c16f0c91292add5d1fa7e1a25d9e8024ec80d0fe9b72c6",
+            "payee": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "amount": "3000000",
+            "purposeHash": "0x65209dc209e29e3b821db5d51443fbba97588eee118cb95c6d416bfa86ee1c9c"
+          }
+        },
+        {
+          "address": "0xb0ee01235a8e7903519b029c1530332f5847d932",
+          "event": "Transfer",
+          "args": {
+            "from": "0xC9746222bdf0959B8ce3cE0F21C26c7c217f1EB1",
+            "to": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "value": "3000000"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0xbedd4d5f1d10c155300394e618ee297f63c762bb42ed4a5576932371ff014b50",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 132,
+          "claim": "| Claude pays $8: held for 2 minutes | Claude's agent key | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151908",
+      "events": [
+        {
+          "address": "0xc9746222bdf0959b8ce3ce0f21c26c7c217f1eb1",
+          "event": "PaymentHeld",
+          "args": {
+            "paymentId": "0x6be7fe572143781e825be58edecee4751963095fa64d91b2ccda5bf884817db1",
+            "agent": "0xCbF00A941D2B157bdBB0ebe6116b9aed466D814E",
+            "contactId": "0x077a7bf18c2e57ca98c16f0c91292add5d1fa7e1a25d9e8024ec80d0fe9b72c6",
+            "payee": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "amount": "8000000",
+            "releaseAt": "1792072224",
+            "purposeHash": "0x1abde0b94af39413ece1cda6216bef46fe01ac8ebb537121523968160dcae774"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0x79f7dd41d37521a8402c3e8cb65d6876ba443c91ab394777b9905c909c3900e4",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 133,
+          "claim": "| Held $8 released | relayer (`release`) | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151972",
+      "events": [
+        {
+          "address": "0xc9746222bdf0959b8ce3ce0f21c26c7c217f1eb1",
+          "event": "PaymentReleased",
+          "args": {
+            "paymentId": "0x6be7fe572143781e825be58edecee4751963095fa64d91b2ccda5bf884817db1",
+            "payee": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "amount": "8000000"
+          }
+        },
+        {
+          "address": "0xb0ee01235a8e7903519b029c1530332f5847d932",
+          "event": "Transfer",
+          "args": {
+            "from": "0xC9746222bdf0959B8ce3cE0F21C26c7c217f1EB1",
+            "to": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "value": "8000000"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0xcda7773e0408da8e958bddbff7ec595a91587221e02a08120ec6135de99a8be9",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 134,
+          "claim": "| Claude asks for $12, over its $10 limit; owner approves on the phone | phone passkey | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48151925",
+      "events": [
+        {
+          "address": "0xc9746222bdf0959b8ce3ce0f21c26c7c217f1eb1",
+          "event": "OwnerAction",
+          "args": {
+            "op": 0,
+            "nonce": "217418311462677791",
+            "keyId": "0xa002ba7a2a107c1f781747308c88bd6ec3ac1fda7ae1fd449bec93d741878e53"
+          }
+        },
+        {
+          "address": "0xc9746222bdf0959b8ce3ce0f21c26c7c217f1eb1",
+          "event": "OwnerPaid",
+          "args": {
+            "paymentId": "0x5939ea1d6539476eb72a785ce11f312f91f027274991b3b89187798a2c4fb37e",
+            "to": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "amount": "12000000",
+            "nonce": "217418311462677791"
+          }
+        },
+        {
+          "address": "0xb0ee01235a8e7903519b029c1530332f5847d932",
+          "event": "Transfer",
+          "args": {
+            "from": "0xC9746222bdf0959B8ce3cE0F21C26c7c217f1EB1",
+            "to": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "value": "12000000"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0x33c12bbce3cb6ebf32b6972302af3ea697eb2eda10565ed0d3fe2836b8f1aeae",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 135,
+          "claim": "| Claude asks for $12 again; the approval arrives in Telegram and the owner approves from it | phone passkey | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48160717",
+      "events": [
+        {
+          "address": "0xc9746222bdf0959b8ce3ce0f21c26c7c217f1eb1",
+          "event": "OwnerAction",
+          "args": {
+            "op": 0,
+            "nonce": "420741345944326",
+            "keyId": "0xa002ba7a2a107c1f781747308c88bd6ec3ac1fda7ae1fd449bec93d741878e53"
+          }
+        },
+        {
+          "address": "0xc9746222bdf0959b8ce3ce0f21c26c7c217f1eb1",
+          "event": "OwnerPaid",
+          "args": {
+            "paymentId": "0xe7fc568387c4c5c1c4d374633b79e1ea708eeb5a1905c2747770831fcc95ea01",
+            "to": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "amount": "12000000",
+            "nonce": "420741345944326"
+          }
+        },
+        {
+          "address": "0xb0ee01235a8e7903519b029c1530332f5847d932",
+          "event": "Transfer",
+          "args": {
+            "from": "0xC9746222bdf0959B8ce3cE0F21C26c7c217f1EB1",
+            "to": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "value": "12000000"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0xd2056b7302cdbd68a40d40be9b47a72887a9f5177b20a07016d35c1221f3ff3e",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 141,
+          "claim": "| Vault deployed for the passkey | relayer | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48147366",
+      "events": [
+        {
+          "address": "0xc6299cfc10366cbd576affc13a6f0440413d3510",
+          "event": "OwnerKeyAdded",
+          "args": {
+            "keyId": "0xd29f377269697bb27ecf42d3cebf9cab3511a5054b979de0df5d4acc2e06ad67"
+          }
+        },
+        {
+          "address": "0x223c60baa1c2efcd0f95b0d73e51d6de9460baa9",
+          "event": "VaultCreated",
+          "args": {
+            "vault": "0xC6299CFc10366cBD576AFFc13a6f0440413d3510",
+            "keyId": "0xd29f377269697bb27ecf42d3cebf9cab3511a5054b979de0df5d4acc2e06ad67",
+            "token": "0xB0ee01235A8e7903519B029c1530332f5847D932"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0x089acf28e2a84fa0dfc0497cdffa6cc4c4c10b33a887532575b094eb2091db25",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 142,
+          "claim": "| Setup: 2 agents and 6 contacts in one approval | passkey | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48147438",
+      "events": [
+        {
+          "address": "0xc6299cfc10366cbd576affc13a6f0440413d3510",
+          "event": "OwnerAction",
+          "args": {
+            "op": 10,
+            "nonce": "15113242495003859342",
+            "keyId": "0xd29f377269697bb27ecf42d3cebf9cab3511a5054b979de0df5d4acc2e06ad67"
+          }
+        },
+        {
+          "address": "0xc6299cfc10366cbd576affc13a6f0440413d3510",
+          "event": "AgentSet",
+          "args": {
+            "agent": "0x4585ac67E66F4c7eE1dD3C42587e010060E78642",
+            "perPayment": "15000000",
+            "dailyCap": "25000000",
+            "expiresAt": "1821007017"
+          }
+        },
+        {
+          "address": "0xc6299cfc10366cbd576affc13a6f0440413d3510",
+          "event": "AgentSet",
+          "args": {
+            "agent": "0x45C57A093537b19D18Fdb02AC5e113b5045140A8",
+            "perPayment": "10000000",
+            "dailyCap": "15000000",
+            "expiresAt": "1793877417"
+          }
+        },
+        {
+          "address": "0xc6299cfc10366cbd576affc13a6f0440413d3510",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0xc541a86caf5c0f8a7713676de52912c1f8ef01c5adbd09e4b9109a52f0fb8e17",
+            "payee": "0x25c0a9C9E552dDC40f8964ADA9B19e889E7870Cd",
+            "activeAt": "1792063164"
+          }
+        },
+        {
+          "address": "0xc6299cfc10366cbd576affc13a6f0440413d3510",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0x0832444a779f3421c95f4596d7a3570b7636754124a69b1ca46cf8cd0da2c0c8",
+            "payee": "0x14590D251053dda381070c857dCf2929EAEb2Bb1",
+            "activeAt": "1792063164"
+          }
+        },
+        {
+          "address": "0xc6299cfc10366cbd576affc13a6f0440413d3510",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0xdaa0c417a6e5f9d865c173768a10eea48d97c2aa2b1bba4eda3bd22d3345d02e",
+            "payee": "0x7Ef4B87D512aB6c34564a25188eF702f0bACBDce",
+            "activeAt": "1792063164"
+          }
+        },
+        {
+          "address": "0xc6299cfc10366cbd576affc13a6f0440413d3510",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0x47a66e377d3a38db224ec0d39dd1afd088a6da4422abe7f5219f92bcd11bc800",
+            "payee": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "activeAt": "1792063164"
+          }
+        },
+        {
+          "address": "0xc6299cfc10366cbd576affc13a6f0440413d3510",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0x9f877fd205633f6910defb94b32fd6e1938321bedd033df2161fab711ed69706",
+            "payee": "0x3B9409698E7990bfab8e0d1ae687C0E6e2Dc0d89",
+            "activeAt": "1792063164"
+          }
+        },
+        {
+          "address": "0xc6299cfc10366cbd576affc13a6f0440413d3510",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0x08285a7cb3d9ed18425cfe7e31982f94e0ed34bc2314f6701023f85dd3d3e933",
+            "payee": "0xBa445625aeD3b794FBE42dE84b2B274b3AaBcd98",
+            "activeAt": "1792149564"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0xde9860d4c13782b76ae2532001dd75447025eb131b2e2e25c28c4f3f338a326b",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 143,
+          "claim": "| Claude pays Blue Tokai $8 within its limits | Claude's agent key | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48147441",
+      "events": [
+        {
+          "address": "0xc6299cfc10366cbd576affc13a6f0440413d3510",
+          "event": "PaymentExecuted",
+          "args": {
+            "paymentId": "0x675a5e25d4343dfa4691fccc58e3c6ca7e2f37a6ef6ee7fa8e54b159ea985b9f",
+            "agent": "0x45C57A093537b19D18Fdb02AC5e113b5045140A8",
+            "contactId": "0x47a66e377d3a38db224ec0d39dd1afd088a6da4422abe7f5219f92bcd11bc800",
+            "payee": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "amount": "8000000",
+            "purposeHash": "0x715be48cb30b1d55380b7c28f3ea360194fbf8c735b41570f3317be872881ff8"
+          }
+        },
+        {
+          "address": "0xb0ee01235a8e7903519b029c1530332f5847d932",
+          "event": "Transfer",
+          "args": {
+            "from": "0xC6299CFc10366cBD576AFFc13a6f0440413d3510",
+            "to": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "value": "8000000"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0xb7272497d2e05893a692decdfdbafc13cb3f165f2b13536f44ecce98962e60f1",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 144,
+          "claim": "| Claude asks for $18, over its limit; owner approves | passkey | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48147442",
+      "events": [
+        {
+          "address": "0xc6299cfc10366cbd576affc13a6f0440413d3510",
+          "event": "OwnerAction",
+          "args": {
+            "op": 0,
+            "nonce": "14175529295015197945",
+            "keyId": "0xd29f377269697bb27ecf42d3cebf9cab3511a5054b979de0df5d4acc2e06ad67"
+          }
+        },
+        {
+          "address": "0xc6299cfc10366cbd576affc13a6f0440413d3510",
+          "event": "OwnerPaid",
+          "args": {
+            "paymentId": "0x3f8d53b9a1b6ef3a04376d0cfe36213fc379ad7b4b27493fcd066cb59bd9484a",
+            "to": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "amount": "18000000",
+            "nonce": "14175529295015197945"
+          }
+        },
+        {
+          "address": "0xb0ee01235a8e7903519b029c1530332f5847d932",
+          "event": "Transfer",
+          "args": {
+            "from": "0xC6299CFc10366cBD576AFFc13a6f0440413d3510",
+            "to": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "value": "18000000"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0xe404d5f31ed429ef92a2bba13e5fc998d787631f96be9024fa3e58b9a1042cb4",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 145,
+          "claim": "| Stolen agent key tries $50: refused, code 2003 | agent key, bypassing our server | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48147446",
+      "events": [
+        {
+          "address": "0xc6299cfc10366cbd576affc13a6f0440413d3510",
+          "event": "PaymentRefused",
+          "args": {
+            "paymentId": "0x1cd49a0f577a16ea3418dff3d10280abe7a33db751266bc9b3c3b106f10b03a5",
+            "agent": "0x45C57A093537b19D18Fdb02AC5e113b5045140A8",
+            "contactId": "0x47a66e377d3a38db224ec0d39dd1afd088a6da4422abe7f5219f92bcd11bc800",
+            "amount": "50000000",
+            "code": 2003
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0xb2c2e2688c9d51e2c806f7db8698de39da993c96eddea5ddab7bbc47b90ec8f5",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 146,
+          "claim": "| Stolen key reuses an earlier payment's id (the owner-approved $18): refused, code 2007 | agent key | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48147447",
+      "events": [
+        {
+          "address": "0xc6299cfc10366cbd576affc13a6f0440413d3510",
+          "event": "PaymentRefused",
+          "args": {
+            "paymentId": "0x3f8d53b9a1b6ef3a04376d0cfe36213fc379ad7b4b27493fcd066cb59bd9484a",
+            "agent": "0x45C57A093537b19D18Fdb02AC5e113b5045140A8",
+            "contactId": "0x47a66e377d3a38db224ec0d39dd1afd088a6da4422abe7f5219f92bcd11bc800",
+            "amount": "8000000",
+            "code": 2007
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0xeaa83ddf0b52937c27ce0331bf23cbfdff1526aa3e0ad9d75ad715b73dc956df",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 147,
+          "claim": "| Stolen key pays an unknown address: refused, code 2010 | agent key | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48147448",
+      "events": [
+        {
+          "address": "0xc6299cfc10366cbd576affc13a6f0440413d3510",
+          "event": "PaymentRefused",
+          "args": {
+            "paymentId": "0x3e5385818d64837c8314a464b13a0ba7b445b6e0ca12aea79e7f291c25f4845f",
+            "agent": "0x45C57A093537b19D18Fdb02AC5e113b5045140A8",
+            "contactId": "0x0a4e4f89149ca0518577a94990bda97c0dc21a5ce1f465912d70a36ca1b6cf8d",
+            "amount": "1000000",
+            "code": 2010
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0x676a0fc216a827a04f2102aae61f8aec54ea124883974c847ed23bb11e5b7a4e",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 148,
+          "claim": "| Guardian freezes Claude in the vault | relayer (can only tighten) | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48147449",
+      "events": [
+        {
+          "address": "0xc6299cfc10366cbd576affc13a6f0440413d3510",
+          "event": "Frozen",
+          "args": {
+            "agent": "0x45C57A093537b19D18Fdb02AC5e113b5045140A8",
+            "by": "0x543D5327b9b80904d26e229777B0E8b37EE95170"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0x8e27c5a2fb9e57142c21d09ead9fd25b40acbfb730c02150ec94385b2f91e12a",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 149,
+          "claim": "| Owner unfreezes Claude | passkey | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48147450",
+      "events": [
+        {
+          "address": "0xc6299cfc10366cbd576affc13a6f0440413d3510",
+          "event": "OwnerAction",
+          "args": {
+            "op": 6,
+            "nonce": "6388231497265633295",
+            "keyId": "0xd29f377269697bb27ecf42d3cebf9cab3511a5054b979de0df5d4acc2e06ad67"
+          }
+        },
+        {
+          "address": "0xc6299cfc10366cbd576affc13a6f0440413d3510",
+          "event": "Unfrozen",
+          "args": {
+            "agent": "0x45C57A093537b19D18Fdb02AC5e113b5045140A8"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0xbebb20616a80f3e49f175a46f53ec1d6596d2b02913457bc5f1a224b64abd7c5",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 155,
+          "claim": "| Setup: agents and contacts in one approval | phone passkey | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48147898",
+      "events": [
+        {
+          "address": "0xd71b81a157ce1d4651d2b1cf0ccb59bea789ae40",
+          "event": "OwnerAction",
+          "args": {
+            "op": 10,
+            "nonce": "2236329288622774277",
+            "keyId": "0xa002ba7a2a107c1f781747308c88bd6ec3ac1fda7ae1fd449bec93d741878e53"
+          }
+        },
+        {
+          "address": "0xd71b81a157ce1d4651d2b1cf0ccb59bea789ae40",
+          "event": "AgentSet",
+          "args": {
+            "agent": "0x71a6Da50B799CC84f245d5B840F40d917100C188",
+            "perPayment": "15000000",
+            "dailyCap": "25000000",
+            "expiresAt": "1820996594"
+          }
+        },
+        {
+          "address": "0xd71b81a157ce1d4651d2b1cf0ccb59bea789ae40",
+          "event": "AgentSet",
+          "args": {
+            "agent": "0xAf4249Fc017d846353Ea820a66c8c88AF6EB4834",
+            "perPayment": "10000000",
+            "dailyCap": "15000000",
+            "expiresAt": "1793866994"
+          }
+        },
+        {
+          "address": "0xd71b81a157ce1d4651d2b1cf0ccb59bea789ae40",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0x0f3452c2f64fd63a0a8022cdd8855245c0180aa96f409b2e21b2aeb5dc25b90d",
+            "payee": "0x25c0a9C9E552dDC40f8964ADA9B19e889E7870Cd",
+            "activeAt": "1792064084"
+          }
+        },
+        {
+          "address": "0xd71b81a157ce1d4651d2b1cf0ccb59bea789ae40",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0x347386068dc1201179a8da66eaaf6dfbda07ea59f841bca85ffb7723ec81b071",
+            "payee": "0x14590D251053dda381070c857dCf2929EAEb2Bb1",
+            "activeAt": "1792064084"
+          }
+        },
+        {
+          "address": "0xd71b81a157ce1d4651d2b1cf0ccb59bea789ae40",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0xff6cecf2e1ea3e37a424ef6024ba70f67cb616b0c5430c845c5723a8f1370e8b",
+            "payee": "0x7Ef4B87D512aB6c34564a25188eF702f0bACBDce",
+            "activeAt": "1792064084"
+          }
+        },
+        {
+          "address": "0xd71b81a157ce1d4651d2b1cf0ccb59bea789ae40",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0x077a7bf18c2e57ca98c16f0c91292add5d1fa7e1a25d9e8024ec80d0fe9b72c6",
+            "payee": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "activeAt": "1792064084"
+          }
+        },
+        {
+          "address": "0xd71b81a157ce1d4651d2b1cf0ccb59bea789ae40",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0x64dec741bf9e4a5dbe1fd7ba255bf79b5547201fd8e197099da5066619a9bceb",
+            "payee": "0x3B9409698E7990bfab8e0d1ae687C0E6e2Dc0d89",
+            "activeAt": "1792064084"
+          }
+        },
+        {
+          "address": "0xd71b81a157ce1d4651d2b1cf0ccb59bea789ae40",
+          "event": "ContactAdded",
+          "args": {
+            "contactId": "0x05618c03428540b3b94fc480ad02226525693d1ad2ac058238dcb4851f15c0cd",
+            "payee": "0xBa445625aeD3b794FBE42dE84b2B274b3AaBcd98",
+            "activeAt": "1792150484"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0x4bc75942fb9e9498c64f504932486966975d29047d2e7aedc05cd6bbba70e774",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 156,
+          "claim": "| Claude pays Blue Tokai $8 over MCP, within its limits | Claude's agent key | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48147921",
+      "events": [
+        {
+          "address": "0xd71b81a157ce1d4651d2b1cf0ccb59bea789ae40",
+          "event": "PaymentExecuted",
+          "args": {
+            "paymentId": "0x0db0c7875f9b38384b65dbb81a54767ef6cb282c0652de5e855f3f41f5083a32",
+            "agent": "0xAf4249Fc017d846353Ea820a66c8c88AF6EB4834",
+            "contactId": "0x077a7bf18c2e57ca98c16f0c91292add5d1fa7e1a25d9e8024ec80d0fe9b72c6",
+            "payee": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "amount": "8000000",
+            "purposeHash": "0x715be48cb30b1d55380b7c28f3ea360194fbf8c735b41570f3317be872881ff8"
+          }
+        },
+        {
+          "address": "0xb0ee01235a8e7903519b029c1530332f5847d932",
+          "event": "Transfer",
+          "args": {
+            "from": "0xd71b81a157Ce1D4651D2B1CF0CCb59bea789Ae40",
+            "to": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "value": "8000000"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0x8f32ad0ba0bfdc65a1c8625b2fb5365edbd36c949a55983c9b3042eb8a3d8d47",
+      "references": [
+        {
+          "file": "README.md",
+          "line": 157,
+          "claim": "| Claude asks for $18, over its limit; owner approves on the phone | phone passkey | [transaction] |"
+        }
+      ],
+      "status": "success",
+      "blockNumber": "48148114",
+      "events": [
+        {
+          "address": "0xd71b81a157ce1d4651d2b1cf0ccb59bea789ae40",
+          "event": "OwnerAction",
+          "args": {
+            "op": 0,
+            "nonce": "17885048473602199620",
+            "keyId": "0xa002ba7a2a107c1f781747308c88bd6ec3ac1fda7ae1fd449bec93d741878e53"
+          }
+        },
+        {
+          "address": "0xd71b81a157ce1d4651d2b1cf0ccb59bea789ae40",
+          "event": "OwnerPaid",
+          "args": {
+            "paymentId": "0x77cb20d67dfdd025626b1afa3e2cdd318b3d0c1642c645b3fbf9181ac266953d",
+            "to": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "amount": "18000000",
+            "nonce": "17885048473602199620"
+          }
+        },
+        {
+          "address": "0xb0ee01235a8e7903519b029c1530332f5847d932",
+          "event": "Transfer",
+          "args": {
+            "from": "0xd71b81a157Ce1D4651D2B1CF0CCb59bea789Ae40",
+            "to": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+            "value": "18000000"
+          }
+        }
+      ]
+    }
+  ]
+}

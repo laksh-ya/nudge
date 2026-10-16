@@ -1,0 +1,23 @@
+{
+  "commit": "2985cf7e011bbfdb4e4fe7cb1cb8410385fcc046",
+  "source": "/var/folders/5b/7d49v2wj5299_m2fz5qmyn580000gn/T/agent-wallet-review32-wzw2t37b",
+  "broadcast": true,
+  "results": [
+    {
+      "log": "contracts-baseline.txt",
+      "exitCode": 0
+    },
+    {
+      "log": "contracts-adversarial.txt",
+      "exitCode": 1
+    },
+    {
+      "log": "deployment-local.txt",
+      "exitCode": 0
+    },
+    {
+      "log": "backend-domain.txt",
+      "exitCode": 1
+    }
+  ]
+}

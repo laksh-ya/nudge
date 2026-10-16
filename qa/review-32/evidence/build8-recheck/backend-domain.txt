@@ -1,0 +1,214 @@
+
+ RUN  v5.0.4 /private/var/folders/5b/7d49v2wj5299_m2fz5qmyn580000gn/T/agent-wallet-review32-wzw2t37b
+
+ × packages/backend/convex/broadcast.test.ts > FAULT accepted transaction with lost broadcast response must remain reconcilable 293ms
+   → expected 'failed' not to be 'failed' // Object.is equality
+ × packages/backend/convex/codexReview32.test.ts > REVIEW callback retry cannot downgrade a confirmed agent payment 44ms
+   → expected 'failed' to be 'confirmed' // Object.is equality
+ × packages/backend/convex/codexReview32.test.ts > REVIEW repeated success callback produces one payment activity 5ms
+   → expected [ { …(7) }, { …(7) } ] to have a length of 1 but got 2
+ × packages/backend/convex/codexReview32.test.ts > REVIEW delayed unknown callback cannot downgrade confirmed payment 3ms
+   → expected 'unknown' to be 'confirmed' // Object.is equality
+ × packages/backend/convex/codexReview32.test.ts > REVIEW one statement row cannot deduplicate two real purchases 12ms
+   → expected [ { …(14) } ] to have a length of 2 but got 1
+ × packages/backend/convex/codexReview32.test.ts > REVIEW obligation 501 is counted or total is explicitly incomplete 26ms
+   → expected false to be true // Object.is equality
+ × packages/backend/convex/codexReview32.test.ts > REVIEW another agent cannot read an unshared task just because it has a requestId 3ms
+   → promise resolved "{ amount: '$3.00', reason: null, …(6) }" instead of rejecting
+ × packages/backend/convex/codexReview32.test.ts > REVIEW same requestId with different payment terms is a conflict 1ms
+   → expected 'duplicate' to be 'refused' // Object.is equality
+ ✓ packages/backend/convex/review.test.ts > CONTROL anonymous user cannot import 26ms
+ ✓ packages/backend/convex/review.test.ts > CONTROL foreign account import is rejected 2ms
+ ✓ packages/backend/convex/review.test.ts > CONTROL foreign transaction list is empty 14ms
+ ✓ packages/backend/convex/review.test.ts > CONTROL foreign transaction detail and edit are denied 8ms
+ ✓ packages/backend/convex/review.test.ts > CONTROL foreign agent control is denied 11ms
+ ✓ packages/backend/convex/review.test.ts > CONTROL foreign payee cannot be paid 4ms
+ ✓ packages/backend/convex/review.test.ts > CONTROL same-agent request-id retry returns same task 12ms
+ ✓ packages/backend/convex/review.test.ts > CONTROL frozen agent cannot propose 3ms
+ ✓ packages/backend/convex/review.test.ts > CONTROL duplicate statement import is idempotent 7ms
+ ✓ packages/backend/convex/review.test.ts > CONTROL 2001-row import is rejected 8ms
+ ✓ packages/backend/convex/review.test.ts > CONTROL cancelled approval cannot be approved later 12ms
+ ✓ packages/backend/convex/review.test.ts > CONTROL expired approval is not executed 1ms
+ ✓ packages/backend/convex/review.test.ts > REGRESSION same obligation through two agents settles once 2ms
+ ✓ packages/backend/convex/review.test.ts > REGRESSION accepted request is not reported paid before settlement 2ms
+ ✓ packages/backend/convex/review.test.ts > REGRESSION repeated manual purchases are not discarded as reimports 2ms
+ ✓ packages/backend/convex/review.test.ts > REGRESSION different merchants at same amount are not cross-source duplicates 3ms
+ ✓ packages/backend/convex/review.test.ts > REGRESSION pending import is promoted when posted statement arrives 2ms
+ ✓ packages/backend/convex/review.test.ts > REGRESSION unrelated opposite amounts are not auto-classified transfers 4ms
+ ✓ packages/backend/convex/review.test.ts > REGRESSION spend totals include transaction number 2001 70ms
+ ✓ packages/backend/convex/review.test.ts > REGRESSION account totals include account number 101 5ms
+ ✓ packages/backend/convex/review.test.ts > REGRESSION overdue unpaid bills still reduce safe-to-spend 1ms
+ ✓ packages/backend/convex/review.test.ts > REGRESSION hidden balance cannot be binary-searched through canAfford 1ms
+ ✓ packages/backend/convex/review.test.ts > REGRESSION rejected signature cannot consume an approval request 1ms
+ ✓ packages/backend/convex/approvals.test.ts > approval tokens never reach agents (#6) > an over-limit request returns no link or token to the agent 26ms
+ ✓ packages/backend/convex/approvals.test.ts > approval tokens never reach agents (#6) > a token holder who isn't the signed-in owner can neither approve nor decline 5ms
+ ✓ packages/backend/convex/approvals.test.ts > approval tokens never reach agents (#6) > a junk signature leaves the request open, and attempts are capped 12ms
+ ✓ packages/backend/convex/approvals.test.ts > approval tokens never reach agents (#6) > the owner's real passkey signature is accepted and queued 3ms
+ ✓ packages/backend/convex/approvals.test.ts > approval tokens never reach agents (#6) > the approval page data holds only this action: no balance, no owner, no other contacts 2ms
+stderr | packages/backend/convex/demo.test.ts > demo deploy budgets > holds new sandbox vaults back when the relayer is nearly out of test ETH
+Demo relayer 0x543D5327b9b80904d26e229777B0E8b37EE95170 has test ETH for about 1 more sandboxes. Top it up from a Base Sepolia faucet.
+
+ ✓ packages/backend/convex/demo.test.ts > demo deploy budgets > lets one visitor make 3 vaults a day, however many sandboxes they open 139ms
+ ✓ packages/backend/convex/demo.test.ts > demo deploy budgets > holds new sandbox vaults back when the relayer is nearly out of test ETH 9ms
+ ✓ packages/backend/convex/demo.test.ts > the judge account > is read-only for visitors: no key rotation, no freezing, no settings 13ms
+ ✓ packages/backend/convex/demo.test.ts > the judge account > stays writable for the team's admin token 6ms
+ ✓ packages/backend/convex/demo.test.ts > assistant quota > gives a sandbox 30 model turns a day, then answers without the model 12ms
+ ✓ packages/backend/convex/contacts.test.ts > a contact's daily limit for all agents > counts every agent's payments to that contact, and asks the owner past it 29ms
+ ✓ packages/backend/convex/contacts.test.ts > a contact's daily limit for all agents > is only offered on a v3 vault 11ms
+ ✓ packages/backend/convex/contacts.test.ts > a contact's daily limit for all agents > can't be set on someone else's contact 1ms
+ ✓ packages/backend/convex/contacts.test.ts > a contact's daily limit for all agents > asks for the passkey with the exact cap in the signed bytes; lowering counts at once, raising waits 4ms
+ ✓ packages/domain/src/statements.test.ts > amounts and dates > parses Indian, European and accounting formats 1ms
+ ✓ packages/domain/src/statements.test.ts > amounts and dates > parses statement dates 1ms
+ ✓ packages/domain/src/statements.test.ts > statement files > reads an HDFC export with a preamble and split debit/credit columns 3ms
+ ✓ packages/domain/src/statements.test.ts > statement files > reads an Alipay bill export and its 收/支 column 1ms
+ ✓ packages/domain/src/statements.test.ts > statement files > reads PDF-style lines using the running balance for direction 1ms
+ ✓ packages/domain/src/statements.test.ts > merchants and categories > cleans UPI narrations 1ms
+ ✓ packages/domain/src/statements.test.ts > merchants and categories > title-cases merchant names without mangling acronyms or domains 0ms
+ ✓ packages/domain/src/statements.test.ts > merchants and categories > categorises English and Chinese merchants 1ms
+ ✓ packages/domain/src/statements.test.ts > merchants and categories > reads a receipt total 1ms
+ ✓ packages/domain/src/statements.test.ts > money > formats and converts 7ms
+ ✓ packages/domain/src/approval-truth.test.ts > approval page truth > shows a saved contact, confirmed by the vault, when everything agrees 10ms
+ ✓ packages/domain/src/approval-truth.test.ts > approval page truth > warns, and blocks approval, when the server labels an attacker's address as a saved contact 0ms
+ ✓ packages/domain/src/approval-truth.test.ts > approval page truth > flags a payee name that doesn't match the vault's own record 0ms
+ ✓ packages/domain/src/approval-truth.test.ts > approval page truth > treats an unreadable chain record as unverified, never as saved 0ms
+ ✓ packages/domain/src/approval-truth.test.ts > approval page truth > refuses an amount shown for an action that pays no one 0ms
+ ✓ packages/domain/src/approval-truth.test.ts > approval page truth > marks server-supplied names as unchecked on other actions 2ms
+ ✓ packages/domain/src/vault.test.ts > vault encoding > matches the contract's digest byte for byte 2ms
+ ✓ packages/domain/src/vault.test.ts > vault encoding > converts cents to 6-decimal token units 0ms
+ ✓ packages/domain/src/vault.test.ts > vault encoding > renders what is being signed from the bytes alone 8ms
+ ✓ packages/domain/src/vault.test.ts > vault encoding > encodes a contact for the vault's own version and shows its cap 1ms
+ ✓ packages/domain/src/vault.test.ts > vault encoding > derives passkey ids the way the contract does 0ms
+ ✓ packages/domain/src/vault.test.ts > vault encoding > derives queued-change ids the way the contract does 0ms
+ ✓ packages/domain/src/vault.test.ts > vault encoding > spells out every rule a policy change sets 0ms
+ ✓ packages/domain/src/webauthn.test.ts > assertion check before relaying > accepts a real assertion over the request's digest 3ms
+ ✓ packages/domain/src/webauthn.test.ts > assertion check before relaying > rejects junk 0ms
+ ✓ packages/domain/src/webauthn.test.ts > assertion check before relaying > rejects a signature over a different request 1ms
+ ✓ packages/domain/src/webauthn.test.ts > assertion check before relaying > rejects another key, another site, a registration, or no user verification 4ms
+ ✓ packages/domain/src/review.finance.test.ts > CONTROL Indian grouped amount parses 1ms
+ ✓ packages/domain/src/review.finance.test.ts > CONTROL JPY conversion honors zero decimals 0ms
+ ✓ packages/domain/src/review.finance.test.ts > CONTROL valid leap date parses 1ms
+ ✓ packages/domain/src/review.finance.test.ts > REGRESSION impossible calendar date is rejected 0ms
+ ✓ packages/domain/src/review.finance.test.ts > REGRESSION invalid ISO month is rejected 0ms
+ ✓ packages/domain/src/review.finance.test.ts > REGRESSION ungrouped four-digit receipt amount is preserved 0ms
+ ✓ packages/domain/src/review.finance.test.ts > REGRESSION ungrouped PDF amount is preserved 0ms
+ ✓ packages/domain/src/review.finance.test.ts > REGRESSION comma-decimal European amount is preserved 0ms
+ ✓ packages/domain/src/review.finance.test.ts > REGRESSION missing exchange rate is explicit instead of zero 1ms
+ ✓ packages/domain/src/review.finance.test.ts > REGRESSION negative exchange rate is rejected 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/backend/convex/broadcast.test.ts > FAULT accepted transaction with lost broadcast response must remain reconcilable
+AssertionError: expected 'failed' not to be 'failed' // Object.is equality
+ ❯ packages/backend/convex/broadcast.test.ts:58:27
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  packages/backend/convex/codexReview32.test.ts > REVIEW callback retry cannot downgrade a confirmed agent payment
+AssertionError: expected 'failed' to be 'confirmed' // Object.is equality
+
+Expected: "confirmed"
+Received: "failed"
+
+ ❯ packages/backend/convex/codexReview32.test.ts:43:394
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  packages/backend/convex/codexReview32.test.ts > REVIEW repeated success callback produces one payment activity
+AssertionError: expected [ { …(7) }, { …(7) } ] to have a length of 1 but got 2
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ packages/backend/convex/codexReview32.test.ts:44:360
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  packages/backend/convex/codexReview32.test.ts > REVIEW delayed unknown callback cannot downgrade confirmed payment
+AssertionError: expected 'unknown' to be 'confirmed' // Object.is equality
+
+Expected: "confirmed"
+Received: "unknown"
+
+ ❯ packages/backend/convex/codexReview32.test.ts:45:383
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  packages/backend/convex/codexReview32.test.ts > REVIEW one statement row cannot deduplicate two real purchases
+AssertionError: expected [ { …(14) } ] to have a length of 2 but got 1
+
+- Expected
++ Received
+
+- 2
++ 1
+
+ ❯ packages/backend/convex/codexReview32.test.ts:46:424
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  packages/backend/convex/codexReview32.test.ts > REVIEW obligation 501 is counted or total is explicitly incomplete
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ packages/backend/convex/codexReview32.test.ts:47:456
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  packages/backend/convex/codexReview32.test.ts > REVIEW another agent cannot read an unshared task just because it has a requestId
+AssertionError: promise resolved "{ amount: '$3.00', reason: null, …(6) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "amount": "$3.00",
++   "reason": null,
++   "releasesAt": null,
++   "simulated": true,
++   "state": "submitted",
++   "taskId": "000000000000000000000010009tasks",
++   "transaction": null,
++   "updatedAt": "2026-10-16T06:00:00.000Z",
+  }
+
+ ❯ packages/backend/convex/codexReview32.test.ts:48:235
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+ FAIL  packages/backend/convex/codexReview32.test.ts > REVIEW same requestId with different payment terms is a conflict
+AssertionError: expected 'duplicate' to be 'refused' // Object.is equality
+
+Expected: "refused"
+Received: "duplicate"
+
+ ❯ packages/backend/convex/codexReview32.test.ts:49:220
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯
+
+
+ Test Files  2 failed | 9 passed (11)
+      Tests  8 failed | 74 passed (82)
+   Start at  11:12:36
+   Duration  2.39s (tests 51%, import 41%, transform 7%, worker 1%)
+
+    Isolate  11 workers spawned · ~48ms startup each (spawn + environment, per file)
+             at least ~481ms faster with isolate: false — reuses workers across files instead of one per file
+

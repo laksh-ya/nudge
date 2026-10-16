@@ -1,0 +1,9 @@
+{
+  "mode": "local Anvil only",
+  "acceptedHash": "0x56364b2e475167ee7b59cad58cc9a1013e2735f33ae62d33b377b9cb615a8da5",
+  "receiptStatus": "success",
+  "transferredTokenUnits": "3000000",
+  "backendState": "failed",
+  "persistedTxHash": null,
+  "reason": "Not done: Missing or invalid parameters.\nDouble check you have provided the correct parameters."
+}
