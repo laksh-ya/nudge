@@ -206,4 +206,3 @@ AssertionError: expected 'failed' not to be 'failed' // Object.is equality
 
     Isolate  10 workers spawned · ~55ms startup each (spawn + environment, per file)
              at least ~495ms faster with isolate: false — reuses workers across files instead of one per file
-

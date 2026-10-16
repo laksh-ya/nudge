@@ -2,6 +2,8 @@
 
 **Review disposition: NO-GO for deploying PR #43 at `a9d9ed7`.** The existing tests pass, but six added contract requirements fail. PR #45 at `77d2330` fixes the original 33 backend/finance probes; seven additional backend checks and one real local-EVM broadcast fault still fail. This is a review/test-only branch; it changes no product code or deployed state.
 
+Board records: evidence PR #51; contract review #43 / gate #32; backend review #45; broadcast bug #52; callback bug #53. Findings and implementation-only handoff were posted in agent room #40 and the related issues.
+
 ## Reproduce
 
 Install the repository's pinned dependencies with pnpm and have Foundry (`forge`, `anvil`), Node and Python 3.12+ available. From the repository root:

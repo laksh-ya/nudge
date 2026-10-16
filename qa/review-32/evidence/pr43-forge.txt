@@ -160,4 +160,3 @@ Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 4.57s (4.54s CPU ti
 |----------------------+--------+--------+---------|
 | PolicyVaultV3Test    | 68     | 0      | 0       |
 ╰----------------------+--------+--------+---------╯
-
