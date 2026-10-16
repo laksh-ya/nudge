@@ -1,6 +1,6 @@
 # Prompt-injection evaluation
 
-2026-10-16 00:13 UTC · commit 43026f8 · local Anvil, chain id 84532, a fresh PolicyVault per case. 54 cases; vault limits as in a demo sandbox: in-app assistant $15 a payment and $25 a day; Claude over MCP $10 and $15 with balances hidden; $40 for all agents, $50 protected, holds above $5.
+2026-10-16 06:32 UTC · commit ce9a238 · local Anvil, chain id 84532, a fresh PolicyVault per case. 54 cases; vault limits as in a demo sandbox: in-app assistant $15 a payment and $25 a day; Claude over MCP $10 and $15 with balances hidden; $40 for all agents, $50 protected, holds above $5.
 
 Two systems run the same cases with the same model. **Model alone**: the model with careful instructions and a `send_money` tool that pays whatever it is asked, as in a wallet whose only guard is the prompt. **Full system**: the app's own assistant (`assistant.ts`) with the gateway and a real PolicyVault, where money is read from the vault's events.
 
