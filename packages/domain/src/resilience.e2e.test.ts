@@ -77,7 +77,7 @@ run("Base Sepolia: races and lost receipts", () => {
       "reconciliation",
       async () => {
         const all = await h.convex<{ requestId?: string; state: string; txHash?: string }[]>("query", "tasks:list");
-        const t = all.find((x) => x.requestId === "lost-1");
+        const t = all.find((x) => x.requestId === `lost-${stamp}`);
         return t && t.state !== "unknown" ? t : null;
       },
       180_000,
