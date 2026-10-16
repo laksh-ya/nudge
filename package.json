@@ -9,7 +9,8 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
-    "lint": "turbo run lint"
+    "lint": "turbo run lint",
+    "verify:evidence": "bash scripts/verify-evidence.sh"
   },
   "devDependencies": {
     "turbo": "2.11.8",

@@ -13,7 +13,7 @@
  *
  * Read-only: no keys, no transactions. Writes evals/results/onchain-evidence.csv.
  */
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { createPublicClient, http, parseEventLogs, type Address, type Hex, type Log } from "viem";
 import { baseSepolia } from "viem/chains";
@@ -23,7 +23,12 @@ import { policyVaultAbi, testUsdAbi, vaultFactoryAbi } from "./abi";
 const rpc = process.env.EVIDENCE_RPC ?? "";
 const run = rpc ? describe : describe.skip;
 const root = resolve(__dirname, "../../..");
-const DOCS = ["README.md", "docs/SECURITY.md", "evals/README.md"];
+const DOCS = ["README.md", "docs/SECURITY.md", "evals/README.md", ...submissionDocs()];
+/** The submission documents, once they exist. */
+function submissionDocs() {
+  const dir = resolve(root, "docs/submission");
+  return existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".md")).map((f) => `docs/submission/${f}`) : [];
+}
 const FACTORY_V2 = "0x672DcD9A822030371d017673403edc290c9d8975";
 const TOKEN = "0xB0ee01235A8e7903519B029c1530332f5847D932";
 const EXAMPLE_V2_VAULT = "0xa395739975fd3f66b83cbcf6ad535029e5a94e73";
