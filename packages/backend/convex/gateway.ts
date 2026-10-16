@@ -275,8 +275,9 @@ export const proposePayment = internalMutation({
  * Pay inside the limits, ask the owner, or refuse. `quiet` skips the chat note for callers that
  * reply in the conversation themselves.
  */
-export async function propose(ctx: MutationCtx, { agentId, contactId, amount, reason, requestId }: Proposal, opts: { quiet?: boolean } = {}): Promise<Decision> {
+export async function propose(ctx: MutationCtx, { agentId, contactId, amount, reason, requestId }: Proposal, opts: { quiet?: boolean; channel?: "mcp" | "app" | "telegram" } = {}): Promise<Decision> {
     const record = opts.quiet ? async () => {} : recordNote;
+    const channel = opts.channel ?? "mcp";
     const { agent, user } = await load(ctx, agentId);
     need(agent, "prepare");
     await ctx.db.patch(agent._id, { lastUsedAt: Date.now() });
@@ -350,7 +351,7 @@ export async function propose(ctx: MutationCtx, { agentId, contactId, amount, re
       const taskId = await ctx.db.insert("tasks", {
         userId: user._id,
         title: purpose ?? `Pay ${payee.name}`,
-        channel: "mcp",
+        channel,
         agentId: agent._id,
         payeeId: payee._id,
         amountMinor: minor,
@@ -379,7 +380,7 @@ export async function propose(ctx: MutationCtx, { agentId, contactId, amount, re
       const taskId = await ctx.db.insert("tasks", {
         userId: user._id,
         title: purpose ?? `Pay ${payee.name}`,
-        channel: "mcp",
+        channel,
         agentId: agent._id,
         payeeId: payee._id,
         amountMinor: minor,
@@ -410,7 +411,7 @@ export async function propose(ctx: MutationCtx, { agentId, contactId, amount, re
         payee,
         amountMinor: minor,
         title: purpose ?? `Pay ${payee.name}`,
-        channel: "mcp",
+        channel,
         agentId: agent._id,
         purpose,
         reason: blockers.map((b) => b.why).join(". "),
@@ -428,7 +429,7 @@ export async function propose(ctx: MutationCtx, { agentId, contactId, amount, re
     const taskId = await ctx.db.insert("tasks", {
       userId: user._id,
       title: purpose ?? `Pay ${payee.name}`,
-      channel: "mcp",
+      channel,
       agentId: agent._id,
       payeeId: payee._id,
       amountMinor: minor,

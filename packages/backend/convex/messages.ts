@@ -152,7 +152,7 @@ export const reply = internalMutation({
       // so inside its limits it pays, above them it asks you, and the vault has the last word.
       const own = isDollar ? await ctx.db.query("agents").withIndex("by_user", (q) => q.eq("userId", userId)).take(50).then((a) => a.find((x) => x.provider === "own" && x.status === "active")) : undefined;
       if (own) {
-        const d = await propose(ctx, { agentId: own._id, contactId: payee._id, amount: major, reason: `Pay ${payee.name}` }, { quiet: true });
+        const d = await propose(ctx, { agentId: own._id, contactId: payee._id, amount: major, reason: `Pay ${payee.name}` }, { quiet: true, channel });
         if (d.outcome === "submitted") return say(`Paying ${payee.name} ${formatMoney(minor, "USDC")} within my limits. I'll show it as paid once it's confirmed.`, d.taskId);
         if (d.outcome === "needs_approval") return say(`${d.reason}, so this one needs your passkey.`, d.taskId);
         if (d.outcome === "duplicate") return say("That payment already exists.", d.taskId);
