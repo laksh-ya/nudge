@@ -107,6 +107,10 @@ export class Sim {
             if (rows.length > 1) throw new Error(`unique: ${rows.length} rows in ${table}`);
             return rows[0] ?? null;
           },
+          // `for await (const row of ctx.db.query(...))`, as lib/overview.ts reads on main.
+          [Symbol.asyncIterator]: async function* () {
+            yield* rows;
+          },
         };
         return q;
       },
