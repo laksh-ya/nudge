@@ -303,6 +303,134 @@ contract PolicyVaultV3Test is PolicyVaultTest {
         assertEq(vault.heldTotal(), 0);
     }
 
+    // ---------------------------------------- review #32 (C1-C6), with this contract's interface
+
+    function test_strangerCannotFreezeItself() public {
+        policy(50e6, 40e6, 1 days, 120, 0, 0);
+        bytes memory data = abi.encode(makeAddr("recipient"), 1e6);
+        sign(PolicyVault.Op.Withdraw, data);
+        uint256 n = nonce;
+        address stranger = makeAddr("stranger");
+        vm.prank(stranger);
+        vm.expectRevert(PolicyVault.NotAgent.selector);
+        vault.freezeAgent(stranger);
+        vm.warp(block.timestamp + 121);
+        vault.finalize(PolicyVault.Op.Withdraw, data, n);
+        assertEq(token.balanceOf(makeAddr("recipient")), 1e6);
+    }
+
+    function test_agentSelfFreezeOnlyVoidsChangesAboutThatAgent() public {
+        policy(50e6, 40e6, 1 days, 120, 0, 0);
+        bytes memory withdraw = abi.encode(makeAddr("recipient"), 1e6);
+        sign(PolicyVault.Op.Withdraw, withdraw);
+        uint256 w = nonce;
+        bytes memory raise = abi.encode(claude, uint128(20e6), uint128(30e6), uint64(block.timestamp + 30 days));
+        sign(PolicyVault.Op.SetAgent, raise);
+        uint256 g = nonce;
+        vm.prank(claude);
+        vault.freezeAgent(claude);
+        vm.warp(block.timestamp + 121);
+        vault.finalize(PolicyVault.Op.Withdraw, withdraw, w);
+        assertEq(token.balanceOf(makeAddr("recipient")), 1e6, "the owner's unrelated change still applies");
+        vm.expectRevert(PolicyVault.Stale.selector);
+        vault.finalize(PolicyVault.Op.SetAgent, raise, g);
+    }
+
+    function test_strikeOutDoesNotStallTheOwner() public {
+        policy(50e6, 40e6, 1 days, 120, 0, 0);
+        bytes memory withdraw = abi.encode(makeAddr("recipient"), 1e6);
+        sign(PolicyVault.Op.Withdraw, withdraw);
+        uint256 w = nonce;
+        for (uint256 i; i < 5; i++) {
+            vm.prank(claude);
+            vault.agentPay(keccak256("nobody"), 1e6, bytes32(i), 0);
+        }
+        (,,,, bool frozenNow,,) = vault.agents(claude);
+        assertTrue(frozenNow);
+        vm.warp(block.timestamp + 121);
+        vault.finalize(PolicyVault.Op.Withdraw, withdraw, w);
+        assertEq(token.balanceOf(makeAddr("recipient")), 1e6);
+    }
+
+    function test_guardianFreezeStillVoidsEveryQueuedChange() public {
+        policy(50e6, 40e6, 1 days, 120, 0, 0);
+        bytes memory withdraw = abi.encode(makeAddr("recipient"), 1e6);
+        sign(PolicyVault.Op.Withdraw, withdraw);
+        uint256 w = nonce;
+        vm.prank(guardian);
+        vault.freezeAgent(claude);
+        vm.warp(block.timestamp + 121);
+        vm.expectRevert(PolicyVault.Stale.selector);
+        vault.finalize(PolicyVault.Op.Withdraw, withdraw, w);
+    }
+
+    function test_revocationRequestVoidsTheStolenKeysQueueAtOnce() public {
+        uint256 backupPk = 0xB0B;
+        (uint256 x, uint256 y) = vm.publicKeyP256(backupPk);
+        sign(PolicyVault.Op.AddOwnerKey, abi.encode(bytes32(x), bytes32(y), sha256(bytes(RP_ID))));
+        policy(50e6, 40e6, 1 days, 120, 0, 0);
+        address thief = makeAddr("thief");
+        bytes memory data = abi.encode(thief, 250e6);
+        sign(PolicyVault.Op.Withdraw, data); // the stolen key
+        uint256 steal = nonce;
+        vm.warp(block.timestamp + 30);
+        PolicyVault.Action memory removal = action(PolicyVault.Op.RemoveOwnerKey, abi.encode(keyId));
+        bytes32 backupId = vault.keyIdOf(bytes32(x), bytes32(y));
+        vault.execute(removal, backupId, assertion(backupPk, vault.digest(removal), RP_ID, 0x05));
+        vm.warp(block.timestamp + 91);
+        vm.expectRevert(PolicyVault.Stale.selector);
+        vault.finalize(PolicyVault.Op.Withdraw, data, steal);
+        assertEq(token.balanceOf(thief), 0);
+        // The backup's own queued removal still applies after its delay.
+        vm.warp(block.timestamp + 30);
+        vault.finalize(PolicyVault.Op.RemoveOwnerKey, abi.encode(keyId), removal.nonce);
+        (,,, bool active) = vault.ownerKeys(keyId);
+        assertFalse(active);
+    }
+
+    function test_regrantDoesNotReviveAnOldHold() public {
+        policy(50e6, 40e6, 1 days, 0, 5e6, 120);
+        pay(claude, 8e6, "old-hold");
+        sign(PolicyVault.Op.RemoveAgent, abi.encode(claude));
+        sign(PolicyVault.Op.SetAgent, abi.encode(claude, uint128(10e6), uint128(15e6), uint64(block.timestamp + 30 days)));
+        sign(PolicyVault.Op.Unfreeze, abi.encode(claude));
+        vm.warp(block.timestamp + 121);
+        vault.release("old-hold");
+        assertEq(token.balanceOf(shop), 0);
+        assertEq(vault.heldTotal(), 0);
+    }
+
+    function test_sameBlockContactReaddDoesNotReviveAnOldHold() public {
+        policy(50e6, 40e6, 0, 0, 5e6, 120);
+        pay(claude, 8e6, "contact-hold");
+        sign(PolicyVault.Op.RemoveContact, abi.encode(shopId));
+        sign(PolicyVault.Op.AddContact, abi.encode(shopId, shop, true, uint128(0)));
+        vm.warp(block.timestamp + 121);
+        vault.release("contact-hold");
+        assertEq(token.balanceOf(shop), 0);
+    }
+
+    function test_oneContactPerAddress() public {
+        PolicyVault.Action memory a = action(PolicyVault.Op.AddContact, abi.encode(keccak256("alias"), shop, false, uint128(0)));
+        WebAuthn.WebAuthnAuth memory auth = assertion(ownerPk, vault.digest(a), RP_ID, 0x05);
+        vm.expectRevert(PolicyVault.BadAction.selector);
+        vault.execute(a, keyId, auth);
+    }
+
+    function test_removedContactLeavesNoMaturityBehind() public {
+        sign(PolicyVault.Op.RemoveContact, abi.encode(shopId));
+        sign(PolicyVault.Op.AddContact, abi.encode(keccak256("alias"), shop, false, uint128(0)));
+        policy(50e6, 40e6, 1 days, 120, 0, 0);
+        sign(PolicyVault.Op.Pay, abi.encode(shop, 3e6, bytes32("alias-pay")));
+        assertEq(token.balanceOf(shop), 0, "the new contact is still cooling, so the owner payment waits");
+    }
+
+    function test_agentCannotRepayAnOwnerPaidId() public {
+        sign(PolicyVault.Op.Pay, abi.encode(shop, 3e6, bytes32("invoice")));
+        assertFalse(pay(claude, 3e6, bytes32("invoice")));
+        assertEq(token.balanceOf(shop), 3e6);
+    }
+
     function test_version() public view {
         assertEq(vault.VERSION(), 3);
     }

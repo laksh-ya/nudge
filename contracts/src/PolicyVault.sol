@@ -80,24 +80,24 @@ contract PolicyVault {
 
     // ------------------------------------------------------------- constants
 
-    uint256 public constant WINDOW = 24 hours;
-    uint256 public constant AGENT_SLOTS = 16;
-    uint256 public constant VAULT_SLOTS = 48;
+    uint256 internal constant WINDOW = 24 hours;
+    uint256 internal constant AGENT_SLOTS = 16;
+    uint256 internal constant VAULT_SLOTS = 48;
     /// @notice Refused attempts within 24 hours before an agent freezes itself.
-    uint8 public constant MAX_STRIKES = 5;
-    bytes32 public constant ACTION_TYPEHASH =
+    uint8 internal constant MAX_STRIKES = 5;
+    bytes32 internal constant ACTION_TYPEHASH =
         keccak256("Action(uint8 op,bytes data,uint256 nonce,uint64 deadline,uint256 chainId,address vault)");
 
     // Refusal codes, shared with the app (see packages/domain).
-    uint16 public constant AGENT_EXPIRED = 2001;
-    uint16 public constant CONTACT_ON_HOLD = 2002;
-    uint16 public constant OVER_AGENT_LIMIT = 2003;
-    uint16 public constant OVER_VAULT_CEILING = 2004;
-    uint16 public constant BREACHES_PROTECTED = 2005;
-    uint16 public constant DUPLICATE_PAYMENT = 2007;
-    uint16 public constant TOO_MANY_PAYMENTS = 2009;
-    uint16 public constant UNKNOWN_CONTACT = 2010;
-    uint16 public constant OVER_CONTACT_LIMIT = 2012;
+    uint16 internal constant AGENT_EXPIRED = 2001;
+    uint16 internal constant CONTACT_ON_HOLD = 2002;
+    uint16 internal constant OVER_AGENT_LIMIT = 2003;
+    uint16 internal constant OVER_VAULT_CEILING = 2004;
+    uint16 internal constant BREACHES_PROTECTED = 2005;
+    uint16 internal constant DUPLICATE_PAYMENT = 2007;
+    uint16 internal constant TOO_MANY_PAYMENTS = 2009;
+    uint16 internal constant UNKNOWN_CONTACT = 2010;
+    uint16 internal constant OVER_CONTACT_LIMIT = 2012;
     uint8 public constant VERSION = 3;
 
     // ----------------------------------------------------------------- state
@@ -149,9 +149,15 @@ contract PolicyVault {
     mapping(bytes32 contactId => uint128) public contactCap;
     mapping(bytes32 contactId => Spend[AGENT_SLOTS]) private _contactSpends;
     mapping(bytes32 contactId => uint256) private _contactNext;
-    /// @dev How many saved contacts pay each address, and since when the earliest is active.
-    mapping(address payee => uint256) private _payeeRefs;
-    mapping(address payee => uint64) private _payeeSince;
+    /// @dev One saved contact per address, so an address's waiting period is never borrowed from
+    /// another (since removed) contact for it.
+    mapping(address payee => bytes32) private _contactOf;
+    /// @dev Bumped on each revocation. A hold records both, so a later grant can't revive it.
+    mapping(address agent => uint32) private _agentRevocations;
+    mapping(bytes32 contactId => uint32) private _contactRevocations;
+    /// @dev Bumped when a passkey's removal is requested: what that key queued no longer applies.
+    mapping(bytes32 keyId => uint64) private _keyEpoch;
+    mapping(bytes32 changeId => bytes32) private _queuedSigner;
 
     // ---------------------------------------------------------------- events
 
@@ -268,7 +274,8 @@ contract PolicyVault {
         uint64 at = uint64(block.timestamp) + (hold ? holdFor : 0);
         uint256 slots = _record(msg.sender, contactId, amount, at);
         if (hold) {
-            _heldSlots[paymentId] = slots;
+            _heldSlots[paymentId] =
+                slots | (uint256(_agentRevocations[msg.sender]) << 32) | (uint256(_contactRevocations[contactId]) << 64);
             // forge-lint: disable-next-line(unsafe-typecast)
             held[paymentId] = Held(msg.sender, payee, contactId, uint128(amount), at, uint64(block.timestamp));
             heldTotal += amount;
@@ -290,8 +297,10 @@ contract PolicyVault {
         if (block.timestamp < h.releaseAt) revert NotReady();
         Agent memory a = agents[h.agent];
         Contact memory c = contacts[h.contactId];
+        uint256 gens = _heldSlots[paymentId];
+        bool revoked = uint32(gens >> 32) != _agentRevocations[h.agent] || uint32(gens >> 64) != _contactRevocations[h.contactId];
         if (
-            !a.active || a.expiresAt < block.timestamp || c.payee != h.payee || c.activeAt > h.heldAt
+            revoked || !a.active || a.expiresAt < block.timestamp || c.payee != h.payee || c.activeAt > h.heldAt
                 || block.timestamp >= h.releaseAt + WINDOW
         ) {
             _cancelHeld(paymentId);
@@ -318,7 +327,8 @@ contract PolicyVault {
         if (a.strikes >= MAX_STRIKES && !a.frozen) {
             a.frozen = true;
             emit Frozen(agent, address(this));
-            _newGeneration();
+            // Only changes about this agent need approving again; the owner's other changes stand.
+            _epoch[_agentKey(agent)] += 1;
         }
     }
 
@@ -331,7 +341,7 @@ contract PolicyVault {
         Contact memory c = contacts[contactId];
         if (c.payee == address(0)) return UNKNOWN_CONTACT;
         if (c.activeAt > block.timestamp) return CONTACT_ON_HOLD;
-        if (paymentUsed[paymentId]) return DUPLICATE_PAYMENT;
+        if (paymentUsed[paymentId] || ownerPaid[paymentId]) return DUPLICATE_PAYMENT;
         if (amount == 0 || amount > a.perPayment) return OVER_AGENT_LIMIT;
 
         (uint256 agentSpent, bool agentFull) = _windowSum(_agentSpends[agent], _agentNext[agent]);
@@ -377,12 +387,16 @@ contract PolicyVault {
 
         nonceUsed[action.nonce] = true;
         emit OwnerAction(action.op, action.nonce, keyId);
+        // Asking to remove a passkey voids what that key has queued now, not when the removal applies,
+        // so a stolen key's queued withdrawal can't mature during the removal's own delay.
+        _voidKeysBeingRemoved(action.op, action.data);
         if (changeDelay > 0 && _loosens(action.op, action.data)) {
             bytes32 id = changeIdOf(action.op, action.data, action.nonce);
             // forge-lint: disable-next-line(unsafe-typecast)
             uint64 readyAt = uint64(block.timestamp) + changeDelay;
             queued[id] = readyAt;
-            _queuedStamp[id] = _stamp(action.op, action.data);
+            _queuedSigner[id] = keyId;
+            _queuedStamp[id] = _stamp(action.op, action.data, keyId);
             emit ChangeQueued(id, action.op, action.nonce, readyAt);
             return;
         }
@@ -395,11 +409,13 @@ contract PolicyVault {
         bytes32 id = changeIdOf(op, data, nonce);
         uint64 readyAt = queued[id];
         if (readyAt == 0) revert NotQueued();
-        if (_queuedStamp[id] != _stamp(op, data)) revert Stale();
+        bytes32 signer = _queuedSigner[id];
+        if (_queuedStamp[id] != _stamp(op, data, signer) || !ownerKeys[signer].active) revert Stale();
         if (block.timestamp < readyAt) revert NotReady();
         if (frozen && op != Op.Unfreeze) revert AgentFrozen();
         delete queued[id];
         delete _queuedStamp[id];
+        delete _queuedSigner[id];
         emit ChangeApplied(id);
         _apply(op, data, nonce);
     }
@@ -501,8 +517,8 @@ contract PolicyVault {
             // A frozen tombstone: adding the same key again leaves it frozen until an explicit,
             // delayed Unfreeze, so remove-then-add can't skip the wait.
             agents[agent] = Agent(0, 0, 0, false, true, 0, 0);
+            _agentRevocations[agent] += 1;
             emit AgentRemoved(agent);
-            _newGeneration();
         } else if (op == Op.AddContact) {
             (bytes32 contactId, address payee, bool immediate, uint128 cap) =
                 abi.decode(data, (bytes32, address, bool, uint128));
@@ -512,19 +528,24 @@ contract PolicyVault {
             // The same address again only changes its cap; it doesn't restart a wait already served.
             Contact memory was = contacts[contactId];
             if (!immediate && was.payee == payee && was.activeAt != 0) activeAt = was.activeAt;
-            _unref(contacts[contactId].payee);
+            bytes32 other = _contactOf[payee];
+            if (other != 0 && other != contactId) revert BadAction(); // one contact per address
+            if (was.payee != address(0) && was.payee != payee) {
+                delete _contactOf[was.payee];
+                _contactRevocations[contactId] += 1;
+            }
+            _contactOf[payee] = contactId;
             contacts[contactId] = Contact(payee, activeAt);
             contactCap[contactId] = cap;
-            _payeeRefs[payee] += 1;
-            if (_payeeSince[payee] == 0 || activeAt < _payeeSince[payee]) _payeeSince[payee] = activeAt;
             emit ContactAdded(contactId, payee, activeAt);
         } else if (op == Op.RemoveContact) {
             bytes32 contactId = abi.decode(data, (bytes32));
-            _unref(contacts[contactId].payee);
+            address payee = contacts[contactId].payee;
+            if (payee != address(0)) delete _contactOf[payee];
             delete contacts[contactId];
             delete contactCap[contactId];
+            _contactRevocations[contactId] += 1;
             emit ContactRemoved(contactId);
-            _newGeneration();
         } else if (op == Op.SetPolicy) {
             (uint256 p, uint256 c, uint64 cd, uint64 d, uint256 ha, uint64 hf) =
                 abi.decode(data, (uint256, uint256, uint64, uint64, uint256, uint64));
@@ -550,7 +571,7 @@ contract PolicyVault {
             ownerKeyCount--;
             emit OwnerKeyRemoved(keyId);
             // Changes that key approved and that haven't applied yet don't survive it.
-            _newGeneration();
+            _keyEpoch[keyId] += 1;
         } else if (op == Op.Withdraw) {
             (address to, uint256 amount) = abi.decode(data, (address, uint256));
             if (to == address(0)) revert BadAction();
@@ -573,11 +594,18 @@ contract PolicyVault {
         _newGeneration();
     }
 
+    /// @notice The guardian freezes any agent; an agent may freeze only itself, and only if registered.
+    /// A guardian freeze is an incident: every queued change must be approved again. An agent's own
+    /// freeze voids only queued changes about that agent, so nobody else can stall the owner.
     function freezeAgent(address agent) external {
-        if (msg.sender != guardian && msg.sender != agent) revert NotGuardian();
+        if (msg.sender != guardian) {
+            if (msg.sender != agent) revert NotGuardian();
+            if (!agents[agent].active) revert NotAgent();
+        }
         agents[agent].frozen = true;
         emit Frozen(agent, msg.sender);
-        _newGeneration();
+        if (msg.sender == guardian) _newGeneration();
+        else _epoch[_agentKey(agent)] += 1;
     }
 
     /// @notice Stop a held agent payment before it leaves. The budget it used stays used.
@@ -605,6 +633,7 @@ contract PolicyVault {
         if (queued[changeId] == 0) revert NotQueued();
         delete queued[changeId];
         delete _queuedStamp[changeId];
+        delete _queuedSigner[changeId];
         emit ChangeCancelled(changeId, msg.sender);
     }
 
@@ -641,13 +670,8 @@ contract PolicyVault {
     }
 
     function _isSavedPayee(address payee) private view returns (bool) {
-        return _payeeRefs[payee] > 0 && _payeeSince[payee] <= block.timestamp;
-    }
-
-    function _unref(address payee) private {
-        if (payee == address(0) || _payeeRefs[payee] == 0) return;
-        _payeeRefs[payee] -= 1;
-        if (_payeeRefs[payee] == 0) _payeeSince[payee] = 0;
+        bytes32 id = _contactOf[payee];
+        return id != 0 && contacts[id].activeAt <= block.timestamp;
     }
 
     function _addKey(bytes32 x, bytes32 y, bytes32 rpIdHash) private {
@@ -710,7 +734,7 @@ contract PolicyVault {
 
     /// @dev What a queued change depends on: the generation, and how often each thing it changes has
     /// changed since. Epochs only grow, so their sum is unchanged exactly when none of them moved.
-    function _stamp(Op op, bytes memory data) private view returns (bytes32) {
+    function _stamp(Op op, bytes memory data, bytes32 signer) private view returns (bytes32) {
         uint256 sum;
         if (op == Op.Batch) {
             (uint8[] memory ops, bytes[] memory datas) = _batch(data);
@@ -720,13 +744,32 @@ contract PolicyVault {
         } else {
             sum = _epoch[_target(op, data)];
         }
-        return keccak256(abi.encode(generation, sum));
+        return keccak256(abi.encode(generation, sum, signer, _keyEpoch[signer]));
     }
 
     /// @dev The thing an action changes: the rules, an agent (by address) or a contact (by id).
     function _target(Op op, bytes memory data) private pure returns (bytes32) {
         if (op == Op.SetPolicy) return keccak256("policy");
-        if (op == Op.SetAgent || op == Op.AddContact) return abi.decode(data, (bytes32));
+        if (op == Op.SetAgent || op == Op.AddContact || op == Op.RemoveAgent || op == Op.RemoveContact) {
+            return abi.decode(data, (bytes32));
+        }
+        // Unfreezing one agent is about that agent; unfreezing the vault is covered by the generation.
+        if (op == Op.Unfreeze) return abi.decode(data, (bytes32));
         return 0;
+    }
+
+    function _agentKey(address agent) private pure returns (bytes32) {
+        return bytes32(uint256(uint160(agent)));
+    }
+
+    function _voidKeysBeingRemoved(Op op, bytes memory data) private {
+        if (op == Op.Batch) {
+            (uint8[] memory ops, bytes[] memory datas) = _batch(data);
+            for (uint256 i; i < ops.length; ++i) {
+                if (Op(ops[i]) == Op.RemoveOwnerKey) _keyEpoch[abi.decode(datas[i], (bytes32))] += 1;
+            }
+        } else if (op == Op.RemoveOwnerKey) {
+            _keyEpoch[abi.decode(data, (bytes32))] += 1;
+        }
     }
 }
