@@ -206,7 +206,7 @@ Deploy your own: put `RELAYER_PRIVATE_KEY` and `RELAYER_ADDRESS` in `contracts/.
 Tests:
 
 ```bash
-cd contracts && forge test                         # 45 tests, fuzz and invariants
+cd contracts && forge test                         # 151 tests: unit, fuzz, invariants, requirements
 pnpm --filter @agent-wallet/domain exec vitest run # encoding, digest, statements
 E2E_CONVEX_URL=https://<dev>.convex.cloud pnpm --filter @agent-wallet/domain exec vitest run onchain.e2e
 ```
