@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { freezeAll } from "./lib/control";
+import { propose } from "./gateway";
 import { formatMoney } from "@agent-wallet/domain";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -147,6 +148,16 @@ export const reply = internalMutation({
       const major = Number(amount[1]!.replace(/,/g, ""));
       const currency = isDollar ? "USDC" : "INR";
       const minor = Math.round(major * 100);
+      // Dollars come from the agent wallet: the assistant gets the same decision any agent gets,
+      // so inside its limits it pays, above them it asks you, and the vault has the last word.
+      const own = isDollar ? await ctx.db.query("agents").withIndex("by_user", (q) => q.eq("userId", userId)).take(50).then((a) => a.find((x) => x.provider === "own" && x.status === "active")) : undefined;
+      if (own) {
+        const d = await propose(ctx, { agentId: own._id, contactId: payee._id, amount: major, reason: `Pay ${payee.name}` }, { quiet: true });
+        if (d.outcome === "submitted") return say(`Paying ${payee.name} ${formatMoney(minor, "USDC")} within my limits. I'll show it as paid once it's confirmed.`, d.taskId);
+        if (d.outcome === "needs_approval") return say(`${d.reason}, so this one needs your passkey.`, d.taskId);
+        if (d.outcome === "duplicate") return say("That payment already exists.", d.taskId);
+        return say(`I can't pay that: ${d.reason}.`);
+      }
       if (!payee.trusted) return say(`${payee.name} is a new contact. Payments to them wait until ${new Date(payee.holdUntil ?? Date.now()).toLocaleString("en-IN", { hour: "numeric", minute: "2-digit", weekday: "short" })}.`);
       const taskId = await createPayment(ctx, user, payee, minor, currency, `Pay ${payee.name}`);
       return say(`Ready to send ${formatMoney(minor, currency)} to ${payee.name}. Review and approve.`, taskId);
