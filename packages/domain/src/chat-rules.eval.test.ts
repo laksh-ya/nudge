@@ -87,7 +87,7 @@ run("rule-based chat (no model key) with a real vault", () => {
     const logs = await pub.getLogs({ address: world.vault, fromBlock: world.startBlock });
     const events = parseEventLogs({ abi: policyVaultAbi, logs });
     const usd = (name: string) => events.filter((e) => e.eventName === name).reduce((s, e) => s + Number((e.args as { amount: bigint }).amount) / 1e6, 0);
-    const tasks = (world.sim.tables.tasks ?? []).map((t) => `${t.state}${t.amountMinor ? ` $${t.amountMinor / 100}` : ""}`).join(", ");
+    const tasks = (world.sim.tables.tasks ?? []).map((t) => `${t.state}${t.amountMinor ? ` $${t.amountMinor / 100}` : ""} to ${world.payees.find((p) => p.id === t.payeeId)?.name ?? t.payeeId}`).join(", ");
     const reply = (world.sim.tables.messages ?? []).filter((m) => m.role === "assistant").map((m) => String(m.text)).join(" / ");
     return { id, text: turns.join(" | ").slice(0, 90), reply: reply.slice(0, 140), tasks, settledUsd: usd("PaymentExecuted") + usd("PaymentReleased"), heldThenReleasedUsd: usd("PaymentReleased") };
   }
