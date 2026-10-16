@@ -52,7 +52,8 @@ run("Base Sepolia: races and lost receipts", () => {
     for (const p of paid) {
       const s = await taskState(key, p.value.taskId, ["held", "confirmed", "failed"]);
       expect(s.state).not.toBe("failed");
-      h.log(`Race: paid ${p.value.taskId.slice(-6)}`, s.transaction?.split("/tx/")[1]);
+      // Above the hold threshold the vault holds it first; the row says which, so the link matches.
+      h.log(`Race: ${s.state === "held" ? "$6 held for the owner's 2 minutes" : "pays $6"} (${p.value.taskId.slice(-6)})`, s.transaction?.split("/tx/")[1]);
     }
     const spent = await until("the vault's count", async () => {
       const n = await pub.readContract({ address: vault, abi: policyVaultAbi, functionName: "spentToday", args: [claudeAddress] });

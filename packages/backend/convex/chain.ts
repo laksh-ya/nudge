@@ -114,10 +114,6 @@ async function settled<T>(read: () => Promise<T>, tries = 4): Promise<T> {
 }
 
 /**
- * A node without the vault's code yet would "simulate" a call to it as a plain transfer and
- * estimate 21k-ish gas, so the real transaction runs out. Check the code is there first.
- */
-/**
  * Which contract version a vault runs. v2 has no VERSION(), so only an actual revert means 2. A
  * node that can't see a just-deployed vault yet fails differently, and is asked again.
  */
@@ -133,6 +129,10 @@ async function vaultVersion(pub: Pub, vault: Address) {
   }, 6);
 }
 
+/**
+ * A node without the vault's code yet would "simulate" a call to it as a plain transfer and
+ * estimate 21k-ish gas, so the real transaction runs out. Check the code is there first.
+ */
 async function ready(pub: Pub, vault: Address) {
   const code = await pub.getCode({ address: vault });
   if (!code || code === "0x") throw new Error("The vault isn't visible on this node yet");
@@ -674,7 +674,8 @@ async function readVault(ctx: ActionCtx, pub: Pub, walletId: Id<"wallets">) {
   const vault = { address: w.address as Address, abi: policyVaultAbi } as const;
   // A version recorded wrongly (a node that lagged at deploy time) is corrected from the vault itself.
   const actual = await vaultVersion(pub, w.address as Address).catch(() => w.version);
-  if (actual && actual !== w.version) await ctx.runMutation(internal.vault.onVersion, { walletId, version: actual });
+  // Contract code never changes, so a correction only ever raises the version.
+  if (actual !== undefined && isVaultVersion(actual) && actual > (w.version ?? 0)) await ctx.runMutation(internal.vault.onVersion, { walletId, version: actual });
   try {
     const [balance, frozen, protectedAmount, ceiling, contactDelay, changeDelay, holdAbove, holdFor, held, spent, headroom, ownerKeys] = await settled(() =>
       Promise.all([

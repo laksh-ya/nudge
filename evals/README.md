@@ -28,7 +28,8 @@ What PolicyVault does not stop: an in-limit payment to a saved contact the attac
 
 ## Races and lost receipts (Base Sepolia)
 
-- Four $6 payments sent at the same instant against a $15 daily limit: two paid ([`0x5ad0b560…`](https://sepolia.basescan.org/tx/0x5ad0b560419f990b5728c262c10aa553b56054c9ed82292647474919e38deff3), [`0x1ee6ff87…`](https://sepolia.basescan.org/tx/0x1ee6ff876a1314e5e8f0637e8e81358d25a1b27a2b45ffa5566f80a21d20cb0d)), two sent to the owner for approval; the vault's own count reads $12.
+- Four $6 payments sent at the same instant against a $15 daily limit: two accepted and held for the owner's 2 minutes ([`0x5ad0b560…`](https://sepolia.basescan.org/tx/0x5ad0b560419f990b5728c262c10aa553b56054c9ed82292647474919e38deff3), [`0x1ee6ff87…`](https://sepolia.basescan.org/tx/0x1ee6ff876a1314e5e8f0637e8e81358d25a1b27a2b45ffa5566f80a21d20cb0d)), two sent to the owner for approval; the vault's own count reads $12.
+  - Both were released after the hold ([`0xbd74ac20…`](https://sepolia.basescan.org/tx/0xbd74ac20e2b5796f61f359f9ff9385b17846b6417544a6a56f7a1d910d72f3da), [`0x3e85527e…`](https://sepolia.basescan.org/tx/0x3e85527eff8614900bf9c2295de4674f139daf060c124a53ee7dec88b38a6ec6)).
 - A payment whose receipt the backend was made to lose: reported "unknown", a retry with the same `requestId` returned the first task instead of paying again, and it settled as paid once from the chain ([`0xc42f6499…`](https://sepolia.basescan.org/tx/0xc42f64997e96461b36fbd27016f7ce0cd30a5b45488322db2514bdbb3a0d6770)).
 
 ## Prompt injection with a real model

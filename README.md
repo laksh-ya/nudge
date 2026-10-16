@@ -104,7 +104,7 @@ Tools: `get_overview`, `can_afford`, `list_bills`, `spending_this_month`, `list_
 | VaultFactory (v1, retired) | [`0x223c60BAa1C2EfCD0F95B0D73e51D6De9460Baa9`](https://sepolia.basescan.org/address/0x223c60BAa1C2EfCD0F95B0D73e51D6De9460Baa9) |
 | TestUSD (tUSD, 6 decimals) | [`0xB0ee01235A8e7903519B029c1530332f5847D932`](https://sepolia.basescan.org/address/0xB0ee01235A8e7903519B029c1530332f5847D932) |
 | Example v1 vault | [`0xC6299CFc10366cBD576AFFc13a6f0440413d3510`](https://sepolia.basescan.org/address/0xC6299CFc10366cBD576AFFc13a6f0440413d3510) |
-| Example v2 vault | [`0xa395739975fd3F66b83cbcF6Ad535029e5A94E73`](https://sepolia.basescan.org/address/0xa395739975fd3f66b83cbcf6ad535029e5a94e73) |
+| Example v2 vault | [`0xa395739975FD3f66b83CbCf6ad535029e5a94e73`](https://sepolia.basescan.org/address/0xa395739975fd3f66b83cbcf6ad535029e5a94e73) |
 | Example v3 vault | [`0x0a130A0cCABA11faA1c653f5ea4D76Adb36194d3`](https://sepolia.basescan.org/address/0x0a130a0ccaba11faa1c653f5ea4d76adb36194d3) |
 
 Contract v3 (16 Oct, after review #32), one full run of `packages/domain/src/onchain.e2e.test.ts` (7 of 7 passed) and `resilience.e2e.test.ts` (3 of 3) through the real backend on the dev deployment, vault [`0x0a130a0c…`](https://sepolia.basescan.org/address/0x0a130a0ccaba11faa1c653f5ea4d76adb36194d3) reporting `VERSION() == 3`.
@@ -132,8 +132,10 @@ Races and lost receipts on v3, vault [`0xc651daa8…`](https://sepolia.basescan.
 |---|---|---|
 | Vault deployed | relayer | [`0x49bccccf…`](https://sepolia.basescan.org/tx/0x49bccccf437e8f5f7a3016f278043a7683e073435894b76e4eb9c3d6e46c201f) |
 | Setup approved | passkey | [`0x887c0209…`](https://sepolia.basescan.org/tx/0x887c020976e0e64fd478110ccee9d71e16726ba8505161fb259301a7632dce97) |
-| Race: paid 8gc5tv | Claude's agent key | [`0x40a37f37…`](https://sepolia.basescan.org/tx/0x40a37f3771d1782c62a97dca8bc116bbddacee5a6fefc3d3aa4a5d0a5e034738) |
-| Race: paid 8gcx4s | Claude's agent key | [`0x2467239e…`](https://sepolia.basescan.org/tx/0x2467239ea0d599861962c2b331b3f129898837bbd6fe9d65a33c17d8cefae0d1) |
+| Race: $6 held for the owner's 2 minutes (8gc5tv) | Claude's agent key | [`0x40a37f37…`](https://sepolia.basescan.org/tx/0x40a37f3771d1782c62a97dca8bc116bbddacee5a6fefc3d3aa4a5d0a5e034738) |
+| Race: $6 held for the owner's 2 minutes (8gcx4s) | Claude's agent key | [`0x2467239e…`](https://sepolia.basescan.org/tx/0x2467239ea0d599861962c2b331b3f129898837bbd6fe9d65a33c17d8cefae0d1) |
+| Race: $6 released after the hold (8gc5tv) | relayer | [`0x837b5ef7…`](https://sepolia.basescan.org/tx/0x837b5ef71b841f1d6d56c4c797c30e603010096275957b4714d3e523c68638e3) |
+| Race: $6 released after the hold (8gcx4s) | relayer | [`0xa9455342…`](https://sepolia.basescan.org/tx/0xa94553426b8836fc9c95009a2190457753a788dbd25a4062a7f61f5beccc2b98) |
 | Lost receipt reconciled: paid once | Claude's agent key | [`0xa2fcd439…`](https://sepolia.basescan.org/tx/0xa2fcd43972b3b1f0ad5611729127df3117e9e11b5bf9594e5995ab5d422fa9ee) |
 
 Contract v2, one full run of `packages/domain/src/onchain.e2e.test.ts` (7 of 7 passed) through the real backend, with a software P-256 key shaped like a browser's. Also covered without a transaction: a registration answering another challenge, a reused setup link and a wrong confirmation code are refused; a retried `requestId` returns the first payment; a held payment is cancelled; after a chat "freeze" the old key reverts with `AgentFrozen`.
