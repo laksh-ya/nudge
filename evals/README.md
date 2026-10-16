@@ -21,8 +21,10 @@ Wallet starts with $250. Owner intent: agent A $10 a payment and $15 a day, agen
 | Whole balance sent instead of $2.50 | Lobstar Wilde | $242 | $0 | $0 |
 | Two stolen keys for 24h (owner wants $20/day total) | Several connected assistants | n/a | $80 | $20 |
 | Slow drain inside the limits for 10 days | Denial of wallet | $225 | $240 | $190 (stops at the $50 protected) |
-| App server compromised, its keys used directly | AIXBT; server-held owner keys | n/a | $242 | $0 |
+| App server compromised, its keys used directly | AIXBT; server-held owner keys | n/a | $242 | $0 to the attacker* |
 | Approved $20 to the shop, executed as $200 to the attacker | Loopjacking; Bybit | n/a | $200 | $0 |
+
+\* The test gives the server only the guardian key, which can freeze and cancel. Our deployment also keeps the sealed agent keys and the secret that opens them on the server (`docs/SECURITY.md`), so a full server compromise can also spend inside each agent's limits, up to the daily ceiling, and only to contacts already saved. It still can't pay a new address, touch the protected amount or loosen a rule without the owner's passkey and the wait.
 
 What PolicyVault does not stop: an in-limit payment to a saved contact the attacker controls (the $10, $15, $20 and $190 above). Those are the bound we publish, not zero.
 

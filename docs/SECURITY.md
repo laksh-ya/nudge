@@ -40,8 +40,8 @@ We do not claim resistance to prompt injection as such. A tricked agent can stil
 | One serial queue for every transaction we send; payments in flight count against limits before any receipt | Convex Workpool, parallelism 1; `gateway.paymentsInFlight` | `resilience.e2e.test.ts`: four simultaneous $6 requests against $15, two paid, two sent for approval, vault count $12 |
 | Agent keys sealed (AES-256-GCM, bound to the agent id) | `lib/secrets.ts` | End-to-end checks stored keys start `enc:v1:` |
 | Demo isolation: per-visitor sandboxes; judge account only with its key | `api/demo/token`, `auth.config.ts` | Manual check; two-browser test still to do |
-| Rate limits: MCP 60/min per assistant; vault deployments 6/hour, sandbox 3/day; code entry 5 per 15 min | `lib/limits.ts` | Code |
-| Telegram: one-use 10-minute linking codes, re-link needs the owner's yes, each update handled once | `telegram.inbound` | Code; no bot linked in the demo |
+| Rate limits: MCP 60/min per assistant; vault deployments 60/hour overall, 3/day per demo visitor, 150/day for all sandboxes; enrolment code entry 5 per 15 min; assistant turns 30/day per sandbox | `lib/limits.ts`, `lib/budget.ts` | Code; limiter tests in `limiters.test.ts` |
+| Telegram: one-use 10-minute linking codes, re-link needs the owner's yes, each update handled once | `telegram.inbound` | Live as @Agent_eallet_bot; a Telegram-delivered approval is in the README's evidence |
 
 ## Known risks
 
@@ -55,7 +55,7 @@ We do not claim resistance to prompt injection as such. A tricked agent can stil
 | Synced passkeys follow the platform account (iCloud, Google) | Passkeys may sync; the chain can't tell | Stated plainly; device-bound keys are a choice the owner can make |
 | Held-payment cancel doesn't refund the 24-hour budget | Keeps the rolling window simple and conservative | Only reduces what agents can spend |
 | Public RPC nodes lag a block | sepolia.base.org is load-balanced | Reads retried, re-read after each transaction, gas estimated only when the vault is visible |
-| Unaudited contract | Prototype | 45 forge tests including fuzz and invariants; no admin or upgrade path |
+| Unaudited contract | Prototype | 151 forge tests including fuzz, invariants and requirement tests from an internal review (`docs/TESTING.md`); no admin or upgrade path |
 | Strikes can be tripped deliberately to freeze an agent | Only that agent's own key can strike it | A stolen key freezing itself is the intended outcome |
 
 ## Attack suite

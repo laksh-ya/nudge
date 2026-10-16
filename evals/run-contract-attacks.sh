@@ -5,5 +5,5 @@ set -euo pipefail
 cd "$(dirname "$0")/../contracts"
 out=../evals/results/contract-attacks.csv
 echo 'scenario,source,hot wallet lost ($),capped wallet lost ($),PolicyVault lost ($),legit $8 payment' > "$out"
-forge test --match-contract AttacksTest -vv | grep -E "^\[(PASS|FAIL)"
+ATTACKS_CSV=true forge test --match-contract AttacksTest -vv | grep -E "^\[(PASS|FAIL)"
 echo "wrote $out"

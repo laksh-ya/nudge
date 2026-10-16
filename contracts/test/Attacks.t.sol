@@ -117,7 +117,8 @@ contract AttacksTest is Passkey {
             scenario, ",", source, ",", _usd(h), ",", _usd(c), ",", _usd(v), ",", vm.toString(legitOk), "/3"
         );
         console2.log(line);
-        vm.writeLine(OUT, line);
+        // Only evals/run-contract-attacks.sh writes the CSV (it resets it first), so a plain `forge test` adds no duplicates.
+        if (vm.envOr("ATTACKS_CSV", false)) vm.writeLine(OUT, line);
     }
 
     function _usd(int256 units) internal pure returns (string memory) {
