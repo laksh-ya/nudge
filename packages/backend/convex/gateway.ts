@@ -242,7 +242,8 @@ async function paymentsInFlight(ctx: QueryCtx, userId: Id<"users">) {
 type Decision =
   | { outcome: "paid"; taskId: Id<"tasks">; message: string }
   | { outcome: "duplicate"; taskId: Id<"tasks">; state: string; message: string }
-  | { outcome: "needs_approval"; taskId: Id<"tasks">; approvalUrl: string; reason: string }
+  // No link: the approval capability goes only to the owner (dashboard, Telegram), never to the agent.
+  | { outcome: "needs_approval"; taskId: Id<"tasks">; reason: string; message: string }
   | { outcome: "refused"; code: string; reason: string };
 
 async function record(ctx: MutationCtx, user: Doc<"users">, agent: Agent, text: string, taskId?: Id<"tasks">) {
@@ -378,7 +379,7 @@ export const proposePayment = internalMutation({
       if (agent.provider !== "own") {
         await notify(ctx, user._id, `${agent.name} asks to pay ${payee.name} ${formatMoney(minor, "USDC")}. ${blockers[0]!.why}, so it needs your passkey.`, `${base}/a/${token}`);
       }
-      return { outcome: "needs_approval", taskId, approvalUrl: `${base}/a/${token}`, reason: blockers.map((b) => b.why).join(". ") };
+      return { outcome: "needs_approval", taskId, reason: blockers.map((b) => b.why).join(". "), message: "Sent to the owner to approve with their passkey. They have been notified; check get_task_status." };
     }
 
     const token = newApprovalToken();
@@ -401,7 +402,10 @@ export const proposePayment = internalMutation({
     });
     await record(ctx, user, agent, `${agent.name} asked to pay ${payee.name} ${formatMoney(minor, "USDC")}. ${blockers[0]!.why}, so it needs you.`, taskId);
     const base = process.env.APPROVE_URL ?? "https://agent-wallet-approve.vercel.app";
-    return { outcome: "needs_approval", taskId, approvalUrl: `${base}/a/${token}`, reason: blockers.map((b) => b.why).join(". ") };
+    if (agent.provider !== "own") {
+      await notify(ctx, user._id, `${agent.name} asks to pay ${payee.name} ${formatMoney(minor, "USDC")}. ${blockers[0]!.why}, so it needs you.`, `${base}/a/${token}`);
+    }
+    return { outcome: "needs_approval", taskId, reason: blockers.map((b) => b.why).join(". "), message: "Sent to the owner to approve with their passkey. They have been notified; check get_task_status." };
   },
 });
 

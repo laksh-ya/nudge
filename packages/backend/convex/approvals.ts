@@ -1,7 +1,9 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { CHAIN_ID, EXPLORER } from "@agent-wallet/domain";
+import { CHAIN_ID, EXPLORER, Op, actionDigest, assertionProblem } from "@agent-wallet/domain";
+import type { Address, Hex } from "viem";
+import { requireViewer } from "./lib/auth";
 import { relayer } from "./lib/relayer";
 
 /**
@@ -17,8 +19,7 @@ export const get = query({
       .withIndex("by_approval_token", (q) => q.eq("approvalToken", token))
       .unique();
     if (!task) return null;
-    const [user, payee, agent, wallet] = await Promise.all([
-      ctx.db.get(task.userId),
+    const [payee, agent, wallet] = await Promise.all([
       task.payeeId ? ctx.db.get(task.payeeId) : null,
       task.agentId ? ctx.db.get(task.agentId) : null,
       ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", task.userId)).unique(),
@@ -73,21 +74,26 @@ export const get = query({
       rail: task.rail,
       channel: task.channel,
       expiresAt: task.expiresAt,
-      owner: user?.name,
       payee: payee ? { name: payee.name, handle: payee.handle, trusted: payee.trusted, kind: payee.kind, address: payee.address ?? null } : null,
       agent: agent?.name,
     };
   },
 });
 
+/**
+ * Approve or decline a request that has no passkey step (simulator and UPI hand-off rails), or
+ * decline any request. Only the signed-in owner can: the approval token alone proves nothing,
+ * since it travels in links and notifications.
+ */
 export const decide = mutation({
   args: { token: v.string(), approve: v.boolean() },
   handler: async (ctx, { token, approve }) => {
+    const user = await requireViewer(ctx);
     const task = await ctx.db
       .query("tasks")
       .withIndex("by_approval_token", (q) => q.eq("approvalToken", token))
       .unique();
-    if (!task) throw new Error("This link is no longer valid");
+    if (!task || task.userId !== user._id) throw new Error("This link is no longer valid");
     if (task.state !== "awaiting_approval") return task.state;
     if (task.expiresAt && task.expiresAt < Date.now()) {
       await ctx.db.patch(task._id, { state: "expired", updatedAt: Date.now() });
@@ -133,10 +139,34 @@ export const submit = mutation({
     }
     if (auth.clientDataJSON.length > 2000 || auth.authenticatorData.length > 1000) throw new Error("Signature too large");
     const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", task.userId)).unique();
-    const keys = (wallet?.passkeys ?? []).filter((k) => k.status === "active");
+    if (!wallet?.address) throw new Error("This wallet has no vault");
+    const keys = (wallet.passkeys ?? []).filter((k) => k.status === "active");
     const key = credentialId ? keys.find((k) => k.credentialId === credentialId) : keys[0];
-    const keyId = key?.keyId ?? wallet?.keyId;
-    if (!keyId) throw new Error("This wallet has no passkey");
+    const x = key?.x ?? wallet.keyX;
+    const y = key?.y ?? wallet.keyY;
+    const rpId = key?.rpId ?? wallet.rpId;
+    const keyId = key?.keyId ?? wallet.keyId;
+    if (!keyId || !x || !y || !rpId) throw new Error("This wallet has no passkey");
+
+    // Attempts are counted without throwing, so the count survives (a throw would roll it back).
+    const limitKey = `approval-sign:${task._id}`;
+    const row = await ctx.db.query("limits").withIndex("by_key", (q) => q.eq("key", limitKey)).unique();
+    const fresh = !row || Date.now() - row.windowStart >= 15 * 60_000;
+    if (!fresh && row.count >= 10) return "too_many_attempts";
+
+    // Check the assertion here first: a bad one leaves the request open instead of failing it.
+    const a = task.action;
+    const digest = actionDigest({ op: a.op as Op, data: a.data as Hex, nonce: BigInt(a.nonce), deadline: BigInt(a.deadline) }, wallet.address as Address, CHAIN_ID);
+    const problem = await assertionProblem({ auth, key: { x: x as Hex, y: y as Hex, rpId }, challenge: digest });
+    if (problem) {
+      if (fresh) {
+        if (row) await ctx.db.patch(row._id, { windowStart: Date.now(), count: 1 });
+        else await ctx.db.insert("limits", { key: limitKey, windowStart: Date.now(), count: 1 });
+      } else {
+        await ctx.db.patch(row._id, { count: row.count + 1 });
+      }
+      return "rejected";
+    }
     await ctx.db.patch(task._id, { state: "reserved", updatedAt: Date.now() });
     await relayer.enqueueAction(ctx, internal.chain.relayOwner, { taskId: task._id, auth, keyId });
     return "reserved";

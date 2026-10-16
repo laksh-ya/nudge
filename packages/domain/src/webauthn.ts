@@ -75,3 +75,57 @@ export function toWebAuthnAuth(input: { authenticatorData: Uint8Array; clientDat
 }
 
 export { hexToBytes };
+
+/**
+ * Check a passkey assertion the way PolicyVault.execute will, before the server accepts it:
+ * the right ceremony, our challenge, the key's site, user presence and verification, a low-s
+ * P-256 signature by this key. Returns why it fails, or null when it is valid. Uses WebCrypto,
+ * so it runs in browsers, Node and the Convex runtime alike.
+ */
+export async function assertionProblem(input: {
+  auth: { r: string; s: string; authenticatorData: string; clientDataJSON: string };
+  key: { x: Hex; y: Hex; rpId: string };
+  challenge: Hex;
+}): Promise<string | null> {
+  const { auth, key, challenge } = input;
+  let client: { type?: string; challenge?: string };
+  try {
+    client = JSON.parse(auth.clientDataJSON);
+  } catch {
+    return "client data is not JSON";
+  }
+  if (client.type !== "webauthn.get") return "not an approval signature";
+  if (client.challenge !== base64url(hexToBytes(challenge))) return "signed a different request";
+  let authData: Uint8Array;
+  try {
+    authData = hexToBytes(auth.authenticatorData as Hex);
+  } catch {
+    return "authenticator data is not hex";
+  }
+  if (authData.length < 37) return "authenticator data too short";
+  const rpIdHash = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key.rpId)));
+  if (!rpIdHash.every((b, i) => b === authData[i])) return "passkey made for a different site";
+  const flags = authData[32]!;
+  if (!(flags & 0x01) || !(flags & 0x04)) return "user verification missing";
+  if (!/^0x[0-9a-fA-F]{1,64}$/.test(auth.r) || !/^0x[0-9a-fA-F]{1,64}$/.test(auth.s)) return "malformed signature";
+  const r = BigInt(auth.r);
+  const s = BigInt(auth.s);
+  if (r === 0n || s === 0n || r >= N || s > N / 2n) return "malformed signature";
+  const pad = (n: bigint) => hexToBytes(`0x${n.toString(16).padStart(64, "0")}`);
+  const signature = new Uint8Array([...pad(r), ...pad(s)]);
+  const clientHash = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(auth.clientDataJSON)));
+  const message = new Uint8Array([...authData, ...clientHash]);
+  try {
+    const publicKey = await crypto.subtle.importKey(
+      "jwk",
+      { kty: "EC", crv: "P-256", x: base64url(hexToBytes(key.x)), y: base64url(hexToBytes(key.y)), ext: true },
+      { name: "ECDSA", namedCurve: "P-256" },
+      false,
+      ["verify"],
+    );
+    const ok = await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, publicKey, signature, message);
+    return ok ? null : "signature does not match this passkey";
+  } catch {
+    return "signature does not match this passkey";
+  }
+}

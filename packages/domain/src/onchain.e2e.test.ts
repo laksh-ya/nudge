@@ -237,9 +237,12 @@ run("Base Sepolia, end to end (contract v2)", () => {
   }, 500_000);
 
   it("turns an over-limit payment into an exact passkey approval", async () => {
-    const asked = (await mcp<{ outcome: string; approvalUrl: string }>(claudeKey, "propose_payment", { contactId: shopId, amount: 12, reason: "A bigger order" })).value;
+    const asked = (await mcp<{ outcome: string; taskId: string }>(claudeKey, "propose_payment", { contactId: shopId, amount: 12, reason: "A bigger order" })).value;
     expect(asked.outcome).toBe("needs_approval");
-    const done = await approve(asked.approvalUrl.split("/a/")[1]!);
+    expect(asked).not.toHaveProperty("approvalUrl"); // the agent never gets the link (#6)
+    // The owner finds the request in their own task list, which is where the link lives.
+    const mine = await convex<{ _id: string; approvalToken?: string }[]>("query", "tasks:list");
+    const done = await approve(mine.find((t) => t._id === asked.taskId)!.approvalToken!);
     expect(done.state).toBe("confirmed");
     log("Owner approves $12 by passkey", done.txHash);
   }, 200_000);
@@ -308,9 +311,16 @@ run("Base Sepolia, end to end (contract v2)", () => {
       return fields[4] === true;
     });
     const thief = createWalletClient({ chain, transport: http(), account: privateKeyToAccount(leaked) });
-    await expect(
-      thief.writeContract({ address: vault, abi: policyVaultAbi, functionName: "agentPay", args: [contactIdOf(shopId), toTokenUnits(100), paymentIdOf("after-freeze"), `0x${"00".repeat(32)}`] }),
-    ).rejects.toThrow(/AgentFrozen/);
+    // Either the node refuses it up front or it is mined and reverts; either way no money moves.
+    const before = await pub.readContract({ address: vault, abi: policyVaultAbi, functionName: "spentToday", args: [privateKeyToAccount(leaked).address] });
+    const sent = await thief
+      .writeContract({ address: vault, abi: policyVaultAbi, functionName: "agentPay", args: [contactIdOf(shopId), toTokenUnits(100), paymentIdOf("after-freeze"), `0x${"00".repeat(32)}`], gas: 300_000n })
+      .catch((e: Error) => {
+        expect(e.message).toMatch(/AgentFrozen|reverted/);
+        return null;
+      });
+    if (sent) expect((await pub.waitForTransactionReceipt({ hash: sent })).status).toBe("reverted");
+    expect(await pub.readContract({ address: vault, abi: policyVaultAbi, functionName: "spentToday", args: [privateKeyToAccount(leaked).address] })).toBe(before);
   }, 200_000);
 
   it("disconnects Claude and removes its key from the vault", async () => {
@@ -324,7 +334,10 @@ run("Base Sepolia, end to end (contract v2)", () => {
     const done = await approve(approvalToken);
     expect(done.state).toBe("confirmed");
     log("Owner removes Claude's key", done.txHash);
-    const fields = (await pub.readContract({ address: vault, abi: policyVaultAbi, functionName: "agents", args: [privateKeyToAccount(leaked).address] })) as readonly unknown[];
+    const fields = await until("the removal", async () => {
+      const f = (await pub.readContract({ address: vault, abi: policyVaultAbi, functionName: "agents", args: [privateKeyToAccount(leaked).address] })) as readonly unknown[];
+      return f[3] === false ? f : null;
+    });
     expect(fields[3]).toBe(false);
   }, 200_000);
 });

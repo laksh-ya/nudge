@@ -188,7 +188,6 @@ function clock(ms: number) {
 
 function Approve({ token }: { token: string }) {
   const data = useQuery(api.approvals.get, { token });
-  const decide = useMutation(api.approvals.decide);
   const submit = useMutation(api.approvals.submit);
   const now = useNow();
   const [busy, setBusy] = useState(false);
@@ -248,13 +247,13 @@ function Approve({ token }: { token: string }) {
       if (signed && data.onchain) {
         const ids = data.onchain.credentialIds.length ? data.onchain.credentialIds : data.onchain.credentialId ? [data.onchain.credentialId] : [];
         const { auth, credentialId } = await signWithPasskey(signed.digest, ids, data.onchain.rpId);
-        await submit({
+        const result = await submit({
           token,
           credentialId,
           auth: { ...auth, challengeIndex: Number(auth.challengeIndex), typeIndex: Number(auth.typeIndex) },
         });
-      } else {
-        await decide({ token, approve: true });
+        if (result === "rejected") setError("That signature doesn't match this request. Nothing was sent; you can try again.");
+        if (result === "too_many_attempts") setError("Too many failed signatures. Wait 15 minutes, or decline this request in the app.");
       }
     } catch (e) {
       setError(errorText(e));
@@ -436,22 +435,29 @@ function Approve({ token }: { token: string }) {
               Open in UPI app
             </a>
           )}
-          {open ? (
+          {open && !live ? (
+            // No passkey step on this rail, so this link alone must not approve: the signed-in app does.
+            <a
+              href={WEB_URL}
+              className="press flex h-12 items-center justify-center gap-2 rounded-[10px] bg-navy text-title font-semibold text-white"
+            >
+              <Check className="size-5" strokeWidth={2.5} /> Approve or decline in the app
+            </a>
+          ) : open ? (
             <div className="grid grid-cols-[1fr_2fr] gap-2">
-              <button
-                disabled={busy}
-                onClick={() => decide({ token, approve: false })}
-                className="press flex h-12 items-center justify-center gap-1.5 rounded-[10px] border border-line text-title font-semibold text-ink-2 disabled:opacity-50"
+              <a
+                href={WEB_URL}
+                className="press flex h-12 items-center justify-center gap-1.5 rounded-[10px] border border-line text-title font-semibold text-ink-2"
               >
                 <X className="size-4" /> Decline
-              </button>
+              </a>
               <button
-                disabled={busy || blocked || (live && !passkeysSupported())}
+                disabled={busy || blocked || !passkeysSupported()}
                 onClick={approve}
                 className="press flex h-12 items-center justify-center gap-2 rounded-[10px] bg-navy text-title font-semibold text-white disabled:opacity-60"
               >
-                {busy ? <LoaderCircle className="size-5 animate-spin" /> : live ? <Fingerprint className="size-5" /> : <Check className="size-5" strokeWidth={2.5} />}
-                {live ? "Approve with passkey" : "Approve"}
+                {busy ? <LoaderCircle className="size-5 animate-spin" /> : <Fingerprint className="size-5" />}
+                Approve with passkey
               </button>
             </div>
           ) : data.state === "reserved" || data.state === "submitted" ? (
