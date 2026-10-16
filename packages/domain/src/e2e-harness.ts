@@ -118,7 +118,8 @@ export function harness(name: string) {
     const enrol = await convex<string>("mutation", "vault:startEnrol", { purpose: "first" });
     const info = await convex<{ challenge: string }>("query", "vault:enrolInfo", { token: enrol }, false);
     const code = await convex<string>("mutation", "vault:completeEnrol", { token: enrol, credentialId, x, y, rpId: RP_ID, device: "Test · Node", ...registration(info.challenge) }, false);
-    await convex("mutation", "vault:confirmEnrol", { code });
+    const confirmed = await convex<{ error?: string }>("mutation", "vault:confirmEnrol", { code });
+    if (confirmed.error) throw new Error(confirmed.error);
     const live = await until(
       "the vault",
       async () => {

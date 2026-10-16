@@ -185,8 +185,10 @@ run("Base Sepolia, end to end (contract v2)", () => {
     expect(code).toMatch(/^\d{6}$/);
     // The link is used up; replaying it gets nothing.
     await expect(convex("mutation", "vault:completeEnrol", { ...args, ...reg }, false)).rejects.toThrow(/expired/);
-    await expect(convex("mutation", "vault:confirmEnrol", { code: code === "000000" ? "111111" : "000000" })).rejects.toThrow(/doesn't match/);
-    await convex("mutation", "vault:confirmEnrol", { code });
+    // A wrong code is answered, not thrown, so the attempt counts against the limit.
+    const wrong = await convex<{ error?: string }>("mutation", "vault:confirmEnrol", { code: code === "000000" ? "111111" : "000000" });
+    expect(wrong.error).toMatch(/doesn't match/);
+    expect((await convex<{ error?: string }>("mutation", "vault:confirmEnrol", { code })).error).toBeUndefined();
 
     const live = await until(
       "the vault",
