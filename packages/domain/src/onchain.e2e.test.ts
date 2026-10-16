@@ -144,7 +144,9 @@ async function mcp<T>(key: string, name: string, args: Record<string, unknown> =
   });
   const body = (await res.json()) as { result?: { structuredContent: T; isError: boolean; content: { text: string }[] } };
   if (body.result?.isError) throw new Error(body.result.content[0]?.text);
-  return { status: res.status, value: body.result?.structuredContent as T };
+  // The text block carries the tool's own result; structuredContent wraps arrays as { items } (#46).
+  const text = body.result?.content[0]?.text;
+  return { status: res.status, value: (text ? JSON.parse(text) : body.result?.structuredContent) as T };
 }
 
 type TaskStatus = { state: string; transaction: string | null; reason: string | null };
