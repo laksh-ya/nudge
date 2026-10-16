@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
-import { ArrowUpCircle, Clock, ExternalLink, Fingerprint, KeyRound, LoaderCircle, Plus, RefreshCw, ShieldAlert, ShieldCheck, TriangleAlert, X } from "lucide-react";
+import { ArrowUpCircle, ChevronRight, Clock, ExternalLink, Fingerprint, KeyRound, LoaderCircle, Plus, RefreshCw, ShieldAlert, ShieldCheck, TriangleAlert, X } from "lucide-react";
 import { api, type Id } from "@/lib/api";
 import { APPROVE_URL, approvalLink } from "@/lib/config";
 import { cn } from "@/lib/cn";
@@ -160,6 +161,9 @@ export function PasskeyCard({ chain }: { chain: ChainStatus }) {
             </a>
           )}
         </div>
+        <Link href="/proof" className="mt-3 flex items-center justify-between rounded-btn bg-page px-3 py-2 text-label font-semibold text-navy">
+          See the vault's full record and worst case, read from the chain <ChevronRight className="size-4" />
+        </Link>
         {chain.setup && (
           <div className="mt-3 flex items-center gap-3 rounded-btn bg-amber-soft p-3">
             <span className="flex-1 text-label font-medium text-amber">{chain.setup.title}: approve your agents, contacts and rules</span>

@@ -7,3 +7,4 @@ export * from "./vault";
 export * from "./abi";
 export * from "./webauthn";
 export * from "./approval-truth";
+export * from "./proof";

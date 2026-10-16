@@ -67,3 +67,18 @@ describe("approval page truth", () => {
     expect(t.lines.find((l) => l.label === "Agent")?.value).toBe("Claude (name from the app, not checked)");
   });
 });
+
+describe("exposure preview for agent grants", () => {
+  it("shows the most a new agent key could lose in 24 hours, read from the vault", async () => {
+    const { checkApproval } = await import("./approval-truth");
+    const { Op, encode } = await import("./vault");
+    const data = encode.setAgent("0x00000000000000000000000000000000000000c1", 10_000_000n, 15_000_000n, 2_000_000_000n);
+    const chain = {
+      contact: async () => ({ payee: "0x0000000000000000000000000000000000000000" as const, activeAt: 0n }),
+      state: async () => ({ balance: 250_000_000n, held: 0n, protectedAmount: 50_000_000n, dailyCeiling: 40_000_000n, spent24h: 30_000_000n, frozen: false }),
+    };
+    const t = await checkApproval(Op.SetAgent, data, { contacts: [], names: {} }, chain);
+    const line = t.lines.find((l) => l.label === "If this key leaks")!;
+    expect(line.value).toBe("At most $15.00 in any 24 hours ($10.00 today), never below your protected amount");
+  });
+});

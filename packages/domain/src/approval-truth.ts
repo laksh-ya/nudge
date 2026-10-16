@@ -1,5 +1,6 @@
 import { decodeAbiParameters, formatUnits, getAddress, type Address, type Hex } from "viem";
 import { Op, contactIdOf, describe, fromTokenUnits, type Line } from "./vault";
+import { exposure, type VaultState } from "./proof";
 
 /**
  * What the approval page may show, worked out only from the bytes the passkey will sign and from
@@ -10,7 +11,22 @@ import { Op, contactIdOf, describe, fromTokenUnits, type Line } from "./vault";
 /** Reads the vault on Base Sepolia from a public RPC, never through our server. */
 export type ChainReader = {
   contact(contactId: Hex): Promise<{ payee: Address; activeAt: bigint }>;
+  /** The vault's own numbers, for the worst case a new agent grant adds. */
+  state?(): Promise<VaultState>;
 };
+
+/** The daily limits an action grants to agent keys, read from the bytes. */
+function grantedCaps(op: Op, data: Hex): bigint[] {
+  if (op === Op.SetAgent) {
+    const [, , dailyCap] = decodeAbiParameters([{ type: "address" }, { type: "uint128" }, { type: "uint128" }, { type: "uint64" }], data);
+    return [dailyCap];
+  }
+  if (op === Op.Batch) {
+    const [ops, datas] = decodeAbiParameters([{ type: "uint8[]" }, { type: "bytes[]" }], data);
+    return ops.flatMap((o, i) => (o === Op.SetAgent ? grantedCaps(Op.SetAgent, datas[i]!) : []));
+  }
+  return [];
+}
 
 /** What the server claims about the request. None of it is trusted. */
 export type ServerClaims = {
@@ -53,7 +69,22 @@ export async function checkApproval(op: Op, data: Hex, claims: ServerClaims, cha
   if (op !== Op.Pay) {
     const d = describe(op, data, unverified(claims.names));
     const mismatches = claims.amountMinor ? ["The app shows an amount, but this action doesn't pay anyone"] : [];
-    return { title: d.title, amountMinor: null, payee: null, lines: d.lines, mismatches };
+    const lines: Truth["lines"] = [...d.lines];
+    const caps = grantedCaps(op, data);
+    if (caps.length && chain.state) {
+      // Exposure preview: what this grant could cost if the agent key were stolen, from the vault's own numbers.
+      try {
+        const e = exposure(await chain.state(), { dailyCap: caps.reduce((a, b) => a + b, 0n) });
+        lines.push({
+          label: caps.length === 1 ? "If this key leaks" : "If these keys leak",
+          value: `At most ${money(e.bound24h)} in any 24 hours (${money(e.now)} today), never below your protected amount`,
+          tone: "bad",
+        });
+      } catch {
+        // The worst case is shown only when it could be read from the chain.
+      }
+    }
+    return { title: d.title, amountMinor: null, payee: null, lines, mismatches };
   }
 
   const [to, amount, paymentId] = decodeAbiParameters([{ type: "address" }, { type: "uint256" }, { type: "bytes32" }], data);

@@ -61,6 +61,7 @@ export const status = query({
         status: w.status ?? null,
         statusNote: w.statusNote,
         address: w.address || null,
+        tokenAddress: w.tokenAddress ?? null,
         deployTx: w.deployTx,
         rpId: w.rpId,
         hasPasskey: Boolean(w.keyId),
