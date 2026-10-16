@@ -118,7 +118,8 @@ export function harness(name: string) {
     const enrol = await convex<string>("mutation", "vault:startEnrol", { purpose: "first" });
     const info = await convex<{ challenge: string }>("query", "vault:enrolInfo", { token: enrol }, false);
     const code = await convex<string>("mutation", "vault:completeEnrol", { token: enrol, credentialId, x, y, rpId: RP_ID, device: "Test · Node", ...registration(info.challenge) }, false);
-    await convex("mutation", "vault:confirmEnrol", { code });
+    const confirmed = await convex<{ error?: string }>("mutation", "vault:confirmEnrol", { code });
+    if (confirmed.error) throw new Error(confirmed.error);
     const live = await until(
       "the vault",
       async () => {
@@ -161,7 +162,9 @@ export async function mcp<T>(key: string, name: string, args: Record<string, unk
   });
   const body = (await res.json()) as { result?: { structuredContent: T; isError: boolean; content: { text: string }[] } };
   if (body.result?.isError) throw new Error(body.result.content[0]?.text);
-  return { status: res.status, value: body.result?.structuredContent as T };
+  // The text block carries the tool's own result; structuredContent wraps arrays as { items } (#46).
+  const text = body.result?.content[0]?.text;
+  return { status: res.status, value: (text ? JSON.parse(text) : body.result?.structuredContent) as T };
 }
 
 export type TaskStatus = { state: string; transaction: string | null; reason: string | null };

@@ -283,6 +283,21 @@ function Approve({ token }: { token: string }) {
     );
   }
 
+  if (data.state === "reported") {
+    return (
+      <Frame live={live}>
+        <div className="mt-14 flex flex-col items-center text-center">
+          <span className="grid size-20 place-items-center rounded-full bg-line text-ink-2">
+            <Landmark className="size-9" strokeWidth={2} />
+          </span>
+          <div className="figure rise mt-6 text-[40px] leading-[44px]">{formatMoney(data.amountMinor, currency)}</div>
+          <p className="rise mt-1 text-title text-ink-2">You marked this paid to {data.payee?.name ?? data.title}</p>
+          <p className="rise mt-3 max-w-[30ch] text-label text-mute">Your bank hasn't confirmed it. It will match when your statement arrives.</p>
+        </div>
+      </Frame>
+    );
+  }
+
   if (data.state === "confirmed") {
     return (
       <Frame live={live}>

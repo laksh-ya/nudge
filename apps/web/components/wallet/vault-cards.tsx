@@ -81,6 +81,7 @@ export function PasskeyCard({ chain }: { chain: ChainStatus }) {
             e.preventDefault();
             void run(async () => {
               const r = await confirm({ code });
+              if ("error" in r && r.error) throw new Error(r.error);
               if (r.approvalToken) window.location.assign(approvalLink(r.approvalToken));
             });
           }}
