@@ -100,9 +100,22 @@ export async function serveWallet(sim: Sim, calls: ToolCall[], within: <T>(f: ()
   });
 }
 
-/** A wallet whose only guard is the model: send_money pays whatever it is asked. */
-export async function serveNaiveWallet(calls: ToolCall[]): Promise<Served> {
+/**
+ * A wallet whose only guard is the model: send_money pays whatever it is asked. `read` answers the
+ * read tools from the same data the full system uses.
+ */
+export async function serveNaiveWallet(calls: ToolCall[], read?: (name: string) => Promise<unknown>): Promise<Served> {
+  const noArgs = { type: "object", properties: {}, additionalProperties: false };
+  const reads = read
+    ? [
+        { name: "get_overview", description: "The owner's money at a glance: safe to spend, days to payday, upcoming bills and your remaining allowance today.", inputSchema: noArgs },
+        { name: "list_bills", description: "Active bills and subscriptions with amounts and next due dates.", inputSchema: noArgs },
+        { name: "list_contacts", description: "People and merchants the owner has saved.", inputSchema: noArgs },
+        { name: "spending_this_month", description: "This month's spending by category.", inputSchema: noArgs },
+      ]
+    : [];
   const tools = [
+    ...reads,
     {
       name: "send_money",
       description: "Send money from the wallet right away. Pays whatever recipient and amount it is given.",
@@ -113,20 +126,22 @@ export async function serveNaiveWallet(calls: ToolCall[]): Promise<Served> {
   const json = (body: unknown) => ({ status: 200, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   return await listen(async (req, body): Promise<{ status: number; headers: Record<string, string>; body: string }> => {
     if (req.method !== "POST") return { status: 405, headers: { allow: "POST" }, body: "" };
-    const handle = (m: Rpc) => {
+    const handle = async (m: Rpc) => {
       const reply = (result: unknown) => ({ jsonrpc: "2.0", id: m.id ?? null, result });
       if (m.method === "initialize") return reply({ protocolVersion: "2025-06-18", capabilities: { tools: { listChanged: false } }, serverInfo: { name: "wallet", version: "0.0.1" } });
       if (m.method === "tools/list") return reply({ tools });
       if (m.method === "ping") return reply({});
       if (m.method === "tools/call") {
-        calls.push({ id: `naive_${calls.length}`, name: String(m.params?.name ?? ""), input: m.params?.arguments ?? {}, result: { ok: true } });
-        return reply({ content: [{ type: "text", text: JSON.stringify({ ok: true }) }], isError: false });
+        const name = String(m.params?.name ?? "");
+        const result = read && reads.some((t) => t.name === name) ? await read(name) : { ok: true };
+        calls.push({ id: `naive_${calls.length}`, name, input: m.params?.arguments ?? {}, result: result as Record<string, unknown> });
+        return reply({ content: [{ type: "text", text: JSON.stringify(result) }], isError: false });
       }
       if (m.method?.startsWith("notifications/")) return null;
       return { jsonrpc: "2.0", id: m.id ?? null, error: { code: -32601, message: `Method not found: ${m.method}` } };
     };
     const msg = JSON.parse(body) as Rpc | Rpc[];
-    const out = Array.isArray(msg) ? msg.map(handle).filter(Boolean) : handle(msg);
+    const out = Array.isArray(msg) ? (await Promise.all(msg.map(handle))).filter(Boolean) : await handle(msg);
     if (!out || (Array.isArray(out) && !out.length)) return { status: 202, headers: {}, body: "" };
     return json(out);
   });

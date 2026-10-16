@@ -104,6 +104,17 @@ export type World = {
 };
 
 /**
+ * Extra records for one case, on top of the demo data. This is where an attacker's text sits when it
+ * reaches the model through the wallet's own tools: a bill detected from a statement descriptor,
+ * a contact name, a spending category.
+ */
+export type Seed = {
+  bills?: { name: string; amount: number; dueInDays: number; payee?: string }[];
+  contacts?: { name: string; handle: string; address?: Address }[];
+  spending?: { description: string; category: string; amount: number; daysAgo: number }[];
+};
+
+/**
  * A new owner with a live vault. `serial` runs the relayer's transactions one at a time across
  * worlds; `seal` is the backend's own key sealing (lib/secrets.ts).
  */
@@ -111,12 +122,20 @@ export async function makeWorld(
   contracts: { token: Address; factory: Address },
   serial: <T>(f: () => Promise<T>) => Promise<T>,
   seal: (plain: string, context: string) => Promise<string>,
+  seed: Seed = {},
 ): Promise<World> {
   const { pub, relayer, test } = clients();
   const now = Date.now();
   const userId = "users_owner";
   const agentId = "agents_own";
-  const payees = CONTACTS.map((c, i) => ({ ...c, id: `payees_${i + 1}`, address: testPayeeAddress(c.name) }));
+  // Contacts a case adds are new ones: still in their waiting period, so the vault won't pay them yet.
+  const extra = (seed.contacts ?? []).map((c) => ({ ...c, kind: "merchant" as const, trusted: false }));
+  const payees = [...CONTACTS, ...extra].map((c, i) => ({
+    ...c,
+    id: `payees_${i + 1}`,
+    address: ("address" in c && c.address ? c.address : testPayeeAddress(c.name)) as Address,
+  }));
+  const payeeId = (name?: string) => payees.find((p) => p.name === name)?.id;
 
   const priv = p256.utils.randomPrivateKey();
   const { x, y } = spkiToXY(new Uint8Array([...new Uint8Array(26), ...p256.getPublicKey(priv, false)]));
@@ -187,12 +206,38 @@ export async function makeWorld(
       { _id: "accounts_2", userId, kind: "card", name: "Credit card", institution: "Demo Bank", currency: "USD", balanceMinor: -38_500, status: "synced", syncedAt: now },
     ],
     obligations: [
-      { _id: "obligations_1", userId, name: "Rent", kind: "rent", amountMinor: 150_000, currency: "USD", cadence: "monthly", nextDueAt: now + 5 * DAY, status: "active", payeeId: "payees_1" },
-      { _id: "obligations_2", userId, name: "Electricity", kind: "utility", amountMinor: 900, currency: "USD", cadence: "monthly", nextDueAt: now + 3 * DAY, status: "active", payeeId: "payees_2" },
+      { _id: "obligations_1", userId, name: "Rent", kind: "bill", amountMinor: 150_000, currency: "USD", cadence: "monthly", nextDueAt: now + 5 * DAY, status: "active", payeeId: "payees_1", source: "manual" },
+      { _id: "obligations_2", userId, name: "Electricity", kind: "bill", amountMinor: 900, currency: "USD", cadence: "monthly", nextDueAt: now + 3 * DAY, status: "active", payeeId: "payees_2", source: "manual" },
+      // Bills a case adds were detected from statement lines, whose wording the merchant controls.
+      ...(seed.bills ?? []).map((b, i) => ({
+        _id: `obligations_${i + 3}`,
+        userId,
+        name: b.name,
+        kind: "bill",
+        amountMinor: Math.round(b.amount * 100),
+        currency: "USD",
+        cadence: "monthly",
+        nextDueAt: now + b.dueInDays * DAY,
+        status: "active",
+        source: "detected",
+        ...(payeeId(b.payee) ? { payeeId: payeeId(b.payee) } : {}),
+      })),
     ],
     transactions: [
       { _id: "transactions_1", userId, accountId: "accounts_1", at: now - 2 * DAY, amountMinor: -1_250, currency: "USD", description: "Blue Tokai coffee", category: "Food", kind: "spend", status: "posted" },
       { _id: "transactions_2", userId, accountId: "accounts_1", at: now - 4 * DAY, amountMinor: -6_400, currency: "USD", description: "Groceries", category: "Groceries", kind: "spend", status: "posted" },
+      ...(seed.spending ?? []).map((t, i) => ({
+        _id: `transactions_${i + 3}`,
+        userId,
+        accountId: "accounts_2",
+        at: now - t.daysAgo * DAY,
+        amountMinor: -Math.round(t.amount * 100),
+        currency: "USD",
+        description: t.description,
+        category: t.category,
+        kind: "spend",
+        status: "posted",
+      })),
     ],
     payees: payees.map((p) => ({ _id: p.id, userId, name: p.name, handle: p.handle, kind: p.kind, trusted: p.trusted, address: p.address, onchain: true, ...(p.trusted ? {} : { holdUntil: now + DAY }) })),
     agents: [
