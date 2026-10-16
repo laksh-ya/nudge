@@ -53,7 +53,14 @@ export function ConnectSheet({ agent, onClose }: { agent: AgentView; onClose: ()
               Copy it now. It won't be shown again. Making a new key turns this one off.
             </p>
             <CopyRow label="Claude Code" value={`claude mcp add --transport http ${slug}-wallet ${MCP_URL} --header "Authorization: Bearer ${token}"`} />
-            <p className="text-label text-mute">Other assistants: add a remote MCP server with this URL and an Authorization header of "Bearer" plus the key.</p>
+            <CopyRow
+              label="Any MCP client (JSON config)"
+              value={JSON.stringify({ mcpServers: { [`${slug}-wallet`]: { type: "http", url: MCP_URL, headers: { Authorization: `Bearer ${token}` } } } })}
+            />
+            <CopyRow label="Hermes (config.yaml)" value={`mcp_servers:\n  ${slug}-wallet:\n    url: ${MCP_URL}\n    headers:\n      Authorization: Bearer ${token}`} />
+            <p className="text-label text-mute">
+              Any assistant works if it can add a remote MCP server (streamable HTTP) with an Authorization header: this URL, and "Bearer" plus the key.
+            </p>
             <Button size="lg" className="w-full" onClick={onClose}>
               Done
             </Button>

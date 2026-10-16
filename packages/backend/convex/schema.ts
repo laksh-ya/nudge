@@ -296,6 +296,8 @@ export default defineSchema({
       v.literal("openclaw"),
       v.literal("hermes"),
       v.literal("poke"),
+      /** Any other MCP client, named by the owner (Codex, Gemini, Instinct, ...). */
+      v.literal("other"),
     ),
     status: v.union(v.literal("active"), v.literal("frozen"), v.literal("revoked"), v.literal("pending")),
     scopes: v.array(v.union(v.literal("read"), v.literal("prepare"), v.literal("spend"), v.literal("request"))),

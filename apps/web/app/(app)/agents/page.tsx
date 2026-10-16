@@ -32,6 +32,8 @@ export default function AgentsPage() {
   });
   const [sheet, setSheet] = useState<{ id: string; kind: "connect" | "permissions" } | null>(null);
   const [adding, setAdding] = useState(false);
+  const [otherName, setOtherName] = useState("");
+  const [addError, setAddError] = useState<string>();
   const target = agents?.find((a) => a._id === sheet?.id);
   const missing = PROVIDERS.filter((p) => !agents?.some((a) => a.provider === p.id));
 
@@ -57,14 +59,14 @@ export default function AgentsPage() {
               onPermissions={() => setSheet({ id: a._id, kind: "permissions" })}
             />
           ))}
-          {missing.length > 0 && (
+          {(
             <button
               onClick={() => setAdding(true)}
               className="press card flex min-h-[200px] flex-col items-center justify-center gap-2 border-2 border-dashed border-line text-navy hover:border-cyan"
             >
               <Plus className="size-6" />
               <span className="text-body font-semibold">Connect an assistant</span>
-              <span className="text-label text-mute">Claude, ChatGPT, OpenClaw and others, over MCP</span>
+              <span className="text-label text-mute">Claude, ChatGPT, Hermes or any other MCP assistant</span>
             </button>
           )}
         </div>
@@ -88,6 +90,40 @@ export default function AgentsPage() {
             </button>
           ))}
         </div>
+        <form
+          className="space-y-2 border-t border-line pt-4 pb-4"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setAddError(undefined);
+            try {
+              const id = await add({ provider: "other", name: otherName });
+              setAdding(false);
+              setOtherName("");
+              setSheet({ id, kind: "connect" });
+            } catch (err) {
+              setAddError(err instanceof Error ? err.message.replace(/^.*Uncaught Error: /, "").split("\n")[0] : "Couldn't add it");
+            }
+          }}
+        >
+          <label className="block text-label font-semibold text-ink-2" htmlFor="other-assistant">
+            Any other assistant that speaks MCP
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="other-assistant"
+              value={otherName}
+              onChange={(e) => setOtherName(e.target.value)}
+              placeholder="Codex, Gemini CLI, Instinct…"
+              maxLength={30}
+              className="h-11 min-w-0 flex-1 rounded-btn border border-line px-3 text-body"
+            />
+            <Button type="submit" disabled={!otherName.trim()}>
+              Add
+            </Button>
+          </div>
+          {addError && <p className="text-label text-red">{addError}</p>}
+          <p className="text-label text-mute">It gets its own key and its own limits, like any other assistant.</p>
+        </form>
       </Sheet>
     </div>
   );
@@ -112,7 +148,7 @@ function AgentCard({
     <Card className={cn("flex flex-col", frozen && "bg-[#fbfcfd]")}>
       <div className="flex items-start gap-3">
         <div className={cn(frozen && "opacity-50 grayscale")}>
-          <AgentMark provider={a.provider} size={44} />
+          <AgentMark provider={a.provider} name={a.name} size={44} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">

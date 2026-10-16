@@ -263,14 +263,30 @@ export const confirmChat = mutation({
   },
 });
 
+/** Outside assistants one owner may connect at once; each gets its own key, limits and vault key. */
+const MAX_ASSISTANTS = 12;
+
 export const addAssistant = mutation({
-  args: { provider: v.union(v.literal("claude"), v.literal("chatgpt"), v.literal("openclaw"), v.literal("hermes"), v.literal("poke")) },
-  handler: async (ctx, { provider }) => {
+  args: {
+    provider: v.union(v.literal("claude"), v.literal("chatgpt"), v.literal("openclaw"), v.literal("hermes"), v.literal("poke"), v.literal("other")),
+    /** Required for "other": what the owner calls it (Codex, Gemini CLI, Instinct, ...). */
+    name: v.optional(v.string()),
+  },
+  handler: async (ctx, { provider, name }) => {
     const user = await requireViewer(ctx);
     const agents = await ctx.db.query("agents").withIndex("by_user", (q) => q.eq("userId", user._id)).take(50);
-    const found = agents.find((a) => a.provider === provider && a.status !== "revoked");
-    if (found) return found._id;
-    const names = { claude: "Claude", chatgpt: "ChatGPT", openclaw: "OpenClaw", hermes: "Hermes", poke: "Poke" };
+    const live = agents.filter((a) => a.status !== "revoked" && a.provider !== "own");
+    const label = (name ?? "").replace(/\s+/g, " ").trim().slice(0, 30);
+    if (provider === "other") {
+      if (!/^[\p{L}\p{N}][\p{L}\p{N} ._-]*$/u.test(label)) throw new Error("Name the assistant (letters, numbers, spaces, . _ -)");
+      const same = live.find((a) => a.name.toLowerCase() === label.toLowerCase());
+      if (same) return same._id;
+    } else {
+      const found = live.find((a) => a.provider === provider);
+      if (found) return found._id;
+    }
+    if (live.length >= MAX_ASSISTANTS) throw new Error(`Up to ${MAX_ASSISTANTS} assistants. Disconnect one first.`);
+    const names = { claude: "Claude", chatgpt: "ChatGPT", openclaw: "OpenClaw", hermes: "Hermes", poke: "Poke", other: label };
     return await ctx.db.insert("agents", {
       userId: user._id,
       name: names[provider],
