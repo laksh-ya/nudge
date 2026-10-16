@@ -18,8 +18,9 @@ const providerStyle: Record<string, { bg: string; fg: string; letter: string }> 
   poke: { bg: "#FFF3D6", fg: "#9A6A00", letter: "P" },
 };
 
-export function AgentMark({ provider, size = 40 }: { provider: string; size?: number }) {
-  const s = providerStyle[provider] ?? providerStyle.own!;
+export function AgentMark({ provider, name, size = 40 }: { provider: string; name?: string; size?: number }) {
+  // Any other assistant shows the first letter of the name its owner gave it.
+  const s = providerStyle[provider] ?? { bg: "#EEF2F6", fg: "#3B4A5C", letter: (name?.trim()[0] ?? "?").toUpperCase() };
   return (
     <span
       className="grid shrink-0 place-items-center rounded-[12px] font-bold [font-stretch:110%]"
