@@ -202,7 +202,7 @@ run("Base Sepolia, end to end (contract v2)", () => {
       180_000,
     );
     vault = live.wallet.address;
-    log("Vault deployed (v2)", live.wallet.deployTx);
+    log("Vault deployed", live.wallet.deployTx);
     log("Setup: agents, contacts and rules", (await approve(live.setup!.token)).txHash);
     await until("the rules", async () => ((await convex<Status>("query", "vault:status")).wallet.vault?.changeDelay ? true : null));
   }, 400_000);

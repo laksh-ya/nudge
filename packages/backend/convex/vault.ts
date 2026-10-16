@@ -765,7 +765,7 @@ export const onVersion = internalMutation({
   args: { walletId: v.id("wallets"), version: v.number() },
   handler: async (ctx, { walletId, version }) => {
     const w = await ctx.db.get(walletId);
-    if (!w || w.version === version) return;
+    if (!w || (w.version ?? 0) >= version) return;
     await ctx.db.patch(walletId, { version });
     await ctx.db.insert("activity", { userId: w.userId, kind: "setting", title: `Vault contract read as v${version}`, detail: "Corrected from the vault itself", tone: "neutral" });
   },
