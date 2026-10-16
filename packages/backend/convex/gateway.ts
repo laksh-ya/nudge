@@ -259,13 +259,25 @@ type Decision =
   | { outcome: "needs_approval"; taskId: Id<"tasks">; reason: string; message: string }
   | { outcome: "refused"; code: string; reason: string };
 
-async function record(ctx: MutationCtx, user: Doc<"users">, agent: Agent, text: string, taskId?: Id<"tasks">) {
+async function recordNote(ctx: MutationCtx, user: Doc<"users">, agent: Agent, text: string, taskId?: Id<"tasks">) {
   await ctx.db.insert("messages", { userId: user._id, role: "assistant", text, channel: "mcp", taskId });
 }
 
+export type Proposal = { agentId: Id<"agents">; contactId: string; amount: number; reason: string; requestId?: string };
+
+/** The payment decision every assistant gets, outside assistants over MCP and the owner's own in chat. */
 export const proposePayment = internalMutation({
   args: { agentId: v.id("agents"), contactId: v.string(), amount: v.number(), reason: v.string(), requestId: v.optional(v.string()) },
-  handler: async (ctx, { agentId, contactId, amount, reason, requestId }): Promise<Decision> => {
+  handler: async (ctx, args): Promise<Decision> => await propose(ctx, args),
+});
+
+/**
+ * Pay inside the limits, ask the owner, or refuse. `quiet` skips the chat note for callers that
+ * reply in the conversation themselves.
+ */
+export async function propose(ctx: MutationCtx, { agentId, contactId, amount, reason, requestId }: Proposal, opts: { quiet?: boolean; channel?: "mcp" | "app" | "telegram" } = {}): Promise<Decision> {
+    const record = opts.quiet ? async () => {} : recordNote;
+    const channel = opts.channel ?? "mcp";
     const { agent, user } = await load(ctx, agentId);
     need(agent, "prepare");
     await ctx.db.patch(agent._id, { lastUsedAt: Date.now() });
@@ -339,7 +351,7 @@ export const proposePayment = internalMutation({
       const taskId = await ctx.db.insert("tasks", {
         userId: user._id,
         title: purpose ?? `Pay ${payee.name}`,
-        channel: "mcp",
+        channel,
         agentId: agent._id,
         payeeId: payee._id,
         amountMinor: minor,
@@ -368,7 +380,7 @@ export const proposePayment = internalMutation({
       const taskId = await ctx.db.insert("tasks", {
         userId: user._id,
         title: purpose ?? `Pay ${payee.name}`,
-        channel: "mcp",
+        channel,
         agentId: agent._id,
         payeeId: payee._id,
         amountMinor: minor,
@@ -399,7 +411,7 @@ export const proposePayment = internalMutation({
         payee,
         amountMinor: minor,
         title: purpose ?? `Pay ${payee.name}`,
-        channel: "mcp",
+        channel,
         agentId: agent._id,
         purpose,
         reason: blockers.map((b) => b.why).join(". "),
@@ -417,7 +429,7 @@ export const proposePayment = internalMutation({
     const taskId = await ctx.db.insert("tasks", {
       userId: user._id,
       title: purpose ?? `Pay ${payee.name}`,
-      channel: "mcp",
+      channel,
       agentId: agent._id,
       payeeId: payee._id,
       amountMinor: minor,
@@ -437,8 +449,7 @@ export const proposePayment = internalMutation({
       await notify(ctx, user._id, `${agent.name} asks to pay ${payee.name} ${formatMoney(minor, "USDC")}. ${blockers[0]!.why}, so it needs you.`, `${base}/a/${token}`);
     }
     return { outcome: "needs_approval", taskId, reason: blockers.map((b) => b.why).join(". "), message: "Sent to the owner to approve with their passkey. They have been notified; check get_task_status." };
-  },
-});
+  }
 
 export const taskStatus = internalQuery({
   args: { agentId: v.id("agents"), taskId: v.string() },

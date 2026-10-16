@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { freezeAll } from "./lib/control";
+import { propose } from "./gateway";
 import { formatMoney } from "@agent-wallet/domain";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -127,7 +128,16 @@ export const reply = internalMutation({
     ).filter((o) => o.status === "active");
 
     if (/\b(pay|send|transfer)\b/.test(t)) {
-      const amount = t.match(/(?:₹|rs\.?|inr|\$|usd)?\s*(\d[\d,]*(?:\.\d{1,2})?)/);
+      // A dollar sign names the amount; otherwise the first number does.
+      const amount = t.match(/\$\s*(\d[\d,]*(?:\.\d{1,2})?)/) ?? t.match(/(?:₹|rs\.?|inr|\$|usd)?\s*(\d[\d,]*(?:\.\d{1,2})?)/);
+      // Only a short, direct order pays on its own. A question, a negation, quoted or pasted text, or
+      // more than one number gets an approval card instead: this parser can't tell a request from a quote.
+      const direct =
+        text.length <= 80 &&
+        /^(please\s+)?(pay|send|transfer)\b/.test(t.trim()) &&
+        !/[\n?"“”‘’`]|'\s|\s'|^'|'$/.test(text.trim()) &&
+        !/\b(don'?t|do not|not|never|no|stop|cancel|wait|should|whether|if|maybe|later)\b/.test(t) &&
+        (t.match(/\d[\d,]*(?:\.\d+)?/g) ?? []).length === 1;
       const isDollar = /\$|usd|dollar/.test(t);
       const aliases: Record<string, string> = { electricity: "bescom", power: "bescom", phone: "airtel", landlord: "rent" };
       const words = Object.entries(aliases).reduce((s, [k, v2]) => (s.includes(k) ? `${s} ${v2}` : s), t);
@@ -147,6 +157,17 @@ export const reply = internalMutation({
       const major = Number(amount[1]!.replace(/,/g, ""));
       const currency = isDollar ? "USDC" : "INR";
       const minor = Math.round(major * 100);
+      // Dollars come from the agent wallet: the assistant gets the same decision any agent gets,
+      // so inside its limits it pays, above them it asks you, and the vault has the last word.
+      const own = isDollar && direct ? await ctx.db.query("agents").withIndex("by_user", (q) => q.eq("userId", userId)).take(50).then((a) => a.find((x) => x.provider === "own" && x.status === "active")) : undefined;
+      if (own) {
+        const d = await propose(ctx, { agentId: own._id, contactId: payee._id, amount: major, reason: `Pay ${payee.name}` }, { quiet: true, channel });
+        if (d.outcome === "submitted") return say(`Paying ${payee.name} ${formatMoney(minor, "USDC")} within my limits. I'll show it as paid once it's confirmed.`, d.taskId);
+        // The first reason is the one that matters in a sentence; the card lists the payment itself.
+        if (d.outcome === "needs_approval") return say(`${d.reason.split(". ")[0]!.replace(/^Above Your assistant's/, "Above my")}, so this one needs your passkey.`, d.taskId);
+        if (d.outcome === "duplicate") return say("That payment already exists.", d.taskId);
+        return say(`I can't pay that: ${d.reason}.`);
+      }
       if (!payee.trusted) return say(`${payee.name} is a new contact. Payments to them wait until ${new Date(payee.holdUntil ?? Date.now()).toLocaleString("en-IN", { hour: "numeric", minute: "2-digit", weekday: "short" })}.`);
       const taskId = await createPayment(ctx, user, payee, minor, currency, `Pay ${payee.name}`);
       return say(`Ready to send ${formatMoney(minor, currency)} to ${payee.name}. Review and approve.`, taskId);
