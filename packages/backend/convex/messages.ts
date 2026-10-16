@@ -154,7 +154,8 @@ export const reply = internalMutation({
       if (own) {
         const d = await propose(ctx, { agentId: own._id, contactId: payee._id, amount: major, reason: `Pay ${payee.name}` }, { quiet: true, channel });
         if (d.outcome === "submitted") return say(`Paying ${payee.name} ${formatMoney(minor, "USDC")} within my limits. I'll show it as paid once it's confirmed.`, d.taskId);
-        if (d.outcome === "needs_approval") return say(`${d.reason}, so this one needs your passkey.`, d.taskId);
+        // The first reason is the one that matters in a sentence; the card lists the payment itself.
+        if (d.outcome === "needs_approval") return say(`${d.reason.split(". ")[0]!.replace(/^Above Your assistant's/, "Above my")}, so this one needs your passkey.`, d.taskId);
         if (d.outcome === "duplicate") return say("That payment already exists.", d.taskId);
         return say(`I can't pay that: ${d.reason}.`);
       }
