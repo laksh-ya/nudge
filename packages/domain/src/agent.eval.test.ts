@@ -45,15 +45,17 @@ const als = new AsyncLocalStorage<Conv>();
 (globalThis as Record<string, unknown>).__evalAls = als;
 
 // Every transaction the backend queues lands on this conversation's simulator instead of a workpool.
-vi.mock("../../backend/convex/lib/relayer", () => ({
-  relayer: {
+vi.mock("../../backend/convex/lib/relayer", () => {
+  const pool = {
     enqueueAction: async (_ctx: unknown, fn: unknown, args: Record<string, unknown>, opts?: { runAt?: number }) => {
       const conv = ((globalThis as Record<string, unknown>).__evalAls as AsyncLocalStorage<Conv>).getStore();
       if (!conv?.sim) throw new Error("relayer used outside an eval conversation");
       return conv.sim.enqueue(fn, args, opts?.runAt ?? Date.now());
     },
-  },
-}));
+  };
+  // One relayer lane: the simulator already runs sends one at a time.
+  return { relayer: pool, agentPool: pool, lanePool: () => pool, laneOf: () => 0, laneCount: () => 1, MAX_LANES: 1 };
+});
 
 // Local chain only: poll for receipts every 50 ms instead of viem's 4-second default, in the backend too.
 vi.mock("viem", async (importOriginal) => {
