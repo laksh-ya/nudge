@@ -2,11 +2,23 @@ import { useMutation, useQuery } from "convex/react";
 import { useEffect, useMemo, useState } from "react";
 import { Check, Clock, ExternalLink, Fingerprint, Landmark, LoaderCircle, Lock, ShieldCheck, TriangleAlert, Wallet, X } from "lucide-react";
 import { api } from "@agent-wallet/backend/api";
-import { actionDigest, describe, formatMoney, type Currency, type Op } from "@agent-wallet/domain";
-import type { Address, Hex } from "viem";
+import { CHAIN_ID, actionDigest, checkApproval, formatMoney, policyVaultAbi, type ChainReader, type Currency, type Op, type Truth } from "@agent-wallet/domain";
+import { createPublicClient, http, type Address, type Hex } from "viem";
 import { createPasskey, inAppBrowser, passkeysSupported, signWithPasskey } from "./passkey";
 
 const WEB_URL = import.meta.env.VITE_WEB_URL ?? "http://localhost:3000";
+
+/** Reads the vault from a public Base Sepolia node, so what the page calls a saved contact doesn't depend on our server. */
+const baseSepolia = createPublicClient({
+  chain: { id: CHAIN_ID, name: "Base Sepolia", nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: ["https://sepolia.base.org"] } } },
+  transport: http("https://sepolia.base.org"),
+});
+const vaultReader = (vault: Address): ChainReader => ({
+  async contact(contactId) {
+    const [payee, activeAt] = await baseSepolia.readContract({ address: vault, abi: policyVaultAbi, functionName: "contacts", args: [contactId] });
+    return { payee, activeAt: BigInt(activeAt) };
+  },
+});
 
 function route(): { kind: "approve" | "enrol"; token: string } | null {
   const m = window.location.pathname.match(/^\/(a|enrol)\/([A-Za-z0-9]+)$/);
@@ -182,13 +194,37 @@ function Approve({ token }: { token: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
 
-  // Rendered from the exact bytes that will be signed, never from server-written text.
+  // The digest is computed here from the exact bytes; the server never supplies the challenge.
   const signed = useMemo(() => {
     if (!data?.onchain) return null;
     const a = data.onchain.action;
     const action = { op: a.op as Op, data: a.data as Hex, nonce: BigInt(a.nonce), deadline: BigInt(a.deadline) };
-    return { action, view: describe(a.op as Op, a.data as Hex, data.onchain.names), digest: actionDigest(action, data.onchain.vault as Address, data.onchain.chainId) };
+    return { action, digest: actionDigest(action, data.onchain.vault as Address, data.onchain.chainId) };
   }, [data?.onchain]);
+
+  // What the page shows comes from those bytes and the vault's own records; server fields are only compared.
+  const [truth, setTruth] = useState<Truth | null>(null);
+  const onchain = data?.onchain;
+  const claimedAmount = data?.amountMinor;
+  const claimedPayee = data?.payee;
+  useEffect(() => {
+    if (!onchain) return;
+    let live = true;
+    void checkApproval(
+      onchain.action.op as Op,
+      onchain.action.data as Hex,
+      {
+        amountMinor: claimedAmount || undefined,
+        payee: claimedPayee ? { name: claimedPayee.name, address: claimedPayee.address } : null,
+        contacts: onchain.contacts,
+        names: onchain.names,
+      },
+      vaultReader(onchain.vault as Address),
+    ).then((t) => live && setTruth(t));
+    return () => {
+      live = false;
+    };
+  }, [onchain, claimedAmount, claimedPayee]);
 
   if (data === null) return <Invalid title="This link isn't valid" text="Ask your assistant for a new one." />;
   if (data === undefined) return <Frame><div className="mt-4 h-[420px] animate-pulse rounded-2xl bg-white" /></Frame>;
@@ -201,6 +237,8 @@ function Approve({ token }: { token: string }) {
   const left = secs === null ? null : secs >= 3600 ? `${Math.floor(secs / 3600)} hr ${Math.floor((secs % 3600) / 60)} min` : `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
   const legacy = Boolean(data.onchain && data.onchain.version !== 2);
   const open = data.state === "awaiting_approval" && !expired && !legacy;
+  // Signing waits for the check, and never happens when the server and the bytes disagree.
+  const blocked = live && (!truth || truth.mismatches.length > 0);
   const txUrl = data.txHash ? `${data.explorer}/tx/${data.txHash}` : null;
 
   const approve = async () => {
@@ -278,19 +316,62 @@ function Approve({ token }: { token: string }) {
       <main className="rise mt-2 overflow-hidden rounded-2xl bg-white shadow-[0_2px_12px_rgba(0,41,112,0.06)]">
         <div className="px-5 pt-6 pb-5 text-center">
           <div className="text-body text-ink-2">{data.agent ? `${data.agent} wants to` : "You're about to"}</div>
-          {data.amountMinor > 0 ? (
-            <div className="figure mt-1 text-[44px] leading-[48px] text-navy">{formatMoney(data.amountMinor, currency, { cents: currency === "USDC" })}</div>
+          {live ? (
+            // On-chain: amount and payee come only from the signed bytes and the vault.
+            truth ? (
+              <>
+                {truth.amountMinor !== null ? (
+                  <div className="figure mt-1 text-[44px] leading-[48px] text-navy">{formatMoney(truth.amountMinor, "USDC", { cents: true })}</div>
+                ) : (
+                  <div className="mt-1 text-[24px] leading-[30px] font-bold text-navy">{truth.title}</div>
+                )}
+                {truth.payee &&
+                  (truth.payee.saved ? (
+                    <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-page py-1.5 pr-3 pl-1.5">
+                      <span className="grid size-7 place-items-center rounded-full bg-navy text-label font-bold text-white">{truth.payee.saved.name.slice(0, 1)}</span>
+                      <span className="text-body font-semibold">{truth.payee.saved.name}</span>
+                      <ShieldCheck className="size-4 text-green" aria-label="Saved contact in your vault" />
+                    </div>
+                  ) : (
+                    <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-red-soft py-1.5 pr-3 pl-2 text-red">
+                      <TriangleAlert className="size-4" />
+                      <span className="text-body font-semibold">Not a saved contact</span>
+                      <span className="num text-label">{truth.payee.address.slice(0, 6)}…{truth.payee.address.slice(-4)}</span>
+                    </div>
+                  ))}
+              </>
+            ) : (
+              <div className="mx-auto mt-2 h-12 w-40 animate-pulse rounded-lg bg-page" aria-label="Checking the vault" />
+            )
           ) : (
-            <div className="mt-1 text-[24px] leading-[30px] font-bold text-navy">{signed?.view.title ?? data.title}</div>
-          )}
-          {data.payee && (
-            <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-page py-1.5 pr-3 pl-1.5">
-              <span className="grid size-7 place-items-center rounded-full bg-navy text-label font-bold text-white">{data.payee.name.slice(0, 1)}</span>
-              <span className="text-body font-semibold">{data.payee.name}</span>
-              {data.payee.trusted && <ShieldCheck className="size-4 text-green" aria-label="In your contacts" />}
-            </div>
+            <>
+              {data.amountMinor > 0 ? (
+                <div className="figure mt-1 text-[44px] leading-[48px] text-navy">{formatMoney(data.amountMinor, currency, { cents: currency === "USDC" })}</div>
+              ) : (
+                <div className="mt-1 text-[24px] leading-[30px] font-bold text-navy">{data.title}</div>
+              )}
+              {data.payee && (
+                <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-page py-1.5 pr-3 pl-1.5">
+                  <span className="grid size-7 place-items-center rounded-full bg-navy text-label font-bold text-white">{data.payee.name.slice(0, 1)}</span>
+                  <span className="text-body font-semibold">{data.payee.name}</span>
+                </div>
+              )}
+            </>
           )}
         </div>
+
+        {truth && truth.mismatches.length > 0 && (
+          <div className="border-t border-red/30 bg-red-soft px-5 py-3 text-label text-red" role="alert">
+            <div className="flex items-center gap-1.5 font-semibold">
+              <TriangleAlert className="size-4" /> Don't approve: the app and the signature disagree
+            </div>
+            <ul className="mt-1 list-disc pl-5">
+              {truth.mismatches.map((m) => (
+                <li key={m}>{m}</li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {signed ? (
           <div className="border-t border-line px-5 py-3">
@@ -298,10 +379,10 @@ function Approve({ token }: { token: string }) {
               <ShieldCheck className="size-3.5" /> Your passkey signs exactly this
             </div>
             <dl className="divide-y divide-line text-body">
-              {signed.view.lines.map((l, i) =>
+              {(truth?.lines ?? []).map((l, i) =>
                 l.label ? (
                   <Detail key={i} label={l.label}>
-                    <span className={l.mono ? "num text-label break-all" : ""}>{l.value}</span>
+                    <span className={`${l.mono ? "num text-label break-all" : ""} ${l.tone === "bad" ? "font-semibold text-red" : l.tone === "ok" ? "text-green" : ""}`}>{l.value}</span>
                   </Detail>
                 ) : (
                   <div key={i} className="pt-3 pb-1 text-label font-semibold text-ink">{l.value}</div>
@@ -365,7 +446,7 @@ function Approve({ token }: { token: string }) {
                 <X className="size-4" /> Decline
               </button>
               <button
-                disabled={busy || (live && !passkeysSupported())}
+                disabled={busy || blocked || (live && !passkeysSupported())}
                 onClick={approve}
                 className="press flex h-12 items-center justify-center gap-2 rounded-[10px] bg-navy text-title font-semibold text-white disabled:opacity-60"
               >

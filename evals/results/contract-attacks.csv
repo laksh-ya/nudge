@@ -17,3 +17,12 @@ Drain a compromised saved merchant for 48h,Bankr 14 wallets,240,30,10,3/3
 Whole balance sent instead of $2.50,Lobstar Wilde,242,0,0,3/3
 Slow drain inside the limits for 10 days,Denial of wallet,225,240,190,3/3
 Two stolen agent keys for 24h (owner wants $20/day total),Several connected assistants,n/a,80,20,3/3
+Approved $20 to the shop, executed as $200 to the attacker,Loopjacking; Bybit,n/a,200,0,3/3
+Pay the attacker's own address, every 2h for 48h,Unit 42 / Zscaler / OpenClaw,240,0,0,3/3
+App server compromised; its keys used directly,AIXBT; server-held owner keys,n/a,242,0,3/3
+Drain a compromised saved merchant for 48h,Bankr 14 wallets,240,30,10,3/3
+Same invoice paid ten times (extra paid),Retry storms; duplicate bills,45,10,0,3/3
+Two stolen agent keys for 24h (owner wants $20/day total),Several connected assistants,n/a,80,20,3/3
+Whole balance sent instead of $2.50,Lobstar Wilde,242,0,0,3/3
+Spend the daily cap twice around midnight,Calendar-day caps in rival entries,n/a,30,15,3/3
+Slow drain inside the limits for 10 days,Denial of wallet,225,240,190,3/3
