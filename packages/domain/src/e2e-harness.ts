@@ -49,7 +49,8 @@ export function harness(name: string) {
 
   /** A demo-sandbox token, signed the way apps/web/app/api/demo/token does it. */
   function demoToken() {
-    const jwk = JSON.parse(readFileSync(JWK!, "utf8")) as { kid?: string };
+    // E2E_DEMO_JWK is a path to the JWK file, or the JWK itself (as in apps/web/.env.local).
+    const jwk = JSON.parse(JWK!.trim().startsWith("{") ? JWK! : readFileSync(JWK!, "utf8")) as { kid?: string };
     const enc = (o: object) => Buffer.from(JSON.stringify(o)).toString("base64url");
     const now = Math.floor(Date.now() / 1000);
     const head = enc({ alg: "ES256", typ: "JWT", kid: jwk.kid ?? "demo-1" });
