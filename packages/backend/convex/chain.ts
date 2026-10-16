@@ -456,8 +456,8 @@ export const releaseHeld = internalAction({
 
 /** Guardian cancel of a held payment. Tightening, so no passkey is needed. */
 export const cancelHeld = internalAction({
-  args: { taskId: v.id("tasks"), quiet: v.optional(v.boolean()) },
-  handler: async (ctx, { taskId, quiet }) => {
+  args: { taskId: v.id("tasks"), quiet: v.optional(v.boolean()), attempt: v.optional(v.number()) },
+  handler: async (ctx, { taskId, quiet, attempt = 1 }) => {
     const t = await ctx.runQuery(internal.vault.heldForChain, { taskId });
     if (!t) return;
     const { pub, wallet, account } = clients();
@@ -467,7 +467,14 @@ export const cancelHeld = internalAction({
       if (r.status !== "success") throw new Error("Reverted");
       if (!quiet) await ctx.runMutation(internal.vault.onCancelled, { taskId, txHash: hash });
     } catch (e) {
-      if (!quiet) await ctx.runMutation(internal.vault.onCancelFailed, { taskId, note: reason(e) });
+      if (transient(e) && attempt < FREEZE_ATTEMPTS) {
+        await relayer.enqueueAction(ctx, internal.chain.cancelHeld, { taskId, quiet, attempt: attempt + 1 }, { runAt: Date.now() + 3_000 * 2 ** attempt });
+        return;
+      }
+      // On a retry, "nothing held" means the earlier attempt landed.
+      if (attempt > 1 && reason(e) === "NotQueued") {
+        if (!quiet) await ctx.runMutation(internal.vault.onCancelled, { taskId });
+      } else if (!quiet) await ctx.runMutation(internal.vault.onCancelFailed, { taskId, note: reason(e) });
     }
     await readVaultTwice(ctx, pub, t.walletId);
   },
@@ -475,8 +482,8 @@ export const cancelHeld = internalAction({
 
 /** Guardian cancel of a queued loosening. */
 export const cancelChange = internalAction({
-  args: { taskId: v.id("tasks") },
-  handler: async (ctx, { taskId }) => {
+  args: { taskId: v.id("tasks"), attempt: v.optional(v.number()) },
+  handler: async (ctx, { taskId, attempt = 1 }) => {
     const t = await ctx.runQuery(internal.vault.taskForChain, { taskId });
     if (!t?.vault || !t.changeId) return;
     const { pub, wallet, account } = clients();
@@ -486,36 +493,58 @@ export const cancelChange = internalAction({
       if (r.status !== "success") throw new Error("Reverted");
       await ctx.runMutation(internal.vault.onCancelled, { taskId, txHash: hash });
     } catch (e) {
-      await ctx.runMutation(internal.vault.onCancelFailed, { taskId, note: reason(e) });
+      if (transient(e) && attempt < FREEZE_ATTEMPTS) {
+        await relayer.enqueueAction(ctx, internal.chain.cancelChange, { taskId, attempt: attempt + 1 }, { runAt: Date.now() + 3_000 * 2 ** attempt });
+        return;
+      }
+      if (attempt > 1 && reason(e) === "NotQueued") await ctx.runMutation(internal.vault.onCancelled, { taskId });
+      else await ctx.runMutation(internal.vault.onCancelFailed, { taskId, note: reason(e) });
     }
   },
 });
 
+/** Network trouble, not a refusal by the contract: worth trying again. */
+function transient(e: unknown) {
+  return !(e instanceof BaseError && e.walk((err) => err instanceof ContractFunctionRevertedError) instanceof ContractFunctionRevertedError);
+}
+
+/** A freeze must not hinge on one RPC call: retry network failures with backoff before giving up. */
+const FREEZE_ATTEMPTS = 5;
+
 /** Tightening needs no passkey: the guardian freezes the vault or one agent, then reads it back. */
 export const guardianFreeze = internalAction({
-  args: { walletId: v.id("wallets"), agentId: v.optional(v.id("agents")) },
-  handler: async (ctx, { walletId, agentId }) => {
+  args: { walletId: v.id("wallets"), agentId: v.optional(v.id("agents")), attempt: v.optional(v.number()) },
+  handler: async (ctx, { walletId, agentId, attempt = 1 }) => {
     const w = await ctx.runQuery(internal.vault.walletForChain, { walletId });
     if (!w?.address) return;
     const agent = agentId ? w.agents.find((a: KeyedAgent) => a._id === agentId) : null;
     if (agentId && !agent?.chainAddress) return;
     const { pub, wallet, account } = clients();
+    const isFrozen = async () =>
+      agent
+        ? ((await pub.readContract({ address: w.address as Address, abi: policyVaultAbi, functionName: "agents", args: [agent.chainAddress as Address] }))[4] as boolean)
+        : await pub.readContract({ address: w.address as Address, abi: policyVaultAbi, functionName: "frozen" });
+    let hash: Hex | undefined;
     try {
-      const hash = agent
-        ? await send(pub, wallet, { address: w.address as Address, abi: policyVaultAbi, functionName: "freezeAgent", args: [agent.chainAddress as Address], account })
-        : await send(pub, wallet, { address: w.address as Address, abi: policyVaultAbi, functionName: "freeze", account });
-      const r = await pub.waitForTransactionReceipt({ hash, timeout: RECEIPT_TIMEOUT });
-      if (r.status !== "success") throw new Error("Freeze reverted");
+      // A retry may find an earlier attempt already landed.
+      if (attempt === 1 || !(await isFrozen())) {
+        hash = agent
+          ? await send(pub, wallet, { address: w.address as Address, abi: policyVaultAbi, functionName: "freezeAgent", args: [agent.chainAddress as Address], account })
+          : await send(pub, wallet, { address: w.address as Address, abi: policyVaultAbi, functionName: "freeze", account });
+        const r = await pub.waitForTransactionReceipt({ hash, timeout: RECEIPT_TIMEOUT });
+        if (r.status !== "success") throw new Error("Freeze reverted");
+      }
       // Only a read-back of the vault counts as frozen.
       const frozen = await settled(async () => {
-        const value = agent
-          ? ((await pub.readContract({ address: w.address as Address, abi: policyVaultAbi, functionName: "agents", args: [agent.chainAddress as Address] }))[4] as boolean)
-          : await pub.readContract({ address: w.address as Address, abi: policyVaultAbi, functionName: "frozen" });
-        if (!value) throw new Error("Not frozen yet");
-        return value;
+        if (!(await isFrozen())) throw new Error("Not frozen yet");
+        return true;
       });
       await ctx.runMutation(internal.vault.onFreezeResult, { walletId, agentId, ok: frozen, txHash: hash });
     } catch (e) {
+      if (transient(e) && attempt < FREEZE_ATTEMPTS) {
+        await relayer.enqueueAction(ctx, internal.chain.guardianFreeze, { walletId, agentId, attempt: attempt + 1 }, { runAt: Date.now() + 3_000 * 2 ** attempt });
+        return;
+      }
       await ctx.runMutation(internal.vault.onFreezeResult, { walletId, agentId, ok: false, note: reason(e) });
     }
     await readVaultTwice(ctx, pub, walletId);

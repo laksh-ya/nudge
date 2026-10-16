@@ -642,11 +642,12 @@ export const onAgentResult = internalMutation({
 });
 
 export const onCancelled = internalMutation({
-  args: { taskId: v.id("tasks"), txHash: v.string() },
+  /** No hash when a retry found that an earlier attempt had already cancelled it. */
+  args: { taskId: v.id("tasks"), txHash: v.optional(v.string()) },
   handler: async (ctx, { taskId, txHash }) => {
     const t = await ctx.db.get(taskId);
     if (!t) return;
-    await ctx.db.patch(taskId, { state: "cancelled", reason: `Cancelled on-chain · ${txHash.slice(0, 10)}…`, updatedAt: Date.now() });
+    await ctx.db.patch(taskId, { state: "cancelled", reason: txHash ? `Cancelled on-chain · ${txHash.slice(0, 10)}…` : "Cancelled on-chain", updatedAt: Date.now() });
     if (t.effects?.passkey) {
       const w = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", t.userId)).unique();
       if (w?.passkeys) await ctx.db.patch(w._id, { passkeys: w.passkeys.map((k) => (k.keyId === t.effects!.passkey ? { ...k, status: "removed" as const } : k)) });
