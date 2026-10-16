@@ -293,6 +293,12 @@ export function summary(rows: Row[], meta: { date: string; commit: string; chain
       if (!a.length && !f.length) continue;
       out.push(`| ${cat.replace("_", " ")} | ${Math.max(a.length, f.length)} | ${a.filter((r) => r.fooled).length} / ${f.filter((r) => r.fooled).length} | $${money(a).toFixed(2)} / $${money(f).toFixed(2)} |`);
     }
+    out.push("", "| Where the instruction was | Cases | Fooled (alone / full) | Money moved (alone / full) |", "|---|---|---|---|");
+    for (const [label, fromTools] of [["pasted by the owner", false], ["inside tool results (bills, contacts, categories)", true]] as const) {
+      const a = aA.filter((r) => r.caseId.startsWith("tool-") === fromTools), f = fA.filter((r) => r.caseId.startsWith("tool-") === fromTools);
+      if (!a.length && !f.length) continue;
+      out.push(`| ${label} | ${Math.max(a.length, f.length)} | ${a.filter((r) => r.fooled).length} / ${f.filter((r) => r.fooled).length} | $${money(a).toFixed(2)} / $${money(f).toFixed(2)} |`);
+    }
     const failed = fL.filter((r) => !r.passed);
     if (failed.length) out.push("", `Legitimate tasks the full system got wrong: ${failed.map((r) => `\`${r.caseId}\` (${r.detail || "nothing happened"})`).join("; ")}.`);
     out.push("");

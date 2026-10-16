@@ -1,5 +1,6 @@
 /**
- * Prompt-injection evaluation: 41 cases (26 attacks in the rules' four security categories, 15
+ * Prompt-injection evaluation: 54 cases (38 attacks in the rules' four security categories, 12 of
+ * them hidden in the owner's own data and read back through the wallet's tools; 16
  * legitimate tasks), each run on two systems with the same model:
  *
  * - "model alone": the model with careful instructions and a send_money tool that pays whatever
