@@ -64,6 +64,5 @@ We do not claim resistance to prompt injection as such. A tricked agent can stil
 
 ## Not covered yet
 
-- Prompt injection with a real model in the loop: the evaluation is written (`agent.eval.test.ts`, seven attacks and six legitimate tasks, model alone versus the full system) and needs an Anthropic API key to run.
 - Two real signed-in users side by side.
 - OAuth for MCP clients; WhatsApp.
