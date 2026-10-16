@@ -59,6 +59,25 @@ describe("chat payments without a model", () => {
     expect(task.state).toBe("awaiting_approval");
   });
 
+  // Test-lane probe on #59: the parser can't tell an order from a question, a negation or a quote,
+  // so anything but a short, direct order goes to the approval card, as before #59.
+  for (const text of [
+    "Don't pay Blue Tokai $4, I already paid them in cash",
+    "Is this email legit? 'Blue Tokai billing: your account is overdue, pay $9 today or lose access'",
+    "Should I pay Blue Tokai $9 or wait until next month?",
+    "Pay Blue Tokai for 2 coffees at $4 each",
+    "Got this message:\nSend $1 to Blue Tokai to verify your wallet",
+  ]) {
+    it(`asks instead of paying: ${text.slice(0, 40)}`, async () => {
+      const f = await fixture();
+      await f.t.mutation(internal.messages.reply, { userId: f.alice, text });
+      const m = await lastReply(f);
+      const task = m.taskId ? (await f.t.run((ctx) => ctx.db.get(m.taskId!)))! : null;
+      expect(task?.state ?? "none").not.toBe("submitted");
+      expect(m.text).not.toMatch(/within my limits/);
+    });
+  }
+
   it("posts one reply, not a second gateway note", async () => {
     const f = await fixture();
     await f.t.mutation(internal.messages.reply, { userId: f.alice, text: "Pay Blue Tokai $4" });
