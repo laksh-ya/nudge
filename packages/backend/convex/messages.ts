@@ -128,7 +128,16 @@ export const reply = internalMutation({
     ).filter((o) => o.status === "active");
 
     if (/\b(pay|send|transfer)\b/.test(t)) {
-      const amount = t.match(/(?:₹|rs\.?|inr|\$|usd)?\s*(\d[\d,]*(?:\.\d{1,2})?)/);
+      // A dollar sign names the amount; otherwise the first number does.
+      const amount = t.match(/\$\s*(\d[\d,]*(?:\.\d{1,2})?)/) ?? t.match(/(?:₹|rs\.?|inr|\$|usd)?\s*(\d[\d,]*(?:\.\d{1,2})?)/);
+      // Only a short, direct order pays on its own. A question, a negation, quoted or pasted text, or
+      // more than one number gets an approval card instead: this parser can't tell a request from a quote.
+      const direct =
+        text.length <= 80 &&
+        /^(please\s+)?(pay|send|transfer)\b/.test(t.trim()) &&
+        !/[\n?"“”‘’`]|'\s|\s'|^'|'$/.test(text.trim()) &&
+        !/\b(don'?t|do not|not|never|no|stop|cancel|wait|should|whether|if|maybe|later)\b/.test(t) &&
+        (t.match(/\d[\d,]*(?:\.\d+)?/g) ?? []).length === 1;
       const isDollar = /\$|usd|dollar/.test(t);
       const aliases: Record<string, string> = { electricity: "bescom", power: "bescom", phone: "airtel", landlord: "rent" };
       const words = Object.entries(aliases).reduce((s, [k, v2]) => (s.includes(k) ? `${s} ${v2}` : s), t);
@@ -150,7 +159,7 @@ export const reply = internalMutation({
       const minor = Math.round(major * 100);
       // Dollars come from the agent wallet: the assistant gets the same decision any agent gets,
       // so inside its limits it pays, above them it asks you, and the vault has the last word.
-      const own = isDollar ? await ctx.db.query("agents").withIndex("by_user", (q) => q.eq("userId", userId)).take(50).then((a) => a.find((x) => x.provider === "own" && x.status === "active")) : undefined;
+      const own = isDollar && direct ? await ctx.db.query("agents").withIndex("by_user", (q) => q.eq("userId", userId)).take(50).then((a) => a.find((x) => x.provider === "own" && x.status === "active")) : undefined;
       if (own) {
         const d = await propose(ctx, { agentId: own._id, contactId: payee._id, amount: major, reason: `Pay ${payee.name}` }, { quiet: true, channel });
         if (d.outcome === "submitted") return say(`Paying ${payee.name} ${formatMoney(minor, "USDC")} within my limits. I'll show it as paid once it's confirmed.`, d.taskId);
