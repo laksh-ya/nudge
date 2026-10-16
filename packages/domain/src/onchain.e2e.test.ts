@@ -211,13 +211,13 @@ run("Base Sepolia, end to end (contract v2)", () => {
     shopId = contacts.find((c) => c.name === "Blue Tokai")!.contactId;
 
     const small = (await mcp<{ outcome: string; taskId: string }>(claudeKey, "propose_payment", { contactId: shopId, amount: 3, reason: "Coffee" })).value;
-    expect(small.outcome).toBe("paid");
+    expect(small.outcome).toBe("submitted");
     const s1 = await settledStatus(claudeKey, small.taskId, ["confirmed", "failed"]);
     expect(s1.state).toBe("confirmed");
     log("Claude pays $3 at once", s1.transaction?.split("/tx/")[1]);
 
     const big = (await mcp<{ outcome: string; taskId: string }>(claudeKey, "propose_payment", { contactId: shopId, amount: 6, reason: "Beans", requestId: "inv-6" })).value;
-    expect(big.outcome).toBe("paid");
+    expect(big.outcome).toBe("submitted");
     const held = await settledStatus(claudeKey, big.taskId, ["held", "failed"]);
     expect(held.state).toBe("held");
     log("Claude pays $6: held for the owner", held.transaction?.split("/tx/")[1]);

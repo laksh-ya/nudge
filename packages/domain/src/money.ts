@@ -21,7 +21,9 @@ export function convert(minor: number, from: Currency, to: Currency, usdRates: R
   if (from === to) return minor;
   const f = from === "USDC" ? 1 : usdRates[from];
   const t = to === "USDC" ? 1 : usdRates[to];
-  if (!f || !t) return 0;
+  // A missing or nonsensical rate is an error, never a silent zero.
+  if (!(f && f > 0 && Number.isFinite(f))) throw new Error(`No exchange rate for ${from}`);
+  if (!(t && t > 0 && Number.isFinite(t))) throw new Error(`No exchange rate for ${to}`);
   const major = minor / 10 ** CURRENCIES[from].decimals;
   return Math.round((major / f) * t * 10 ** CURRENCIES[to].decimals);
 }

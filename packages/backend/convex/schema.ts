@@ -369,6 +369,8 @@ export default defineSchema({
     releaseAt: v.optional(v.number()),
     /** The caller's own id for this payment (an invoice number, say). Retries with it never pay twice. */
     requestId: v.optional(v.string()),
+    /** Other assistants that proposed this same payment (same requestId) and were sent to this task. */
+    sharedWith: v.optional(v.array(v.id("agents"))),
     paymentId: v.optional(v.string()),
     checks: v.optional(v.number()),
     /** Seeded demo history, shown with a "Sample" label. */
@@ -381,7 +383,7 @@ export default defineSchema({
     .index("by_user_state", ["userId", "state"])
     .index("by_approval_token", ["approvalToken"])
     .index("by_state_expires", ["state", "expiresAt"])
-    .index("by_agent_request", ["agentId", "requestId"])
+    .index("by_user_request", ["userId", "requestId"])
     .index("by_payee", ["payeeId"]),
 
   messages: defineTable({

@@ -41,7 +41,7 @@ const TOOLS = [
   {
     name: "propose_payment",
     description:
-      "Pay a saved contact from the agent wallet in USD (test USDC). Inside your limits it is paid; otherwise the owner is notified to approve it themselves (you never receive an approval link). Never retry a payment whose status is unknown; check get_task_status.",
+      "Pay a saved contact from the agent wallet in USD (test USDC). Inside your limits it is submitted (check get_task_status for confirmed); otherwise the owner is notified to approve it themselves (you never receive an approval link). Never retry a payment whose status is unknown; check get_task_status.",
     inputSchema: {
       type: "object",
       properties: {
