@@ -3,18 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
-import {
-  Activity,
-  Bell,
-  Bot,
-  House,
-  MessageCircle,
-  Settings,
-  Snowflake,
-  Users,
-  Wallet,
-  ChartPie,
-} from "lucide-react";
+import { Activity, Bell, Bot, ChartPie, House, MessageCircle, Settings, ShieldCheck, Snowflake, Users, Wallet } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -30,6 +19,7 @@ const NAV = [
   { href: "/agents", label: "Agents", icon: Bot },
   { href: "/family", label: "Family", icon: Users },
   { href: "/activity", label: "Activity", icon: Activity },
+  { href: "/proof", label: "Proof", icon: ShieldCheck },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

@@ -2,7 +2,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useEffect, useMemo, useState } from "react";
 import { Check, Clock, ExternalLink, Fingerprint, Landmark, LoaderCircle, Lock, ShieldCheck, TriangleAlert, Wallet, X } from "lucide-react";
 import { api } from "@agent-wallet/backend/api";
-import { CHAIN_ID, actionDigest, checkApproval, formatMoney, isVaultVersion, policyVaultAbi, type ChainReader, type Currency, type Op, type Truth } from "@agent-wallet/domain";
+import { CHAIN_ID, actionDigest, checkApproval, formatMoney, isVaultVersion, policyVaultAbi, testUsdAbi, type ChainReader, type Currency, type Op, type Truth } from "@agent-wallet/domain";
 import { createPublicClient, http, type Address, type Hex } from "viem";
 import { createPasskey, inAppBrowser, passkeysSupported, signWithPasskey } from "./passkey";
 
@@ -17,6 +17,20 @@ const vaultReader = (vault: Address): ChainReader => ({
   async contact(contactId) {
     const [payee, activeAt] = await baseSepolia.readContract({ address: vault, abi: policyVaultAbi, functionName: "contacts", args: [contactId] });
     return { payee, activeAt: BigInt(activeAt) };
+  },
+  async state() {
+    const read = <F extends "heldTotal" | "protectedAmount" | "dailyCeiling" | "vaultSpentToday" | "frozen" | "token">(functionName: F) =>
+      baseSepolia.readContract({ address: vault, abi: policyVaultAbi, functionName });
+    const [token, held, protectedAmount, dailyCeiling, spent24h, frozen] = await Promise.all([
+      read("token"),
+      read("heldTotal"),
+      read("protectedAmount"),
+      read("dailyCeiling"),
+      read("vaultSpentToday"),
+      read("frozen"),
+    ]);
+    const balance = await baseSepolia.readContract({ address: token as Address, abi: testUsdAbi, functionName: "balanceOf", args: [vault] });
+    return { balance, held, protectedAmount, dailyCeiling, spent24h, frozen } as Awaited<ReturnType<NonNullable<ChainReader["state"]>>>;
   },
 });
 

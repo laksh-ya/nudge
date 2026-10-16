@@ -105,6 +105,9 @@ importers:
       vaul:
         specifier: 1.1.2
         version: 1.1.2(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      viem:
+        specifier: 2.57.7
+        version: 2.57.7(typescript@5.9.3)
     devDependencies:
       '@tailwindcss/postcss':
         specifier: 4.3.3
