@@ -5,4 +5,4 @@ const config: NextConfig = {
   experimental: { optimizePackageImports: ["lucide-react"] },
 };
 
-export default config;
+export default config; 
