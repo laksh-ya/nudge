@@ -376,6 +376,12 @@ export default defineSchema({
     /** Other assistants that proposed this same payment (same requestId) and were sent to this task. */
     sharedWith: v.optional(v.array(v.id("agents"))),
     paymentId: v.optional(v.string()),
+    /** The signed transaction, stored before broadcast: reconciliation looks for exactly this one. */
+    rawTx: v.optional(v.string()),
+    /** Callbacks that arrived after the task settled: kept as history, never applied. */
+    attempts: v.optional(v.array(v.object({ at: v.number(), ignored: v.string(), txHash: v.optional(v.string()), note: v.optional(v.string()) }))),
+    txNonce: v.optional(v.number()),
+    txFrom: v.optional(v.string()),
     checks: v.optional(v.number()),
     /** Seeded demo history, shown with a "Sample" label. */
     sample: v.optional(v.boolean()),

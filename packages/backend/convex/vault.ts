@@ -14,6 +14,23 @@ import { spendDeploy } from "./lib/budget";
 import { chainReady } from "./chain";
 
 const HEX32 = /^0x[0-9a-fA-F]{64}$/;
+
+/** Settled outcomes. Chain callbacks can arrive twice or late; none of them may reopen these. */
+const TERMINAL = new Set<string>(["confirmed", "failed", "cancelled", "expired", "reported"]);
+
+/**
+ * Whether a late callback may change this task, and if not, record it in the task's attempt
+ * history instead. A confirmed task is final. A failed one becomes confirmed only when the very
+ * transaction we were tracking turns out to have succeeded.
+ */
+async function accepts(ctx: MutationCtx, t: Doc<"tasks">, next: { ok?: boolean; state: string; txHash?: string; note?: string }) {
+  const final = TERMINAL.has(t.state);
+  const lateTruth = final && t.state !== "confirmed" && next.ok === true && Boolean(next.txHash) && next.txHash === t.txHash;
+  if (!final || lateTruth) return true;
+  const attempt = { at: Date.now(), ignored: next.state, txHash: next.txHash, note: next.note?.slice(0, 140) };
+  await ctx.db.patch(t._id, { attempts: [...(t.attempts ?? []), attempt].slice(-20) });
+  return false;
+}
 const ENROL_MINUTES = 15;
 
 function allowedRpIds() {
@@ -429,7 +446,7 @@ export const taskForChain = internalQuery({
     const t = await ctx.db.get(taskId);
     if (!t) return null;
     const w = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", t.userId)).unique();
-    return { action: t.action, vault: w?.address, walletId: w!._id, state: t.state, changeId: t.changeId, txHash: t.txHash };
+    return { action: t.action, vault: w?.address, walletId: w!._id, state: t.state, changeId: t.changeId, txHash: t.txHash, rawTx: t.rawTx, txNonce: t.txNonce, txFrom: t.txFrom };
   },
 });
 
@@ -441,6 +458,7 @@ export const agentTaskForChain = internalQuery({
     const key = await ctx.db.query("agentKeys").withIndex("by_agent", (q) => q.eq("agentId", t.agentId!)).unique();
     const w = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", t.userId)).unique();
     if (!key || !w?.address) return null;
+    if (TERMINAL.has(t.state)) return null;
     return {
       userId: t.userId,
       agentId: t.agentId,
@@ -486,9 +504,21 @@ export const heldForChain = internalQuery({
   },
 });
 
+/** The signed transaction, recorded before broadcast, so a lost reply can't lose its identity. */
+export const onSigned = internalMutation({
+  args: { taskId: v.id("tasks"), txHash: v.string(), rawTx: v.string(), txNonce: v.number(), txFrom: v.string() },
+  handler: async (ctx, { taskId, ...tx }) => {
+    const t = await ctx.db.get(taskId);
+    if (!t || TERMINAL.has(t.state)) return;
+    await ctx.db.patch(taskId, { ...tx, updatedAt: Date.now() });
+  },
+});
+
 export const onSubmitted = internalMutation({
   args: { taskId: v.id("tasks"), txHash: v.string(), keepState: v.optional(v.boolean()) },
   handler: async (ctx, { taskId, txHash, keepState }) => {
+    const t = await ctx.db.get(taskId);
+    if (!t || !(await accepts(ctx, t, { state: "submitted", txHash }))) return;
     await ctx.db.patch(taskId, keepState ? { txHash, updatedAt: Date.now() } : { txHash, state: "submitted", updatedAt: Date.now() });
   },
 });
@@ -496,7 +526,9 @@ export const onSubmitted = internalMutation({
 /** Broadcast but no receipt yet: never call it failed, since it may still land. */
 export const onUnknown = internalMutation({
   args: { taskId: v.id("tasks"), txHash: v.string(), note: v.string() },
-  handler: async (ctx, { taskId, txHash }) => {
+  handler: async (ctx, { taskId, txHash, note }) => {
+    const t = await ctx.db.get(taskId);
+    if (!t || !(await accepts(ctx, t, { state: "unknown", txHash, note }))) return;
     await ctx.db.patch(taskId, { state: "unknown", txHash, reason: "Sent; checking the network before doing anything else", checks: 0, updatedAt: Date.now() });
   },
 });
@@ -519,7 +551,7 @@ export const onQueued = internalMutation({
   args: { taskId: v.id("tasks"), txHash: v.string(), changeId: v.string(), readyAt: v.number() },
   handler: async (ctx, { taskId, txHash, changeId, readyAt }) => {
     const t = await ctx.db.get(taskId);
-    if (!t) return;
+    if (!t || !(await accepts(ctx, t, { state: "queued", txHash }))) return;
     await ctx.db.patch(taskId, { state: "queued", txHash, changeId, readyAt, reason: "Approved. Loosening waits before it applies; you can still cancel.", updatedAt: Date.now() });
     await ctx.db.insert("activity", { userId: t.userId, kind: "security", title: `${t.title}: waiting`, detail: `Applies at ${new Date(readyAt).toISOString().slice(11, 16)} UTC unless you cancel`, tone: "warn" });
   },
@@ -555,7 +587,7 @@ export const onOwnerResult = internalMutation({
   args: { taskId: v.id("tasks"), txHash: v.optional(v.string()), ok: v.boolean(), note: v.optional(v.string()) },
   handler: async (ctx, { taskId, txHash, ok, note }) => {
     const t = await ctx.db.get(taskId);
-    if (!t) return;
+    if (!t || !(await accepts(ctx, t, { ok, state: ok ? "confirmed" : "failed", txHash, note }))) return;
     await ctx.db.patch(taskId, { state: ok ? "confirmed" : "failed", txHash: txHash ?? t.txHash, reason: ok ? t.reason : `Not done: ${note ?? "rejected"}`, updatedAt: Date.now() });
     if (!ok) {
       await ctx.db.insert("activity", { userId: t.userId, kind: "payment", title: `${t.title} failed`, detail: note, tone: "bad" });
@@ -601,7 +633,7 @@ export const onHeld = internalMutation({
   args: { taskId: v.id("tasks"), txHash: v.string(), releaseAt: v.number() },
   handler: async (ctx, { taskId, txHash, releaseAt }) => {
     const t = await ctx.db.get(taskId);
-    if (!t) return;
+    if (!t || !(await accepts(ctx, t, { state: "held", txHash }))) return;
     await ctx.db.patch(taskId, { state: "held", txHash, releaseAt, reason: "Held so you can cancel it before it leaves", updatedAt: Date.now() });
     const agent = t.agentId ? await ctx.db.get(t.agentId) : null;
     const payee = t.payeeId ? await ctx.db.get(t.payeeId) : null;
@@ -626,7 +658,7 @@ export const onAgentResult = internalMutation({
   args: { taskId: v.id("tasks"), txHash: v.optional(v.string()), ok: v.boolean(), code: v.optional(v.number()), note: v.optional(v.string()) },
   handler: async (ctx, { taskId, txHash, ok, code, note }) => {
     const t = await ctx.db.get(taskId);
-    if (!t) return;
+    if (!t || !(await accepts(ctx, t, { ok, state: ok ? "confirmed" : "failed", txHash, note: note ?? (code ? `code ${code}` : undefined) }))) return;
     const why = code ? `Refused by the vault: ${REFUSAL[code] ?? `code ${code}`}` : note;
     await ctx.db.patch(taskId, { state: ok ? "confirmed" : "failed", txHash: txHash ?? t.txHash, refusalCode: code, reason: ok ? t.reason : why, updatedAt: Date.now() });
     const agent = t.agentId ? await ctx.db.get(t.agentId) : null;
@@ -647,7 +679,7 @@ export const onCancelled = internalMutation({
   args: { taskId: v.id("tasks"), txHash: v.optional(v.string()) },
   handler: async (ctx, { taskId, txHash }) => {
     const t = await ctx.db.get(taskId);
-    if (!t) return;
+    if (!t || !(await accepts(ctx, t, { state: "cancelled", txHash }))) return;
     await ctx.db.patch(taskId, { state: "cancelled", reason: txHash ? `Cancelled on-chain · ${txHash.slice(0, 10)}…` : "Cancelled on-chain", updatedAt: Date.now() });
     if (t.effects?.passkey) {
       const w = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", t.userId)).unique();
