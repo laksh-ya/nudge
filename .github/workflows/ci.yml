@@ -1,0 +1,51 @@
+name: CI
+
+# Every pull request and every push to main: typecheck, unit and integration tests, contract tests
+# with fuzzing and invariants, and Slither (fails on medium or high findings).
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: All tests (contracts with fuzzing and invariants, backend, domain)
+        run: pnpm test
+      - name: Dependency audit (production)
+        run: pnpm audit --prod
+
+  slither:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      # OpenZeppelin comes from the workspace's node_modules (contracts/foundry.toml libs).
+      - run: pnpm install --frozen-lockfile
+      - uses: foundry-rs/foundry-toolchain@v1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install slither-analyzer==0.11.3
+      - name: Slither (medium and high fail the build)
+        working-directory: contracts
+        run: slither . --filter-paths "node_modules|lib/|test/|script/" --exclude-informational --exclude-low --exclude-optimization --exclude incorrect-equality,uninitialized-local --fail-medium
