@@ -99,11 +99,42 @@ Tools: `get_overview`, `can_afford`, `list_bills`, `spending_this_month`, `list_
 
 | Contract | Address |
 |---|---|
-| VaultFactory (v2, current) | [`0x672DcD9A822030371d017673403edc290c9d8975`](https://sepolia.basescan.org/address/0x672DcD9A822030371d017673403edc290c9d8975) |
+| VaultFactory (v3, current) | [`0xF0D906bdec522087992EA711710Ee60F2a8DA95e`](https://sepolia.basescan.org/address/0xF0D906bdec522087992EA711710Ee60F2a8DA95e) (deployed in [`0x8c091288…`](https://sepolia.basescan.org/tx/0x8c0912888e939bed5c9dc992248c2c4af2414a6c671c50685a10a774d7b5bb41)) |
+| VaultFactory (v2, retired) | [`0x672DcD9A822030371d017673403edc290c9d8975`](https://sepolia.basescan.org/address/0x672DcD9A822030371d017673403edc290c9d8975) |
 | VaultFactory (v1, retired) | [`0x223c60BAa1C2EfCD0F95B0D73e51D6De9460Baa9`](https://sepolia.basescan.org/address/0x223c60BAa1C2EfCD0F95B0D73e51D6De9460Baa9) |
 | TestUSD (tUSD, 6 decimals) | [`0xB0ee01235A8e7903519B029c1530332f5847D932`](https://sepolia.basescan.org/address/0xB0ee01235A8e7903519B029c1530332f5847D932) |
 | Example v1 vault | [`0xC6299CFc10366cBD576AFFc13a6f0440413d3510`](https://sepolia.basescan.org/address/0xC6299CFc10366cBD576AFFc13a6f0440413d3510) |
 | Example v2 vault | [`0xa395739975fd3F66b83cbcF6Ad535029e5A94E73`](https://sepolia.basescan.org/address/0xa395739975fd3f66b83cbcf6ad535029e5a94e73) |
+| Example v3 vault | [`0x0a130A0cCABA11faA1c653f5ea4D76Adb36194d3`](https://sepolia.basescan.org/address/0x0a130a0ccaba11faa1c653f5ea4d76adb36194d3) |
+
+Contract v3 (16 Oct, after review #32), one full run of `packages/domain/src/onchain.e2e.test.ts` (7 of 7 passed) and `resilience.e2e.test.ts` (3 of 3) through the real backend on the dev deployment, vault [`0x0a130a0c…`](https://sepolia.basescan.org/address/0x0a130a0ccaba11faa1c653f5ea4d76adb36194d3) reporting `VERSION() == 3`.
+
+| Step | Who signs | Transaction |
+|---|---|---|
+| Vault deployed from the v3 factory after the owner typed the code | relayer | [`0x16ffc2cf…`](https://sepolia.basescan.org/tx/0x16ffc2cf41bfbe9ec897f558b090ddaf1334bfb032b743f22b5bd644f5dcfefd) |
+| Setup: agents, contacts and rules | passkey | [`0x251636f7…`](https://sepolia.basescan.org/tx/0x251636f7e8c22660fcbe8a0fba009bec6fca95ebc2cd880e31b6c3fb50393943) |
+| Claude pays $3 at once | Claude's agent key | [`0x7d93f727…`](https://sepolia.basescan.org/tx/0x7d93f727d650323704373f61799ec3fda49dde095a64c10a6d84896b0594789c) |
+| Claude pays $6: above $5, so the vault holds it | Claude's agent key | [`0xa119acfa…`](https://sepolia.basescan.org/tx/0xa119acfa4b25b047cd8e086a223cfa07bbf0cde8d547bbcdb66f0fe107a1560f) |
+| Held $6 released after the 2-minute window | relayer (`release`) | [`0x9a7b0017…`](https://sepolia.basescan.org/tx/0x9a7b0017f9ef6faa9cdade24a16f23ecec90f049266e74a585fcd1ca7155c76b) |
+| Owner approves $12, keeping the protected amount | passkey | [`0x89948646…`](https://sepolia.basescan.org/tx/0x89948646fe987b6489ab3f60d95abe6f36ed4db1d1a39ae59d5b37f4a1dfa8a5) |
+| Stolen key: $50 → refused 2003 | agent key, bypassing our server | [`0x0563fdac…`](https://sepolia.basescan.org/tx/0x0563fdacf54f69d18a35f7d5a0a4668bd881781b2635c565df17ecf8eb9c80bd) |
+| Stolen key: replay → refused 2007 | agent key, bypassing our server | [`0xf9be31b8…`](https://sepolia.basescan.org/tx/0xf9be31b8f157b21155478e7c23e3dc50b7741e2749225fdbccc485f716b38af4) |
+| Stolen key: unknown contact → refused 2010 | agent key, bypassing our server | [`0x5176f1df…`](https://sepolia.basescan.org/tx/0x5176f1df4ef48679cfc88a55cddf9631f036710ddd29445cfdc27cf7cc4ccce1) |
+| Stolen key: refused again (4 strikes) | agent key, bypassing our server | [`0x07e36acc…`](https://sepolia.basescan.org/tx/0x07e36accf3146b1bd2f4db81987ac97a0fb2ca3f82b220030d235d12fff75fc8) |
+| Stolen key: 5th refusal freezes it | agent key, bypassing our server | [`0x9e852068…`](https://sepolia.basescan.org/tx/0x9e852068f278fa9810a1cc9367979aa106238609e8bb3fca863c8d8dea369781) |
+| Owner signs an unfreeze: queued, not applied | passkey | [`0xffc6955e…`](https://sepolia.basescan.org/tx/0xffc6955e6ebd71716c3d6acb5872cb31faf76b3e8cb707e9ff7d238ed2605633) |
+| Unfreeze applied after the 2-minute delay | relayer (`finalize`) | [`0xc1326865…`](https://sepolia.basescan.org/tx/0xc1326865fcf8704b051f7459af23c491a72493abdd6f179f01c8fe4a8ca80863) |
+| Disconnected agent's key removed from the vault | passkey | [`0x5463f383…`](https://sepolia.basescan.org/tx/0x5463f38384c174b2b794e6a5f3b3a416090cbfcde08c46fefab23dfa59f10a82) |
+
+Races and lost receipts on v3, vault [`0xc651daa8…`](https://sepolia.basescan.org/address/0xc651daa8d459935cdad40fd1e5ea51f43d81efac): four simultaneous $6 requests against a $15 daily cap pay two; a payment whose receipt is lost stays unknown, a retry is refused as a duplicate, and it settles once from the chain.
+
+| Step | Who signs | Transaction |
+|---|---|---|
+| Vault deployed | relayer | [`0x49bccccf…`](https://sepolia.basescan.org/tx/0x49bccccf437e8f5f7a3016f278043a7683e073435894b76e4eb9c3d6e46c201f) |
+| Setup approved | passkey | [`0x887c0209…`](https://sepolia.basescan.org/tx/0x887c020976e0e64fd478110ccee9d71e16726ba8505161fb259301a7632dce97) |
+| Race: paid 8gc5tv | Claude's agent key | [`0x40a37f37…`](https://sepolia.basescan.org/tx/0x40a37f3771d1782c62a97dca8bc116bbddacee5a6fefc3d3aa4a5d0a5e034738) |
+| Race: paid 8gcx4s | Claude's agent key | [`0x2467239e…`](https://sepolia.basescan.org/tx/0x2467239ea0d599861962c2b331b3f129898837bbd6fe9d65a33c17d8cefae0d1) |
+| Lost receipt reconciled: paid once | Claude's agent key | [`0xa2fcd439…`](https://sepolia.basescan.org/tx/0xa2fcd43972b3b1f0ad5611729127df3117e9e11b5bf9594e5995ab5d422fa9ee) |
 
 Contract v2, one full run of `packages/domain/src/onchain.e2e.test.ts` (7 of 7 passed) through the real backend, with a software P-256 key shaped like a browser's. Also covered without a transaction: a registration answering another challenge, a reused setup link and a wrong confirmation code are refused; a retried `requestId` returns the first payment; a held payment is cancelled; after a chat "freeze" the old key reverts with `AgentFrozen`.
 
