@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "project": "Agent Wallet",
+  "topic": "F",
+  "deadline": "2026-10-20T23:59:00+08:00",
+  "sourceSnapshot": "6533942",
+  "registeredTeamNameConfirmed": false,
+  "registrationFormCompletedPrivately": false,
+  "technicalDocumentReviewedForFinalRelease": false,
+  "deck": { "path": null, "durationSeconds": null, "english": false },
+  "video": { "path": null, "durationSeconds": null, "englishSubtitles": false },
+  "finalCommit": null,
+  "finalAcceptanceLog": null,
+  "freshEvidenceLog": null,
+  "judgeAccessCheckedAt": null,
+  "physicalPhoneFlowCheckedAt": null,
+  "secretsAndSharingReviewComplete": false,
+  "submissionAcknowledgementStoredPrivately": false
+}

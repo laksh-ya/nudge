@@ -1,0 +1,62 @@
+{
+  "checkedAt": "2026-10-17",
+  "source": "https://fintechathon.g-ican.com/",
+  "files": [
+    {
+      "file": "team-information-form.xlsx",
+      "url": "https://fintechathon.g-ican.com/templates/team-information-form.xlsx",
+      "bytes": 5353,
+      "sha256": "5a9a07aea9ace2747498af3efb298a4cc9bab71234918e16ed07b5b02ff3b67e",
+      "contentType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "lastModified": "Thu, 08 Oct 2026 12:56:11 GMT"
+    },
+    {
+      "file": "international-technical-document-en.docx",
+      "url": "https://fintechathon.g-ican.com/templates/international-technical-document-en.docx",
+      "bytes": 38246,
+      "sha256": "92c2affd4be3d3ea4c1bea28e60f0ce7a6b60b7f02484c89c06a0100fceb83c0",
+      "contentType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "lastModified": "Thu, 08 Oct 2026 12:56:12 GMT"
+    },
+    {
+      "file": "presentation-template.pptx",
+      "url": "https://fintechathon.g-ican.com/templates/presentation-template.pptx",
+      "bytes": 3376472,
+      "sha256": "c7cecdfe3e047b85160ead0feb5ed7fed55bb12aa1d39c46439fcfd523e90feb",
+      "contentType": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "lastModified": "Thu, 08 Oct 2026 12:56:12 GMT"
+    },
+    {
+      "file": "demo-video-guide-en.docx",
+      "url": "https://fintechathon.g-ican.com/templates/demo-video-guide-en.docx",
+      "bytes": 38228,
+      "sha256": "cbfc10b3996c054ff059a6a09e0520946f95aa60af7bef8b7126fa673506614e",
+      "contentType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "lastModified": "Thu, 08 Oct 2026 12:56:11 GMT"
+    },
+    {
+      "file": "source-code-readme-template-en.md",
+      "url": "https://fintechathon.g-ican.com/templates/source-code-readme-template-en.md",
+      "bytes": 992,
+      "sha256": "7283976423e35f135a8e26cfe39b27a8f726431dcc5197751f2a93cfe21facf7",
+      "contentType": "text/markdown",
+      "lastModified": "Thu, 08 Oct 2026 12:56:11 GMT"
+    },
+    {
+      "file": "international-security-self-assessment-en.docx",
+      "url": "https://fintechathon.g-ican.com/templates/international-security-self-assessment-en.docx",
+      "bytes": 38101,
+      "sha256": "c74286e20458e3fdea86de60af5213cd99b6b17ca3ce123b3645adc122252903",
+      "contentType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "lastModified": "Thu, 08 Oct 2026 12:56:11 GMT"
+    },
+    {
+      "file": "international-execution-evidence-en.docx",
+      "url": "https://fintechathon.g-ican.com/templates/international-execution-evidence-en.docx",
+      "bytes": 38077,
+      "sha256": "9e25c4c2a47768c2ea28e8b731cd8b2677d329569ef4dfae09b4ba02a14eefc5",
+      "contentType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "lastModified": "Thu, 08 Oct 2026 12:56:11 GMT"
+    }
+  ]
+}
