@@ -26,7 +26,18 @@ Google's Agent Payments Protocol (AP2) describes three signed mandates. PolicyVa
 | PaymentMandate | an agent payment the vault settled, under that intent | [`results/mandates/hermes-payment.json`](results/mandates/hermes-payment.json): $7 held, then released |
 | CartMandate | a payment the owner approved exactly with their passkey | produced for owner payments |
 
-`mandates.e2e.test.ts` (read-only, Base Sepolia): the real mandates verify, and six forgeries are caught: a raised limit even with its hash recomputed, a merchant the owner never saved, another agent claiming the grant, a later expiry, edited text, and a bigger payment or the wrong intent. Assistants get theirs over MCP (`get_mandate`), so a merchant's agent can check an assistant's authority itself.
+`mandates.e2e.test.ts` (read-only, Base Sepolia): the real mandates verify, and six forgeries are caught: a raised limit even with its hash recomputed, a merchant the owner never saved, another agent claiming the grant, a later expiry, edited text, and a bigger payment or the wrong intent. Assistants get theirs over MCP (`get_mandate`), so a merchant's agent can check an assistant's authority itself. Live on the deployed app: [`results/mandates/claude-prod-intent.json`](results/mandates/claude-prod-intent.json) is exactly what prod's `get_mandate` returned to Claude for a demo sandbox (vault `0x1bAc392A…`), and it verifies the same way.
+
+## Family guardian, on the deployed app (17 Oct)
+
+An owner invites a guardian (a second account); Claude pays $6 over MCP; the vault holds it; the guardian sees it from their own account and stops it. Vault [`0x1bAc392A…`](https://sepolia.basescan.org/address/0x1bAc392A06A058A72A8B0fb1dF4b3F8686CA3747), test `packages/domain/src/guardian.e2e.test.ts` (`GUARDIAN=1`), against prod with demo sandboxes.
+
+| Step | Who signs | Transaction |
+|---|---|---|
+| Claude pays $6 over MCP: the vault holds it | Claude's agent key | [`0x93c7ceae…`](https://sepolia.basescan.org/tx/0x93c7ceae0d8ef0205966df68a96b038a73489a0bf1eb4c382b00256c97352598) |
+| The guardian stops it from their own account; the money never leaves | relayer (guardian role: stop and freeze only) | [`0x338a1ffe…`](https://sepolia.basescan.org/tx/0x338a1ffe3619581ea84e9cc65fb0f8e34a8165bdbe56dcad67fba384d0d2c5dc) |
+
+The test also checks that nothing is still held for that payment and no release follows.
 
 ## Any AI, one wallet (17 Oct)
 
