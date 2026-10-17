@@ -26,7 +26,7 @@ Our answer: let any assistant pay, but only through a contract that enforces the
 | `packages/domain` | Shared TypeScript | Money, statement parsing, vault encoding, the signed digest, WebAuthn helpers |
 | `contracts` | Base Sepolia | `PolicyVault` (v3), `VaultFactory`, `TestUSD` |
 
-Live: dashboard https://nudge-wallet.vercel.app, approval site https://agent-wallet-approve.vercel.app, v3 factory `0xF0D906bdec522087992EA711710Ee60F2a8DA95e`.
+Live: dashboard https://nudge-wallet.vercel.app, approval site https://nudge-approve.vercel.app, v3 factory `0xF0D906bdec522087992EA711710Ee60F2a8DA95e`.
 
 ### 3.1 An outside assistant pays inside its limits
 
