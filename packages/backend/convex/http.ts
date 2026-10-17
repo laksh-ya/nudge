@@ -112,7 +112,7 @@ async function handle(ctx: ActionCtx, agent: Caller, value: unknown) {
       return reply({
         protocolVersion: typeof msg.params?.protocolVersion === "string" ? msg.params.protocolVersion : "2025-06-18",
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: "agent-wallet", title: "Agent Wallet", version: "0.2.0" },
+        serverInfo: { name: "nudge", title: "Nudge", version: "0.3.0" },
         instructions: MCP_INSTRUCTIONS,
       });
     case "ping":
@@ -205,7 +205,7 @@ const protectedResource = httpAction(async (_ctx, req) =>
   json({
     resource: `${new URL(req.url).origin}/mcp`,
     bearer_methods_supported: ["header"],
-    resource_name: "Agent Wallet MCP",
+    resource_name: "Nudge MCP",
     resource_documentation: `${process.env.WEB_URL ?? "https://agent-wallet-nu.vercel.app"}/agents/docs`,
     scopes_supported: ["read", "prepare", "spend", "request"],
   }),

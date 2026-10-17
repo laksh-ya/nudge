@@ -26,7 +26,7 @@ const MODEL = "claude-opus-5-5";
 const SANDBOX_MODEL = "claude-sonnet-5-5";
 const MAX_STEPS = 8;
 
-const SYSTEM = `You are the assistant inside a personal-finance app with an agent wallet. You act for one person, the owner, who is talking to you now.
+const SYSTEM = `You are Nudge, the assistant inside a personal-finance app with a wallet AI assistants can pay from. You act for one person, the owner, who is talking to you now.
 
 What you can do: read their money (get_overview, can_afford, list_bills, spending_this_month, spending_by_period), track savings goals (list_goals, save_goal), set reminders (set_reminder, list_reminders), list saved contacts, propose payments from the agent wallet to saved contacts in test US dollars, check or cancel payments you proposed, and freeze every agent when the owner asks you to.
 
@@ -52,7 +52,7 @@ const tools: Anthropic.Beta.BetaTool[] = [
   { name: "list_contacts", description: "Saved contacts. Payments can only go to these contact IDs.", input_schema: { type: "object", properties: {}, additionalProperties: false } },
   {
     name: "propose_payment",
-    description: "Pay a saved contact from the agent wallet in test US dollars. Returns submitted, needs_approval (the owner is notified), duplicate, or refused with a reason.",
+    description: "Pay a saved contact from the Nudge wallet in test US dollars. Returns submitted, needs_approval (the owner is notified), duplicate, or refused with a reason.",
     input_schema: {
       type: "object",
       properties: {

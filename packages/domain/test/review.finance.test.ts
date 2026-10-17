@@ -1,0 +1,13 @@
+import { expect,it } from "vitest";
+import { parseDate,parseAmount,linesToTransactions,parseReceipt } from "../src/statements";
+import { convert } from "../src/money";
+it("CONTROL Indian grouped amount parses",()=>expect(parseAmount("1,23,456.78")).toBe(123456.78));
+it("CONTROL JPY conversion honors zero decimals",()=>expect(convert(100,"USD","JPY",{USD:1,JPY:150})).toBe(150));
+it("CONTROL valid leap date parses",()=>expect(new Date(parseDate("29/02/2024")!).toISOString().slice(0,10)).toBe("2024-02-29"));
+it("REGRESSION impossible calendar date is rejected",()=>expect(parseDate("31/02/2026")).toBeNull());
+it("REGRESSION invalid ISO month is rejected",()=>expect(parseDate("2026-13-10")).toBeNull());
+it("REGRESSION ungrouped four-digit receipt amount is preserved",()=>expect(parseReceipt("Cafe\nTotal 1234.56").total).toBe(1234.56));
+it("REGRESSION ungrouped PDF amount is preserved",()=>expect(linesToTransactions(["16/10/2026 SHOP 1234.56"])[0]?.amountMinor).toBe(-123456));
+it("REGRESSION comma-decimal European amount is preserved",()=>expect(parseAmount("12,50")).toBe(12.5));
+it("REGRESSION missing exchange rate is explicit instead of zero",()=>expect(()=>convert(10000,"USD","CNY",{USD:1})).toThrow());
+it("REGRESSION negative exchange rate is rejected",()=>expect(()=>convert(10000,"USD","CNY",{USD:1,CNY:-7})).toThrow());

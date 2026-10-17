@@ -141,7 +141,7 @@ async function ownAssistant(ctx: MutationCtx, user: Doc<"users">, mode: "draft" 
   } else {
     await ctx.db.insert("agents", {
       userId: user._id,
-      name: "Your assistant",
+      name: "Nudge",
       provider: "own",
       status: "active",
       scopes,
@@ -207,7 +207,7 @@ export const setupWallet = mutation({
       await ctx.db.insert("activity", {
         userId: user._id,
         kind: "setting",
-        title: "Agent wallet set up",
+        title: "Nudge wallet set up",
         detail: `Agents can spend up to $${(args.dailyCeilingMinor / 100).toFixed(2)} a day`,
         tone: "neutral",
       });

@@ -95,7 +95,7 @@ export const MCP_TOOLS: McpTool[] = [
     name: "propose_payment",
     title: "Pay a saved contact",
     description: [
-      "Pay one of the owner's saved contacts from the agent wallet. The amount is in US dollars (test dollars, tUSD on Base Sepolia, no real value), e.g. 12.5. The wallet decides in code, not you. The result has an `outcome`:",
+      "Pay one of the owner's saved contacts from their Nudge wallet. The amount is in US dollars (test dollars, tUSD on Base Sepolia, no real value), e.g. 12.5. The wallet decides in code, not you. The result has an `outcome`:",
       "- submitted: within your limits and on its way. Call get_task_status until the state is confirmed. Larger payments may show held first: the vault waits a few minutes so the owner can cancel, then releases it.",
       "- needs_approval: above your limits or to a new contact. The owner has been notified and approves with their passkey on their own phone. You never receive an approval link; tell the user it is waiting for the owner and check get_task_status later.",
       "- duplicate: this requestId was already used; the earlier taskId and state are returned. Do not pay again.",
@@ -227,7 +227,7 @@ export const OUTCOMES = [
 export const REASON_CODES = [
   { code: "1001", meaning: "This assistant isn't registered in the owner's on-chain vault yet; the payment waits for the owner." },
   { code: "1002", meaning: "The wallet is frozen. Nothing moves until the owner unfreezes it." },
-  { code: "2001", meaning: "The owner hasn't set up an agent wallet." },
+  { code: "2001", meaning: "The owner hasn't set up a Nudge wallet." },
   { code: "2002", meaning: "This assistant may prepare payments but not send them; the owner approves each one." },
   { code: "2003", meaning: "Above this assistant's per-payment or daily limit, or not a valid amount (whole cents, at least $0.01)." },
   { code: "2004", meaning: "Above the wallet's daily ceiling across all assistants." },

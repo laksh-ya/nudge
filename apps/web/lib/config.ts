@@ -1,4 +1,4 @@
-export const APP_NAME = "agent wallet";
+export const APP_NAME = "Nudge";
 export const APPROVE_URL = process.env.NEXT_PUBLIC_APPROVE_URL ?? "http://localhost:3001";
 
 export function approvalLink(token: string) {

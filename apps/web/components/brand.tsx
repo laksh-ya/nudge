@@ -1,35 +1,17 @@
+import { Character, Logo, type Mood } from "@agent-wallet/brand";
 import { cn } from "@/lib/cn";
 
-export function Wordmark({ className, inverse }: { className?: string; inverse?: boolean }) {
-  return (
-    <span className={cn("text-[20px] leading-none font-extrabold tracking-[-0.035em] [font-stretch:110%]", className)}>
-      <span className={inverse ? "text-white" : "text-navy"}>agent</span>
-      <span className="text-cyan">wallet</span>
-    </span>
-  );
+/** The logo; the mark and rules live in packages/brand (docs/BRAND.md). */
+export function Wordmark({ className, inverse, size = 22 }: { className?: string; inverse?: boolean; size?: number }) {
+  return <Logo size={size} inverse={inverse} className={className} />;
 }
 
-const providerStyle: Record<string, { bg: string; fg: string; letter: string }> = {
-  own: { bg: "#002970", fg: "#ffffff", letter: "a" },
-  claude: { bg: "#F4E9E1", fg: "#B8562F", letter: "C" },
-  chatgpt: { bg: "#E8F3EF", fg: "#0E7A5A", letter: "G" },
-  openclaw: { bg: "#FDECEC", fg: "#C0392B", letter: "O" },
-  hermes: { bg: "#EEF0FB", fg: "#4453B8", letter: "H" },
-  poke: { bg: "#FFF3D6", fg: "#9A6A00", letter: "P" },
-};
-
-export function AgentMark({ provider, name, size = 40 }: { provider: string; name?: string; size?: number }) {
-  // Any other assistant shows the first letter of the name its owner gave it.
-  const s = providerStyle[provider] ?? { bg: "#EEF2F6", fg: "#3B4A5C", letter: (name?.trim()[0] ?? "?").toUpperCase() };
-  return (
-    <span
-      className="grid shrink-0 place-items-center rounded-[12px] font-bold [font-stretch:110%]"
-      style={{ width: size, height: size, background: s.bg, color: s.fg, fontSize: size * 0.42 }}
-      aria-hidden
-    >
-      {s.letter}
-    </span>
-  );
+/**
+ * An assistant's character: Nudge for your own, a shape and colour for each provider (packages/brand
+ * → CAST). `mood` follows what it's doing; see moodFor.
+ */
+export function AgentMark({ provider, size = 40, mood = "happy" }: { provider: string; name?: string; size?: number; mood?: Mood }) {
+  return <Character of={provider} mood={mood} size={size} />;
 }
 
 export function Initial({ name, size = 36 }: { name: string; size?: number }) {

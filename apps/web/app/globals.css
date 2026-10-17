@@ -1,8 +1,14 @@
 @import "tailwindcss";
+@import "@agent-wallet/brand/brand.css";
 
 /* Paytm palette, measured from paytm.com: navy #002970, cyan #00BAF2, ink #101010, page #F5F8FA. */
 @theme {
+  /* Nudge brand (packages/brand/src/tokens.ts, docs/BRAND.md) */
+  --color-nudge: #00baf2;
+  --color-paper: #f4f4f1;
+  --color-coal: #1d1d1f;
   --font-sans: var(--font-mona), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-instrument), ui-serif, Georgia, serif;
 
   --color-navy: #002970;
   --color-navy-deep: #001a4d;

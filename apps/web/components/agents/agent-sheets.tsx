@@ -133,7 +133,7 @@ export function ConnectSheet({ agent, onClose }: { agent: AgentView; onClose: ()
 const SCOPES = [
   { id: "read" as const, label: "See money", hint: "Overview, bills and spending" },
   { id: "prepare" as const, label: "Prepare payments", hint: "Drafts that come to you" },
-  { id: "spend" as const, label: "Pay within limits", hint: "From the agent wallet only" },
+  { id: "spend" as const, label: "Pay within limits", hint: "From the Nudge wallet only" },
   { id: "request" as const, label: "Ask for more", hint: "Send you approval links" },
 ];
 

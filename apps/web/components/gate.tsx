@@ -8,14 +8,16 @@ import { ArrowRight, FlaskConical, ShieldCheck } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useDemo } from "@/lib/demo";
+import { Character } from "@agent-wallet/brand";
 import { Wordmark } from "./brand";
+import { Landing } from "./landing";
 import { Shell } from "./shell";
 import { ButtonLink } from "./ui";
 
 function Splash() {
   return (
     <div className="grid min-h-dvh place-items-center bg-white">
-      <Wordmark className="animate-pulse text-[28px]" />
+      <Character of="nudge" mood="happy" size={72} bob title="Nudge is loading" />
     </div>
   );
 }
@@ -55,76 +57,6 @@ function DemoBar({ readOnly }: { readOnly: boolean }) {
         </>
       )}
       <button onClick={() => setDemo(false)} className="font-semibold text-white/70 hover:text-white">Exit</button>
-    </div>
-  );
-}
-
-function Landing() {
-  const { setDemo } = useDemo();
-  return (
-    <div className="flex min-h-dvh flex-col bg-white">
-      <header className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-5">
-        <Wordmark />
-        <Link href="/sign-in" className="text-body font-semibold text-navy">Sign in</Link>
-      </header>
-      <main className="mx-auto grid w-full max-w-5xl flex-1 items-center gap-10 px-5 pb-12 lg:grid-cols-[1fr_400px]">
-        <div className="rise">
-          <h1 className="max-w-[14ch] text-[36px] leading-[40px] font-bold tracking-[-0.03em] text-navy [font-stretch:108%] lg:text-[52px] lg:leading-[56px]">
-            Let your assistants pay. Only within your rules.
-          </h1>
-          <ul className="mt-5 max-w-[46ch] space-y-1.5 text-body text-ink-2 lg:text-title lg:font-normal">
-            <li>Claude and other assistants pay your saved contacts, within limits you set.</li>
-            <li>Anything bigger, and any rule you loosen, waits for your passkey.</li>
-            <li>A contract on Base Sepolia enforces it, even if an assistant&apos;s key is stolen.</li>
-          </ul>
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <ButtonLink href="/sign-up" className="h-12 px-6 text-title">Create account</ButtonLink>
-            <button
-              onClick={() => setDemo(true)}
-              className="press inline-flex h-12 items-center justify-center gap-2 rounded-btn bg-sky px-6 text-title font-semibold text-navy"
-            >
-              Try the demo <ArrowRight className="size-4" strokeWidth={2.4} />
-            </button>
-          </div>
-          <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-label">
-            <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-soft px-2 py-1 font-semibold text-amber">
-              <FlaskConical className="size-3.5" /> Base Sepolia testnet, test money only
-            </span>
-            <Link href="/proof" className="inline-flex items-center gap-1 font-semibold text-cyan-ink">
-              See the proof on-chain <ArrowRight className="size-3.5" strokeWidth={2.4} />
-            </Link>
-          </div>
-        </div>
-        <div className="rise card overflow-hidden p-0 [animation-delay:80ms]">
-          <div className="bg-navy p-5 text-white">
-            <div className="text-label text-white/70">Safe to spend</div>
-            <div className="figure mt-1 text-hero">₹22,907</div>
-            <div className="mt-1 text-label text-white/70">₹1,272 a day · 18 days to payday</div>
-          </div>
-          <div className="divide-y divide-line px-5">
-            {[
-              ["Claude wants to pay Exa", "$18.00", "Needs you"],
-              ["Your assistant paid Blue Tokai", "$8.40", "Paid"],
-              ["OpenClaw tried a forwarded invoice", "$49.00", "Blocked"],
-            ].map(([t, a, s]) => (
-              <div key={t} className="flex items-center justify-between gap-3 py-3">
-                <div className="min-w-0">
-                  <div className="truncate text-body font-medium">{t}</div>
-                  <div className="text-label text-mute">{s}</div>
-                </div>
-                <div className="num text-body font-semibold">{a}</div>
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center gap-2 bg-sky-soft px-5 py-3 text-label text-navy">
-            <ShieldCheck className="size-4" strokeWidth={2} />
-            Payments over your limits wait for your passkey
-          </div>
-        </div>
-      </main>
-      <footer className="mx-auto w-full max-w-5xl px-5 pb-6 text-label text-mute">
-        Testnet prototype. Wallet payments use test dollars (tUSD) with no value; bank feeds and family transfers are simulated.
-      </footer>
     </div>
   );
 }

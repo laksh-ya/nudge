@@ -229,7 +229,7 @@ export function ordinal(text: string) {
 /** Which currency an answer to "dollars or rupees?" picks. */
 export function currencyWord(text: string): Cur | null {
   const t = normalize(text);
-  if (/\$|\bdollars?\b|\busd\b|\bbucks\b|\bwallet\b|\bagent\b|\btest\b|\bcrypto\b/.test(t)) return "USD";
+  if (/\$|\bdollars?\b|\busd\b|\bbucks\b|\bwallet\b|\bnudge\b|\bagent\b|\btest\b|\bcrypto\b/.test(t)) return "USD";
   if (/₹|\brupees?\b|\binr\b|\brs\b|\bupi\b|\bbank\b/.test(t)) return "LOCAL";
   return null;
 }

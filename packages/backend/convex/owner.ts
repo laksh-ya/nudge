@@ -50,7 +50,7 @@ export const pay = mutation({
       title: `Pay ${payee.name} ${formatMoney(args.amountMinor, "USDC", { cents: true })}`,
       channel: "app",
       purpose,
-      reason: payee.onchain ? "You're paying a saved contact from your agent wallet" : `${payee.name} isn't in your vault yet, so after your passkey this waits the vault's change delay and can be cancelled`,
+      reason: payee.onchain ? "You're paying a saved contact from your Nudge wallet" : `${payee.name} isn't in your vault yet, so after your passkey this waits the vault's change delay and can be cancelled`,
     });
     return token;
   },

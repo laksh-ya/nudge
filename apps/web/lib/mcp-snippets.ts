@@ -4,7 +4,7 @@
  */
 export type Snippet = { id: string; label: string; where: string; code: string };
 
-export function mcpSnippets(url: string, key: string, name = "agent-wallet"): Snippet[] {
+export function mcpSnippets(url: string, key: string, name = "nudge"): Snippet[] {
   const bearer = `Bearer ${key}`;
   return [
     {

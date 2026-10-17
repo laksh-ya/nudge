@@ -1,0 +1,27 @@
+{
+  "name": "@agent-wallet/brand",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Nudge's brand: colour and type tokens, the character cast, the logo and the dot illustrations. One source for the web app, the approval site and exported assets.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./brand.css": "./src/brand.css"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "assets": "esbuild scripts/export.tsx --bundle --platform=node --format=esm --jsx=automatic --packages=external --outfile=scripts/.export.mjs --log-level=warning && node scripts/.export.mjs && rm scripts/.export.mjs"
+  },
+  "peerDependencies": {
+    "react": "19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "esbuild": "0.27.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "typescript": "5.9.3"
+  }
+}

@@ -56,7 +56,7 @@ Severity is for this prototype on a test network. "Test" names the failing test 
 
 F1, F3 and F5 matter beyond the bug count: the payment association's agent-payment convention (August 2026) names the user's right to revoke authorisation as a requirement. A judge who tests "disconnect" should find that it is final.
 
-### Gateway and approval link (`packages/domain/src/gateway.audit.test.ts`)
+### Gateway and approval link (`packages/domain/test/gateway.audit.test.ts`)
 
 | # | Severity | What happens | Test | Suggested fix |
 |---|---|---|---|---|
@@ -128,5 +128,5 @@ For the local-chain passkey test: `anvil --chain-id 84532 --port 8546`, deploy w
 
 - `contracts/test/AuditFindings.t.sol`: F1–F9 and C5 as requirements.
 - `contracts/test/AuditInvariant.t.sol`: stateful fuzzing with holds, releases, cancels, freezes and a stolen key.
-- `packages/domain/src/gateway.audit.test.ts`: 13 gateway controls and G1–G6, against an in-memory database.
-- `packages/domain/src/evidence.e2e.test.ts`: checks every cited transaction on Base Sepolia and compares deployed bytecode with the source. Writes `evals/results/onchain-evidence.csv`.
+- `packages/domain/test/gateway.audit.test.ts`: 13 gateway controls and G1–G6, against an in-memory database.
+- `packages/domain/test/evidence.e2e.test.ts`: checks every cited transaction on Base Sepolia and compares deployed bytecode with the source. Writes `evals/results/onchain-evidence.csv`.

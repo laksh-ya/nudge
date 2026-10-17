@@ -271,7 +271,7 @@ export async function seedUser(ctx: MutationCtx, userId: Id<"users">) {
 
   const own = await ctx.db.insert("agents", {
     userId,
-    name: "Your assistant",
+    name: "Nudge",
     provider: "own",
     status: "active",
     scopes: ["read", "prepare", "spend", "request"],
@@ -461,7 +461,7 @@ export async function seedUser(ctx: MutationCtx, userId: Id<"users">) {
 
   const events: Array<["payment" | "security" | "agent" | "import" | "setting", string, string | undefined, "neutral" | "good" | "warn" | "bad"]> = [
     ["agent", "OpenClaw frozen", "Tried to pay an address from a forwarded message", "bad"],
-    ["payment", "Paid Blue Tokai $8.40", "Your assistant, within its daily limit", "good"],
+    ["payment", "Paid Blue Tokai $8.40", "Nudge, within its daily limit", "good"],
     ["import", "Imported your HDFC statement", "September and October", "neutral"],
     ["agent", "Claude connected", "Read, prepare and spend up to $15 a day", "neutral"],
     ["security", "Signed in on a new device", "Chrome on Mac", "neutral"],

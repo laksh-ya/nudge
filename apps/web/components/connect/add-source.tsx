@@ -216,7 +216,7 @@ export function AddSourceSheet({
         chain: "evm",
         address,
       });
-      const message = `Agent Wallet ownership check\nAccount: ${id}\nAddress: ${address}\nIssued at: ${Date.now()}\nThis signature does not move any funds.`;
+      const message = `Nudge ownership check\nAccount: ${id}\nAddress: ${address}\nIssued at: ${Date.now()}\nThis signature does not move any funds.`;
       const signature = (await window.ethereum.request({ method: "personal_sign", params: [message, address] })) as string;
       await verify({ accountId: id, message, signature });
       onAdded?.(id, "onchain");
