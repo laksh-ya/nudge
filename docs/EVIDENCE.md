@@ -31,6 +31,14 @@ Contract v3 (16 Oct, after review #32), one full run of `packages/domain/test/on
 | Unfreeze applied after the 2-minute delay | relayer (`finalize`) | [`0xc1326865…`](https://sepolia.basescan.org/tx/0xc1326865fcf8704b051f7459af23c491a72493abdd6f179f01c8fe4a8ca80863) |
 | Disconnected agent's key removed from the vault | passkey | [`0x5463f383…`](https://sepolia.basescan.org/tx/0x5463f38384c174b2b794e6a5f3b3a416090cbfcde08c46fefab23dfa59f10a82) |
 
+The owner paying and withdrawing from the Wallet screen (#11), in a later run of the same suite on the dev deployment (17 Oct, 8 of 8 passed):
+
+| Step | Who signs | Transaction |
+|---|---|---|
+| Owner pays a saved contact $2 | passkey | [`0x646bcb23…`](https://sepolia.basescan.org/tx/0x646bcb239c3162015bb75a418a6ec2bad13045f31c66ab9b05c8d3ceb5623f01) |
+| Owner signs a $1 withdrawal: queued for the change delay | passkey | [`0x27854e58…`](https://sepolia.basescan.org/tx/0x27854e582d5f47251ec3efa1a768867c80df20495ee550544e301509cdb5703b) |
+| Withdrawal sent after the delay | relayer (`finalize`) | [`0x7d637bff…`](https://sepolia.basescan.org/tx/0x7d637bff77567b20860b7fac9650f499f458c5a245d922466e4960eff63f45da) |
+
 Races and lost receipts on v3, vault [`0xc651daa8…`](https://sepolia.basescan.org/address/0xc651daa8d459935cdad40fd1e5ea51f43d81efac): four simultaneous $6 requests against a $15 daily cap pay two; a payment whose receipt is lost stays unknown, a retry is refused as a duplicate, and it settles once from the chain.
 
 | Step | Who signs | Transaction |

@@ -17,7 +17,7 @@ export function SetupCard() {
     { step: "sources", label: "Add your accounts", done: state.counts.accounts > 0 },
     { step: "history", label: "Bring in history", done: state.counts.withHistory > 0 },
     { step: "review", label: "Review regular payments", done: state.counts.suggested === 0 && state.counts.confirmed > 0 },
-    { step: "wallet", label: "Set up the agent wallet", done: Boolean(state.wallet) },
+    { step: "wallet", label: "Set up your Nudge wallet", done: Boolean(state.wallet) },
     { step: "chat", label: "Link Telegram", done: Boolean(state.chat?.linked) },
   ];
   const done = items.filter((i) => i.done).length;

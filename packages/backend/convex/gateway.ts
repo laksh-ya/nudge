@@ -359,7 +359,7 @@ export async function propose(ctx: MutationCtx, { agentId, contactId, amount, re
       return { outcome: "refused", code: "2002", reason: `${payee.name} is a new contact. Agents can pay it after ${when}.` };
     }
     const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
-    if (!wallet) return { outcome: "refused", code: "2001", reason: "The owner hasn't set up an agent wallet" };
+    if (!wallet) return { outcome: "refused", code: "2001", reason: "The owner hasn't set up a Nudge wallet" };
     const purpose = reason.trim().slice(0, 140) || undefined;
 
     // When the vault is live its own numbers win; our copy can only be stricter, never looser.

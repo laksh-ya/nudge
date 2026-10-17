@@ -30,8 +30,8 @@ const toHex = (b: ArrayBuffer) => `0x${Array.from(new Uint8Array(b), (x) => x.to
 export async function createPasskey(opts: { userHandle: string; name: string; challenge: string; backup?: boolean }) {
   const cred = (await navigator.credentials.create({
     publicKey: {
-      rp: { id: RP_ID, name: "Agent Wallet payments" },
-      user: { id: new TextEncoder().encode(opts.userHandle), name: `${opts.name || "you"} · payments${opts.backup ? " (backup)" : ""}`, displayName: opts.name || "Agent Wallet" },
+      rp: { id: RP_ID, name: "Nudge payments" },
+      user: { id: new TextEncoder().encode(opts.userHandle), name: `${opts.name || "you"} · payments${opts.backup ? " (backup)" : ""}`, displayName: opts.name || "Nudge" },
       // The server's challenge, so the registration it receives is provably from this ceremony.
       challenge: new Uint8Array(fromBase64url(opts.challenge)).buffer,
       pubKeyCredParams: [{ type: "public-key", alg: -7 }],

@@ -13,8 +13,8 @@ import { OAUTH_ONLY_CLIENTS, mcpSnippets } from "@/lib/mcp-snippets";
  * page lists exactly what tools/list can return.
  */
 export const metadata: Metadata = {
-  title: "Connect your AI agent · Agent Wallet",
-  description: "Connect Claude Code, Cursor, Hermes, OpenClaw or any MCP client to an Agent Wallet with its own key and limits.",
+  title: "Connect your AI agent · Nudge",
+  description: "Connect Claude Code, Cursor, Hermes, OpenClaw or any MCP client to Nudge, each with its own key and limits.",
 };
 
 const SERVER_URL = process.env.NEXT_PUBLIC_CONVEX_SITE_URL ? MCP_URL : "https://ceaseless-raven-960.convex.site/mcp";
@@ -55,7 +55,7 @@ export default function AgentDocsPage() {
     <div className="min-h-dvh bg-page">
       <header className="border-b border-line bg-white">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3">
-          <Link href="/" aria-label="Agent Wallet home">
+          <Link href="/" aria-label="Nudge home">
             <Wordmark />
           </Link>
           <Link href="/agents" className="press flex items-center gap-1 text-label font-semibold text-cyan-ink">

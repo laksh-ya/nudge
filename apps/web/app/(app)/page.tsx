@@ -34,7 +34,7 @@ const ACTIONS = [
   { href: "/money?tab=bills", label: "Pay bills", icon: Receipt },
   { href: "/assistant", label: "Ask assistant", icon: MessageCircle },
   { href: "/family", label: "Send to family", icon: Users },
-  { href: "/wallet", label: "Agent wallet", icon: Wallet },
+  { href: "/wallet", label: "Nudge wallet", icon: Wallet },
   { href: "/agents", label: "Agents", icon: Bot },
   { href: "/money", label: "Spending", icon: ChartPie },
   { href: "/money?tab=goals", label: "Goals", icon: Target },
@@ -170,7 +170,7 @@ export default function Home() {
               {attention.approvals.map((t) => (
                 <Row
                   key={t._id}
-                  leading={t.agentProvider ? <AgentMark provider={t.agentProvider} /> : <IconTile icon={Receipt} />}
+                  leading={t.agentProvider ? <AgentMark provider={t.agentProvider} mood="watch" /> : <IconTile icon={Receipt} />}
                   title={t.title}
                   sub={t.sample ? `Sample · ${t.reason ?? ""}` : t.reason}
                   trailing={

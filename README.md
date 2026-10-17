@@ -1,18 +1,20 @@
 <div align="center">
 
-# agent wallet
+<img src="packages/brand/assets/mark.svg" alt="" width="84">
+
+# Nudge
 
 **Let your AI assistants pay. Only within your rules.**
 
-A wallet where Claude and other assistants pay your saved contacts within limits you set, enforced by a contract on Base Sepolia even if an assistant's key is stolen. Anything bigger, and any rule you loosen, waits for your passkey.
+Nudge is a wallet where Claude and your other assistants pay your saved contacts within limits you set, enforced by a contract on Base Sepolia even if an assistant's key is stolen. Anything bigger, and any rule you loosen, waits for your passkey.
 
 [![CI](https://github.com/laksh-ya/agent-wallet/actions/workflows/ci.yml/badge.svg)](https://github.com/laksh-ya/agent-wallet/actions/workflows/ci.yml)
 ![Chain](https://img.shields.io/badge/chain-Base%20Sepolia-0052FF)
 ![Money](https://img.shields.io/badge/money-test%20dollars%20only-orange)
 
-[**Live app**](https://agent-wallet-nu.vercel.app) · [**Proof on-chain**](https://agent-wallet-nu.vercel.app/proof) · [**Connect your agent (MCP)**](https://agent-wallet-nu.vercel.app/agents/docs) · [Docs](docs/README.md)
+[**Live app**](https://agent-wallet-nu.vercel.app) · [**Proof on-chain**](https://agent-wallet-nu.vercel.app/proof) · [**Connect your agent (MCP)**](https://agent-wallet-nu.vercel.app/agents/docs) · [Docs](docs/README.md) · [Brand](docs/BRAND.md)
 
-<img src="docs/images/landing.jpg" alt="Agent Wallet: let your assistants pay, only within your rules" width="760">
+<img src="docs/images/hero.jpg" alt="Nudge homepage: Let your AI pay. Only within your rules." width="820">
 
 </div>
 
@@ -20,7 +22,7 @@ A wallet where Claude and other assistants pay your saved contacts within limits
 
 ## Why
 
-Giving an AI assistant your card is all or nothing. A prompt injection, a confused model, or a leaked API key can spend everything. Agent Wallet puts a small on-chain vault between your assistants and your money:
+Giving an AI assistant your card is all or nothing. A prompt injection, a confused model, or a leaked API key can spend everything. Nudge gives your AI an allowance instead: a small on-chain vault sits between your assistants and your money.
 
 - **Small payments just happen.** Each assistant has its own key, per-payment and daily limits, and may pay only contacts you saved.
 - **Big or unusual ones wait for you.** Over the limit, a new contact, or anything that loosens a rule needs your passkey, signed over the exact action. Loosening also waits out a delay you can cancel.
@@ -71,7 +73,7 @@ The model never decides what's allowed: the gateway is ordinary code, and the va
 Agents → **Connect an assistant** → copy the key (shown once). For Claude Code:
 
 ```bash
-claude mcp add --transport http agent-wallet https://ceaseless-raven-960.convex.site/mcp --header "Authorization: Bearer aw_…"
+claude mcp add --transport http nudge https://ceaseless-raven-960.convex.site/mcp --header "Authorization: Bearer aw_…"
 ```
 
 A new assistant starts read-only; turn on *Prepare payments* or *Pay within limits* on its card. Tools, outcomes and refusal codes: [Connect your AI agent](https://agent-wallet-nu.vercel.app/agents/docs).
@@ -103,6 +105,12 @@ Every on-chain claim links to a transaction: [docs/EVIDENCE.md](docs/EVIDENCE.md
 
 The claim, who can do what, the controls with their evidence, and the known risks are in [docs/SECURITY.md](docs/SECURITY.md). In short: the owner's passkey is the only thing that can loosen a rule; the relayer and guardian keys can only tighten; agent keys are sealed with AES-256-GCM and capped by the contract; there's no upgradeable proxy or admin key. Please report vulnerabilities as described there.
 
+## Brand
+
+Nudge is the friend who taps you on the shoulder before your AI spends something it shouldn't. Every assistant gets a face, and the face says what's happening: paid, held, waiting for your passkey, refused, frozen. The logo, the cast of characters, colour, type, voice and motion are one package, [`packages/brand`](packages/brand), used by both apps; the rules are in [docs/BRAND.md](docs/BRAND.md) and the living sheet is at [`/brand`](https://agent-wallet-nu.vercel.app/brand).
+
+<img src="packages/brand/assets/cast.svg" alt="The cast: Nudge, Claude, ChatGPT, Hermes, OpenClaw, Poke and any other assistant" width="720">
+
 ## Project structure
 
 ```text
@@ -110,10 +118,11 @@ apps/web              Next.js app: dashboard, wallet, agents, chat, onboarding
 apps/approve          Approval site (Vite, separate host): the only place the passkey signs
 packages/backend      Convex: gateway, MCP server, relayer, chain reads, assistant, reminders
 packages/domain       Shared logic: vault encoding, WebAuthn, mandates, money, statements
+packages/brand        Nudge's logo, characters, tokens, dot art and exported SVGs
 packages/domain/test  Unit, Base Sepolia end-to-end and eval suites
 contracts             Solidity (Foundry): PolicyVault, VaultFactory, TestUSD and their tests
 evals                 Attack, injection and task results
-docs                  Architecture, security, testing, evidence, development
+docs                  Architecture, security, testing, evidence, development, brand
 ```
 
 ## Run it locally

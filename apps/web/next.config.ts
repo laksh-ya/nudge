@@ -14,7 +14,7 @@ const security = [
 ];
 
 const config: NextConfig = {
-  transpilePackages: ["@agent-wallet/domain", "@agent-wallet/backend"],
+  transpilePackages: ["@agent-wallet/domain", "@agent-wallet/backend", "@agent-wallet/brand"],
   experimental: { optimizePackageImports: ["lucide-react"] },
   async headers() {
     return [{ source: "/(.*)", headers: security }];

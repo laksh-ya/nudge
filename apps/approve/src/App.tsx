@@ -2,6 +2,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useEffect, useMemo, useState } from "react";
 import { Check, Clock, ExternalLink, Fingerprint, Landmark, LoaderCircle, Lock, ShieldCheck, TriangleAlert, Wallet, X } from "lucide-react";
 import { api } from "@agent-wallet/backend/api";
+import { Character, Logo } from "@agent-wallet/brand";
 import { CHAIN_ID, actionDigest, checkApproval, formatMoney, isVaultVersion, policyVaultAbi, testUsdAbi, Op, type ChainReader, type Currency, type Truth } from "@agent-wallet/domain";
 import { createPublicClient, http, type Address, type Hex } from "viem";
 import { createPasskey, inAppBrowser, passkeysSupported, signWithPasskey } from "./passkey";
@@ -72,12 +73,7 @@ function errorText(e: unknown) {
 }
 
 function Wordmark() {
-  return (
-    <span className="text-[18px] leading-none font-extrabold tracking-[-0.035em] [font-stretch:110%]">
-      <span className="text-navy">agent</span>
-      <span className="text-cyan">wallet</span>
-    </span>
-  );
+  return <Logo size={20} />;
 }
 
 function Frame({ children, live }: { children: React.ReactNode; live?: boolean }) {
@@ -91,7 +87,7 @@ function Frame({ children, live }: { children: React.ReactNode; live?: boolean }
       </header>
       {children}
       <a href={WEB_URL} className="mt-6 text-center text-label font-semibold text-cyan-ink">
-        Back to agent wallet
+        Back to Nudge
       </a>
     </div>
   );
@@ -131,7 +127,7 @@ function Home() {
         </span>
         <h1 className="mt-4 text-head font-semibold">Nothing to approve right now</h1>
         <p className="mt-1 text-body text-ink-2">
-          This site does one thing: you approve payments and rule changes for your agent wallet with your passkey. Requests reach you as links in the
+          This site does one thing: you approve payments and rule changes for your Nudge wallet with your passkey. Requests reach you as links in the
           dashboard or Telegram.
         </p>
         <p className="mt-3 text-label text-mute">Base Sepolia testnet. Test dollars (tUSD) only, no real value.</p>
@@ -186,8 +182,9 @@ function Enrol({ token }: { token: string }) {
     return (
       <Frame live>
         <div className="mt-14 flex flex-col items-center text-center">
-          <span className="pop grid size-20 place-items-center rounded-full bg-green text-white">
-            <Check className="size-10" strokeWidth={3} />
+          <span className="pop relative">
+            <Character of="nudge" mood="happy" size={88} />
+            <span className="absolute -right-1 -bottom-1 grid size-8 place-items-center rounded-full bg-green text-white ring-4 ring-page"><Check className="size-4" strokeWidth={3} /></span>
           </span>
           <h1 className="rise mt-6 text-head font-semibold">Passkey made. One step left</h1>
           <p className="rise mt-1 max-w-xs text-body text-ink-2">Type this code in the app, on the Wallet screen, to confirm it's yours.</p>
@@ -350,9 +347,7 @@ function Approve({ token }: { token: string }) {
     return (
       <Frame live>
         <div className="mt-14 flex flex-col items-center text-center">
-          <span className="pop grid size-20 place-items-center rounded-full bg-amber text-white">
-            <Clock className="size-10" strokeWidth={2.5} />
-          </span>
+          <span className="pop"><Character of="nudge" mood="watch" size={88} /></span>
           <h1 className="rise mt-6 text-head font-semibold">Approved. Applies at {clock(data.readyAt)}</h1>
           <p className="rise mt-1 max-w-xs text-body text-ink-2">
             Loosening a rule waits {Math.round((data.onchain?.changeDelay ?? 0) / 60)} min in the vault. You can cancel it from the Wallet screen until then.
@@ -371,9 +366,7 @@ function Approve({ token }: { token: string }) {
     return (
       <Frame live={live}>
         <div className="mt-14 flex flex-col items-center text-center">
-          <span className="pop grid size-20 place-items-center rounded-full bg-line text-ink-2">
-            <X className="size-10" strokeWidth={2.5} />
-          </span>
+          <span className="pop"><Character of="nudge" mood="sleep" size={88} /></span>
           <h1 className="rise mt-6 text-head font-semibold">Declined</h1>
           <p className="rise mt-1 max-w-xs text-body text-ink-2">{payment ? "Nothing was paid." : "Nothing was changed."} The request is closed.</p>
         </div>
@@ -427,6 +420,10 @@ function Approve({ token }: { token: string }) {
     <Frame live={live}>
       <main className="rise mt-2 overflow-hidden rounded-2xl bg-white shadow-[0_2px_12px_rgba(0,41,112,0.06)]">
         <div className="px-5 pt-6 pb-5 text-center">
+          <div className="mb-3 flex items-end justify-center gap-2">
+            {data.agentProvider && data.agentProvider !== "own" && <Character of={data.agentProvider} mood="watch" size={48} />}
+            <Character of="nudge" mood={open ? "wink" : "neutral"} size={open ? 60 : 48} bob={open} />
+          </div>
           <div className="text-body text-ink-2">{headline(data.agent, payment)}</div>
           {live ? (
             // On-chain: amount and payee come only from the signed bytes and the vault.
@@ -511,7 +508,7 @@ function Approve({ token }: { token: string }) {
               {data.rail === "handoff" ? (
                 <span className="flex items-center gap-1.5"><Landmark className="size-4 text-mute" /> Bank account via UPI</span>
               ) : (
-                <span className="flex items-center gap-1.5"><Wallet className="size-4 text-mute" /> Agent wallet</span>
+                <span className="flex items-center gap-1.5"><Wallet className="size-4 text-mute" /> Nudge wallet</span>
               )}
             </Detail>
           </dl>

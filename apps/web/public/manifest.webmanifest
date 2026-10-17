@@ -1,9 +1,15 @@
 {
-  "name": "Agent Wallet",
-  "short_name": "Wallet",
+  "name": "Nudge",
+  "short_name": "Nudge",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f5f8fa",
+  "background_color": "#f4f4f1",
   "theme_color": "#ffffff",
-  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
 }

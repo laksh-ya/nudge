@@ -81,7 +81,7 @@ export const add = mutation({
       if (!family || (args.chain && family !== args.chain)) throw new ConvexError("That doesn't look like a wallet address");
       if (existing.some((a) => a.address?.toLowerCase() === address.toLowerCase())) throw new ConvexError("This address is already added");
     }
-    // A connection never grants spending authority. Only the agent wallet can execute.
+    // A connection never grants spending authority. Only the Nudge wallet can execute.
     const can = args.can.filter((c) => c !== "execute");
     const accountId = await ctx.db.insert("accounts", {
       userId: user._id,

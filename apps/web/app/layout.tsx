@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Mona_Sans } from "next/font/google";
+import { Instrument_Serif, Mona_Sans } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Providers } from "@/lib/providers";
 import "./globals.css";
@@ -11,11 +11,14 @@ const mona = Mona_Sans({
   display: "swap",
 });
 
+// One accent phrase per headline, in italic (docs/BRAND.md → Type).
+const serif = Instrument_Serif({ subsets: ["latin"], weight: "400", style: ["normal", "italic"], variable: "--font-instrument", display: "swap" });
+
 export const metadata: Metadata = {
-  title: "Agent Wallet",
-  description: "Your money, your assistant, and exactly what it's allowed to spend.",
-  applicationName: "Agent Wallet",
-  appleWebApp: { capable: true, title: "Agent Wallet", statusBarStyle: "default" },
+  title: "Nudge: let your AI pay, only within your rules",
+  description: "Claude and your other assistants pay your saved contacts within limits you set. Anything bigger waits for your passkey, and a contract enforces it even if a key is stolen.",
+  applicationName: "Nudge",
+  appleWebApp: { capable: true, title: "Nudge", statusBarStyle: "default" },
   manifest: "/manifest.webmanifest",
 };
 
@@ -44,7 +47,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         },
       }}
     >
-      <html lang="en" className={mona.variable}>
+      <html lang="en" className={`${mona.variable} ${serif.variable}`}>
         <body>
           <Providers>{children}</Providers>
         </body>

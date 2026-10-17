@@ -139,7 +139,7 @@ async function createPayment(ctx: MutationCtx, user: Doc<"users">, payee: Doc<"p
   if (currency === "USDC") {
     const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
     if (wallet?.status === "live") {
-      const { taskId } = await ownerPayTask(ctx, { user, payee, amountMinor, title, channel, reason: "You're paying from your agent wallet" });
+      const { taskId } = await ownerPayTask(ctx, { user, payee, amountMinor, title, channel, reason: "You're paying from your Nudge wallet" });
       return taskId;
     }
   }
@@ -214,8 +214,8 @@ async function pay(
   if (!cur) {
     const usd = money(Math.round(r.amountMajor * 100), "USDC");
     const loc = money(toMinor(r.amountMajor, user.currency), user.currency);
-    return say(turn, `Is that ${usd} from the agent wallet (test dollars), or ${loc} from your bank by UPI?`, {
-      suggestions: [`${usd} from the agent wallet`, `${loc} by UPI`],
+    return say(turn, `Is that ${usd} from your Nudge wallet (test dollars), or ${loc} from your bank by UPI?`, {
+      suggestions: [`${usd} from my Nudge wallet`, `${loc} by UPI`],
       pending: { kind: "pay", missing: "currency", payeeIds: [payee._id], amountMajor: r.amountMajor, ...base },
     });
   }
@@ -248,7 +248,7 @@ async function pay(
       const d = await propose(ctx, { agentId: own._id, contactId: payee._id, amount: r.amountMajor, reason: title }, { quiet: true, channel: turn.channel });
       if (d.outcome === "submitted") return say(turn, `Paying ${payee.name} ${label} within my limits. I'll show it as paid once it's confirmed.${replaced}`, { taskId: d.taskId, draft });
       // The first reason is the one that matters in a sentence; the card lists the payment itself.
-      if (d.outcome === "needs_approval") return say(turn, `${d.reason.split(". ")[0]!.replace(/^Above Your assistant's/, "Above my")}, so this ${label} payment to ${payee.name} needs your passkey.${replaced}`, { taskId: d.taskId, draft });
+      if (d.outcome === "needs_approval") return say(turn, `${d.reason.split(". ")[0]!.replace(/^Above (?:Your assistant|Nudge)'s/, "Above my")}, so this ${label} payment to ${payee.name} needs your passkey.${replaced}`, { taskId: d.taskId, draft });
       if (d.outcome === "duplicate") return say(turn, "That payment already exists.", { taskId: d.taskId });
       return say(turn, `I can't pay that: ${d.reason}.${replaced}`, { draft });
     }
@@ -631,7 +631,7 @@ async function onYes(turn: Turn) {
   }
   if (p?.kind === "pay") {
     const names = turn.payees.filter((x) => p.payeeIds.includes(x._id)).map((x) => x.name);
-    const q = p.missing === "payee" ? `Which one: ${names.join(", ")}?` : p.missing === "amount" ? "How much?" : "Dollars from the agent wallet, or your own money by UPI?";
+    const q = p.missing === "payee" ? `Which one: ${names.join(", ")}?` : p.missing === "amount" ? "How much?" : "Dollars from your Nudge wallet, or your own money by UPI?";
     return say(turn, `I need one more thing first. ${q}`, { pending: p, suggestions: p.missing === "payee" ? names.slice(0, 4) : undefined });
   }
   if (p?.kind === "remind") return say(turn, `When should I remind you to ${p.text.toLowerCase()}?`, { pending: p });

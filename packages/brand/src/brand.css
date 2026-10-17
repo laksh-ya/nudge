@@ -1,0 +1,21 @@
+/* Nudge's motion. Import once per app; characters opt in with className "nudge-bob", and every
+   character's eyes blink on their own. Everything stops for people who turn motion off. */
+@keyframes nudge-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.1); }
+}
+@keyframes nudge-bob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-6%) rotate(-2deg); }
+}
+.nudge-eyes {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: nudge-blink 5.5s infinite;
+}
+.nudge-bob {
+  animation: nudge-bob 3.2s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nudge-eyes, .nudge-bob { animation: none; }
+}

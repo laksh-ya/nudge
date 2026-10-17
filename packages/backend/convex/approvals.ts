@@ -76,6 +76,8 @@ export const get = query({
       expiresAt: task.expiresAt,
       payee: payee ? { name: payee.name, handle: payee.handle, trusted: payee.trusted, kind: payee.kind, address: payee.address ?? null } : null,
       agent: agent?.name,
+      /** Which character to draw for it on the approval page (packages/brand → CAST). */
+      agentProvider: agent?.provider,
     };
   },
 });

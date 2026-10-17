@@ -54,7 +54,7 @@ export default function AccountPage() {
     try {
       const [addr] = (await window.ethereum.request({ method: "eth_requestAccounts" })) as string[];
       if (addr?.toLowerCase() !== a.address?.toLowerCase()) throw new Error("Switch your wallet to this address first");
-      const message = `Agent Wallet ownership check\nAccount: ${a._id}\nAddress: ${a.address}\nIssued at: ${Date.now()}\nThis signature does not move any funds.`;
+      const message = `Nudge ownership check\nAccount: ${a._id}\nAddress: ${a.address}\nIssued at: ${Date.now()}\nThis signature does not move any funds.`;
       const signature = (await window.ethereum.request({ method: "personal_sign", params: [message, addr] })) as string;
       await verify({ accountId: a._id, message, signature });
     } catch (e) {

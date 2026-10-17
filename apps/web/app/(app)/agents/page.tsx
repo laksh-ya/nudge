@@ -193,8 +193,8 @@ function AgentCard({
   return (
     <Card className={cn("flex flex-col", frozen && "bg-[#fbfcfd]")}>
       <div className="flex items-start gap-3">
-        <div className={cn(frozen && "opacity-50 grayscale")}>
-          <AgentMark provider={a.provider} name={a.name} size={44} />
+        <div className={cn(frozen && "opacity-60")}>
+          <AgentMark provider={a.provider} name={a.name} size={44} mood={frozen ? "sleep" : a.status === "revoked" ? "grumpy" : pending ? "neutral" : "happy"} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">

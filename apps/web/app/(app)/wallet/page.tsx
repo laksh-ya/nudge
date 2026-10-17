@@ -36,7 +36,7 @@ export default function WalletPage() {
       <div className="mx-auto max-w-3xl space-y-4">
         <PageTitle>Wallet</PageTitle>
         <Card>
-          <h2 className="text-title font-semibold">Set up the agent wallet</h2>
+          <h2 className="text-title font-semibold">Set up your Nudge wallet</h2>
           <p className="mt-1 text-body text-ink-2">The one place agents can pay from, with a daily ceiling and a protected amount you choose.</p>
           <Button className="mt-4" onClick={async () => { await setStep({ step: "wallet" }); router.push("/onboarding"); }}>
             Set up
@@ -76,7 +76,7 @@ export default function WalletPage() {
         <div className="p-5">
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-2 text-label text-white/70">
-              Agent wallet
+              Nudge wallet
               <Chip className="bg-white/15 text-white">Base Sepolia · tUSD, no value</Chip>
             </span>
             {frozen && (
