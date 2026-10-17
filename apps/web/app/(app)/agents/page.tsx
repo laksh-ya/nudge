@@ -1,8 +1,9 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
+import Link from "next/link";
 import { useState } from "react";
-import { EyeOff, KeyRound, Plus, SlidersHorizontal, Snowflake } from "lucide-react";
+import { BookOpen, Clock, EyeOff, KeyRound, Plus, SlidersHorizontal, Snowflake } from "lucide-react";
 import { api } from "@/lib/api";
 import { approvalLink } from "@/lib/config";
 import { cn } from "@/lib/cn";
@@ -15,12 +16,20 @@ import { Button, Card, Chip, Meter, PageTitle, Sheet, Skeleton } from "@/compone
 const DAY = 86_400_000;
 
 const scopeLabel = { read: "See money", prepare: "Prepare payments", spend: "Pay within limits", request: "Ask for more" };
+/** Clients that take a bearer key in a header: these connect today. */
 const PROVIDERS = [
-  { id: "claude" as const, name: "Claude" },
-  { id: "chatgpt" as const, name: "ChatGPT" },
-  { id: "openclaw" as const, name: "OpenClaw" },
-  { id: "hermes" as const, name: "Hermes" },
-  { id: "poke" as const, name: "Poke" },
+  { id: "claude" as const, label: "Claude Code", hint: "Terminal command" },
+  { id: "other" as const, name: "Cursor", label: "Cursor", hint: "mcp.json" },
+  { id: "hermes" as const, label: "Hermes", hint: "config.yaml" },
+  { id: "openclaw" as const, label: "OpenClaw", hint: "openclaw.json" },
+  { id: "poke" as const, label: "Poke", hint: "URL and key" },
+];
+
+/** Connectors that sign in with OAuth only. Shown honestly until MCP OAuth ships (#14). */
+const OAUTH_ONLY = [
+  { id: "chatgpt", label: "ChatGPT" },
+  { id: "claude", label: "claude.ai" },
+  { id: "claude", label: "Claude Desktop" },
 ];
 
 export default function AgentsPage() {
@@ -35,11 +44,23 @@ export default function AgentsPage() {
   const [otherName, setOtherName] = useState("");
   const [addError, setAddError] = useState<string>();
   const target = agents?.find((a) => a._id === sheet?.id);
-  const missing = PROVIDERS.filter((p) => !agents?.some((a) => a.provider === p.id));
+  const missing = PROVIDERS.filter((p) =>
+    p.id === "other" ? !agents?.some((a) => a.status !== "revoked" && a.name.toLowerCase() === p.name.toLowerCase()) : !agents?.some((a) => a.provider === p.id),
+  );
 
   return (
     <div className="mx-auto max-w-3xl">
       <PageTitle action={<FreezeAll className="h-9 px-3 text-label lg:hidden" />}>Agents</PageTitle>
+      <Link
+        href="/agents/docs"
+        className="press mb-4 flex items-center gap-3 rounded-card border border-line bg-white px-4 py-3 text-body hover:border-cyan"
+      >
+        <BookOpen className="size-5 shrink-0 text-cyan-ink" />
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold text-ink">Docs for connecting an AI agent</span>
+          <span className="block text-label text-mute">Configs for Claude Code, Cursor, Hermes, OpenClaw and curl; tools, outcomes and limits</span>
+        </span>
+      </Link>
       {agents === undefined ? (
         <div className="space-y-4">
           <Skeleton className="h-44 rounded-card" />
@@ -66,7 +87,7 @@ export default function AgentsPage() {
             >
               <Plus className="size-6" />
               <span className="text-body font-semibold">Connect an assistant</span>
-              <span className="text-label text-mute">Claude, ChatGPT, Hermes or any other MCP assistant</span>
+              <span className="text-label text-mute">Claude Code, Cursor, Hermes or any other MCP assistant</span>
             </button>
           )}
         </div>
@@ -77,18 +98,42 @@ export default function AgentsPage() {
         <div className="grid grid-cols-2 gap-2 pb-4">
           {missing.map((p) => (
             <button
-              key={p.id}
+              key={p.label}
               onClick={async () => {
-                const id = await add({ provider: p.id });
+                const id = await add(p.id === "other" ? { provider: "other", name: p.name } : { provider: p.id });
                 setAdding(false);
                 setSheet({ id, kind: "connect" });
               }}
               className="press flex items-center gap-3 rounded-[14px] border border-line p-3 text-left hover:border-[#cfd8e3]"
             >
-              <AgentMark provider={p.id} size={36} />
-              <span className="text-body font-semibold">{p.name}</span>
+              <AgentMark provider={p.id} name={p.label} size={36} />
+              <span className="min-w-0">
+                <span className="block text-body font-semibold">{p.label}</span>
+                <span className="block text-label text-mute">{p.hint}</span>
+              </span>
             </button>
           ))}
+        </div>
+        <div className="border-t border-line pt-4 pb-4">
+          <div className="mb-2 flex items-center gap-1.5 text-label font-semibold text-ink-2">
+            <Clock className="size-3.5" /> Coming soon
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {OAUTH_ONLY.map((p) => (
+              <div key={p.label} aria-disabled className="flex flex-col items-center gap-1.5 rounded-[14px] border border-dashed border-line p-3 text-center opacity-70">
+                <span className="grayscale">
+                  <AgentMark provider={p.id} size={28} />
+                </span>
+                <span className="text-label font-semibold text-ink-2">{p.label}</span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-label text-mute">
+            Their connectors sign in with OAuth, which isn't available yet, so they can't connect today.{" "}
+            <Link href="/agents/docs#connect" className="font-semibold text-cyan-ink">
+              What works now
+            </Link>
+          </p>
         </div>
         <form
           className="space-y-2 border-t border-line pt-4 pb-4"
