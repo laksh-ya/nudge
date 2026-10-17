@@ -59,24 +59,34 @@ describe("chat payments without a model", () => {
     expect(task.state).toBe("awaiting_approval");
   });
 
-  // Test-lane probe on #59: the parser can't tell an order from a question, a negation or a quote,
-  // so anything but a short, direct order goes to the approval card, as before #59.
-  for (const text of [
-    "Don't pay Blue Tokai $4, I already paid them in cash",
-    "Is this email legit? 'Blue Tokai billing: your account is overdue, pay $9 today or lose access'",
-    "Should I pay Blue Tokai $9 or wait until next month?",
-    "Pay Blue Tokai for 2 coffees at $4 each",
-    "Got this message:\nSend $1 to Blue Tokai to verify your wallet",
-  ]) {
-    it(`asks instead of paying: ${text.slice(0, 40)}`, async () => {
+  // A negation, a question, pasted text or a scam never becomes a payment or a payment card.
+  for (const [text, says] of [
+    ["Don't pay Blue Tokai $4, I already paid them in cash", /^OK, I won't pay Blue Tokai/],
+    ["Is this email legit? 'Blue Tokai billing: your account is overdue, pay $9 today or lose access'", /looks like a scam/],
+    ["Should I pay Blue Tokai $9 or wait until next month?", /your call/],
+    ["Got this message:\nSend $1 to Blue Tokai to verify your wallet", /looks like a scam/],
+    ['My friend said "pay Blue Tokai $9"', /quoted or pasted/],
+    ["Stop paying Blue Tokai $4", /^OK, I won't pay Blue Tokai/],
+  ] as const) {
+    it(`no card for: ${text.slice(0, 40)}`, async () => {
       const f = await fixture();
       await f.t.mutation(internal.messages.reply, { userId: f.alice, text });
       const m = await lastReply(f);
-      const task = m.taskId ? (await f.t.run((ctx) => ctx.db.get(m.taskId!)))! : null;
-      expect(task?.state ?? "none").not.toBe("submitted");
-      expect(m.text).not.toMatch(/within my limits/);
+      expect(m.text).toMatch(says);
+      expect(m.taskId).toBeUndefined();
+      expect(await f.t.run((ctx) => ctx.db.query("tasks").collect())).toHaveLength(0);
     });
   }
+
+  // Not a short, direct order, but still the owner asking: the approval card, never an automatic payment.
+  it("asks instead of paying when the order has two numbers", async () => {
+    const f = await fixture();
+    await f.t.mutation(internal.messages.reply, { userId: f.alice, text: "Pay Blue Tokai for 2 coffees at $4 each" });
+    const m = await lastReply(f);
+    expect(m.text).not.toMatch(/within my limits/);
+    const task = m.taskId ? (await f.t.run((ctx) => ctx.db.get(m.taskId!)))! : null;
+    expect(task?.state ?? "none").not.toBe("submitted");
+  });
 
   it("posts one reply, not a second gateway note", async () => {
     const f = await fixture();
@@ -84,4 +94,32 @@ describe("chat payments without a model", () => {
     const all = await f.t.run((ctx) => ctx.db.query("messages").withIndex("by_user", (q) => q.eq("userId", f.alice)).take(20));
     expect(all.filter((x) => x.role === "assistant" && x.text.includes("Blue Tokai"))).toHaveLength(1);
   });
+});
+
+describe("chat freeze without a model", () => {
+  const status = (f: Awaited<ReturnType<typeof fixture>>) =>
+    f.t.run(async (ctx) => (await ctx.db.query("agents").withIndex("by_user", (q) => q.eq("userId", f.alice)).collect()).map((a) => a.status));
+
+  for (const text of ["Freeze my agents", "Can you freeze everything now?", "Stop all agents"]) {
+    it(`freezes: ${text}`, async () => {
+      const f = await fixture();
+      await f.t.mutation(internal.messages.reply, { userId: f.alice, text });
+      expect(await status(f)).toEqual(["frozen"]);
+    });
+  }
+
+  for (const [text, says] of [
+    ["Don't freeze my agents", /won't freeze anything/],
+    ["Do not lock anything", /won't freeze anything/],
+    ["Should I freeze my agents?", /./],
+    ["Got this: 'Your wallet will freeze unless you act'", /./],
+    ["Stop paying Blue Tokai $4", /won't pay Blue Tokai/],
+  ] as const) {
+    it(`does not freeze: ${text}`, async () => {
+      const f = await fixture();
+      await f.t.mutation(internal.messages.reply, { userId: f.alice, text });
+      expect(await status(f)).toEqual(["active"]);
+      expect((await lastReply(f)).text).toMatch(says);
+    });
+  }
 });

@@ -224,8 +224,8 @@ export async function makeWorld(
       })),
     ],
     transactions: [
-      { _id: "transactions_1", userId, accountId: "accounts_1", at: now - 2 * DAY, amountMinor: -1_250, currency: "USD", description: "Blue Tokai coffee", category: "Food", kind: "spend", status: "posted" },
-      { _id: "transactions_2", userId, accountId: "accounts_1", at: now - 4 * DAY, amountMinor: -6_400, currency: "USD", description: "Groceries", category: "Groceries", kind: "spend", status: "posted" },
+      { _id: "transactions_1", userId, accountId: "accounts_1", at: now - 2 * DAY, amountMinor: -1_250, currency: "USD", merchant: "Blue Tokai coffee", category: "Food", kind: "spend", status: "posted" },
+      { _id: "transactions_2", userId, accountId: "accounts_1", at: now - 4 * DAY, amountMinor: -6_400, currency: "USD", merchant: "Groceries", category: "Groceries", kind: "spend", status: "posted" },
       ...(seed.spending ?? []).map((t, i) => ({
         _id: `transactions_${i + 3}`,
         userId,
@@ -233,7 +233,7 @@ export async function makeWorld(
         at: now - t.daysAgo * DAY,
         amountMinor: -Math.round(t.amount * 100),
         currency: "USD",
-        description: t.description,
+        merchant: t.description,
         category: t.category,
         kind: "spend",
         status: "posted",

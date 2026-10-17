@@ -685,6 +685,24 @@ async function answer(turn: Turn, intent: Intent, allowResume = true): Promise<v
       if (who.length === 1 && task?.payeeId === who[0]!._id) return onCancel(turn, who[0]!._id);
       return say(turn, `OK, I won't pay ${who.length === 1 ? who[0]!.name : "anyone"}. Nothing was sent.`);
     }
+    case "dont_freeze":
+      return say(turn, "OK, I won't freeze anything. Your agents are as they were.");
+    case "scam": {
+      const who = matchContacts(turn.text, turn.payees);
+      return say(
+        turn,
+        `That looks like a scam: pressure to pay right away, or a threat to cut you off, is the usual trick. I haven't paid ${who.length === 1 ? who[0]!.name : "anyone"}. Check with them through their own app or number, not a link or number in the message.`,
+      );
+    }
+    case "quoted":
+      return say(turn, `I don't pay from quoted or pasted text, so nothing was sent. If you want to pay, type it yourself, like "pay Blue Tokai $5".`);
+    case "pay_question": {
+      const o = await overviewOf(turn);
+      return say(
+        turn,
+        `That's your call, so I haven't paid anything. You have ${money(o.available, o.currency)} safe to spend after rent, bills and your emergency fund. If you want to go ahead, tell me to pay, with the amount.`,
+      );
+    }
     case "correction":
       return onCorrection(turn, intent);
     case "pay":
