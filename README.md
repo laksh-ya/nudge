@@ -6,7 +6,7 @@
 
 **Let your AI pay. Only within your rules.**
 
-Nudge is a wallet your AI assistants can pay from, on a leash you set. Small payments go through on their own; anything bigger waits for your passkey; and a contract on Base Sepolia enforces every rule, even if an assistant's key is stolen.
+Nudge is a wallet your AI assistants can pay from, on a leash you set. Small payments go through on their own; anything bigger waits for your passkey; and a contract on Base Sepolia enforces every rule, even if an assistant's key is stolen!!
 
 [![CI](https://github.com/laksh-ya/nudge/actions/workflows/ci.yml/badge.svg)](https://github.com/laksh-ya/nudge/actions/workflows/ci.yml)
 ![Chain](https://img.shields.io/badge/chain-Base%20Sepolia-0052FF)
