@@ -1,0 +1,47 @@
+name: Deploy Convex
+
+# Deploys the backend to Convex prod when main changes it, after the same tests CI runs.
+# Needs the repository secret CONVEX_DEPLOY_KEY (Convex dashboard → prod deployment → Settings →
+# Deploy keys → Generate production deploy key). Without it the job says so and does nothing.
+on:
+  push:
+    branches: [main]
+    paths: ["packages/backend/**", "packages/domain/src/**", "pnpm-lock.yaml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: convex-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+    steps:
+      - name: Deploy key present?
+        id: key
+        run: |
+          if [ -z "$CONVEX_DEPLOY_KEY" ]; then echo "CONVEX_DEPLOY_KEY is not set: skipping the deploy."; echo "ok=false" >> "$GITHUB_OUTPUT"; else echo "ok=true" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/checkout@v4
+        if: steps.key.outputs.ok == 'true'
+      - uses: pnpm/action-setup@v4
+        if: steps.key.outputs.ok == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.key.outputs.ok == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+      - if: steps.key.outputs.ok == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Backend tests
+        if: steps.key.outputs.ok == 'true'
+        run: pnpm --filter @agent-wallet/backend typecheck && pnpm --filter @agent-wallet/backend test
+      - name: Deploy to Convex prod
+        if: steps.key.outputs.ok == 'true'
+        working-directory: packages/backend
+        run: npx convex deploy --yes
