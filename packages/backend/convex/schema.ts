@@ -82,6 +82,27 @@ export const sourceKind = v.union(
   v.literal("cash"),
 );
 
+/** What the basic assistant asked and is waiting on, so the next message can answer it. */
+const cur = v.union(v.literal("USD"), v.literal("LOCAL"));
+export const pendingOffer = v.union(
+  v.object({
+    kind: v.literal("pay"),
+    missing: v.union(v.literal("payee"), v.literal("amount"), v.literal("currency")),
+    payeeIds: v.array(v.id("payees")),
+    amountMajor: v.optional(v.number()),
+    cur: v.optional(cur),
+    reason: v.optional(v.string()),
+    /** The original order was short and direct (#59), so once answered it may pay inside the limits. */
+    direct: v.boolean(),
+    replaces: v.optional(v.id("tasks")),
+  }),
+  v.object({ kind: v.literal("goal"), goalId: v.optional(v.id("goals")), name: v.string(), targetMinor: v.number(), currency, dueAt: v.optional(v.number()) }),
+  v.object({ kind: v.literal("remind"), text: v.string(), obligationId: v.optional(v.id("obligations")), repeat: v.optional(v.union(v.literal("monthly"), v.literal("weekly"))) }),
+);
+
+/** The payment a chat reply proposed, so "no wait, make it $6" can replace it. */
+export const chatDraft = v.object({ payeeId: v.id("payees"), amountMajor: v.number(), cur, reason: v.optional(v.string()), direct: v.boolean() });
+
 export const capability = v.union(v.literal("read"), v.literal("prepare"), v.literal("handoff"), v.literal("execute"));
 
 export const importKind = v.union(
@@ -114,6 +135,8 @@ export default defineSchema({
     quietFrom: v.optional(v.string()),
     quietTo: v.optional(v.string()),
     reminderLeadDays: v.optional(v.number()),
+    /** Telegram reminders say "a bill is due" without amounts or payees. */
+    privateReminders: v.optional(v.boolean()),
     onboardingStep: v.optional(v.string()),
     onboardedAt: v.optional(v.number()),
     lastSeenAt: v.optional(v.number()),
@@ -220,7 +243,11 @@ export default defineSchema({
     occurrences: v.optional(v.number()),
     lastPaidAt: v.optional(v.number()),
     accountId: v.optional(v.id("accounts")),
-  }).index("by_user_due", ["userId", "nextDueAt"]),
+    /** The due date the last reminder was sent for, so each cycle reminds once. */
+    remindedFor: v.optional(v.number()),
+  })
+    .index("by_user_due", ["userId", "nextDueAt"])
+    .index("by_due", ["nextDueAt"]),
 
   goals: defineTable({
     userId: v.id("users"),
@@ -230,7 +257,35 @@ export default defineSchema({
     savedMinor: v.number(),
     currency,
     dueAt: v.optional(v.number()),
-  }).index("by_user", ["userId"]),
+    remindedFor: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_due", ["dueAt"]),
+
+  /** Reminders the owner asked for ("remind me to pay rent on the 1st"). Bill and goal reminders need no row. */
+  reminders: defineTable({
+    userId: v.id("users"),
+    text: v.string(),
+    dueAt: v.number(),
+    repeat: v.optional(v.union(v.literal("monthly"), v.literal("weekly"))),
+    obligationId: v.optional(v.id("obligations")),
+    status: v.union(v.literal("scheduled"), v.literal("sent"), v.literal("cancelled")),
+    sentAt: v.optional(v.number()),
+    repeatDay: v.optional(v.number()),
+  })
+    .index("by_status_due", ["status", "dueAt"])
+    .index("by_user", ["userId", "status", "dueAt"]),
+
+  reminderDeliveries: defineTable({
+    userId: v.id("users"),
+    key: v.string(),
+    text: v.string(),
+    privateText: v.string(),
+    status: v.union(v.literal("queued"), v.literal("sending"), v.literal("sent"), v.literal("failed"), v.literal("unknown")),
+    attempts: v.number(),
+    nextAttemptAt: v.number(),
+    error: v.optional(v.string()),
+  }).index("by_key", ["key"]),
 
   wallets: defineTable({
     userId: v.id("users"),
@@ -412,6 +467,14 @@ export default defineSchema({
     text: v.string(),
     channel,
     taskId: v.optional(v.id("tasks")),
+    /** "basic" when the rule-based assistant answered instead of the model; `fallback` says why. */
+    mode: v.optional(v.union(v.literal("model"), v.literal("basic"))),
+    fallback: v.optional(v.string()),
+    /** Quick replies to offer under the message (contact names, "yes"). */
+    suggestions: v.optional(v.array(v.string())),
+    pending: v.optional(pendingOffer),
+    draft: v.optional(chatDraft),
+    reminder: v.optional(v.boolean()),
   }).index("by_user", ["userId"]),
 
   family: defineTable({

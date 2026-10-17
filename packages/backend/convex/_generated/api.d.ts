@@ -24,6 +24,7 @@ import type * as gateway from "../gateway.js";
 import type * as home from "../home.js";
 import type * as http from "../http.js";
 import type * as imports from "../imports.js";
+import type * as reminders from "../reminders.js";
 import type * as lib_actions from "../lib/actions.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_budget from "../lib/budget.js";
@@ -93,6 +94,7 @@ declare const fullApi: ApiFromModules<{
   onboarding: typeof onboarding;
   ops: typeof ops;
   rates: typeof rates;
+  reminders: typeof reminders;
   tasks: typeof tasks;
   telegram: typeof telegram;
   users: typeof users;

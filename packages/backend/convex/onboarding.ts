@@ -43,6 +43,7 @@ export const state = query({
         quietFrom: user.quietFrom ?? "22:00",
         quietTo: user.quietTo ?? "08:00",
         reminderLeadDays: user.reminderLeadDays ?? 2,
+        privateReminders: user.privateReminders ?? false,
         monthlyBudgetMinor: user.monthlyBudgetMinor,
         emergencyMinor: user.emergencyMinor,
         step: user.onboardingStep ?? (user.onboardedAt ? null : "you"),
@@ -161,10 +162,11 @@ export const saveAssistant = mutation({
     quietFrom: v.string(),
     quietTo: v.string(),
     reminderLeadDays: v.number(),
+    privateReminders: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const user = await requireViewer(ctx);
-    if (!/^\d{2}:\d{2}$/.test(args.quietFrom) || !/^\d{2}:\d{2}$/.test(args.quietTo)) throw new Error("Use HH:MM");
+    if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(args.quietFrom) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(args.quietTo)) throw new Error("Use HH:MM");
     if (!Number.isInteger(args.reminderLeadDays) || args.reminderLeadDays < 0 || args.reminderLeadDays > 14) throw new Error("Pick 0 to 14 days");
     await ctx.db.patch(user._id, args);
     const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
