@@ -1,12 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useMutation } from "convex/react";
 import { useState } from "react";
-import { Check, Copy, KeyRound, TriangleAlert } from "lucide-react";
+import { BookOpen, Check, Copy, Info, KeyRound, TriangleAlert } from "lucide-react";
 import { api, type Doc } from "@/lib/api";
+import { MCP_URL, approvalLink } from "@/lib/config";
+import { mcpSnippets } from "@/lib/mcp-snippets";
 
 export type AgentView = Omit<Doc<"agents">, "tokenHash"> & { hasKey: boolean };
-import { MCP_URL, approvalLink } from "@/lib/config";
 import { Button, Sheet } from "../ui";
 import { Choice, ErrorText, Field, MoneyInput, Select, Toggle, errorMessage, toMinorUnits } from "../form";
 
@@ -33,17 +35,47 @@ function CopyRow({ label, value, secret }: { label: string; value: string; secre
   );
 }
 
+/** Which snippet to show first for each preset; the rest stay one tap away. */
+const FIRST: Record<string, string> = { claude: "claude-code", hermes: "hermes", openclaw: "openclaw" };
+
 export function ConnectSheet({ agent, onClose }: { agent: AgentView; onClose: () => void }) {
   const issue = useMutation(api.gateway.issueToken);
   const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<string>();
+  const [confirmRotate, setConfirmRotate] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const slug = agent.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const readOnly = !agent.scopes.includes("prepare") && !agent.scopes.includes("spend");
+  const first = FIRST[agent.provider] ?? (agent.name.toLowerCase() === "cursor" ? "cursor" : "json");
+  const snippets = token ? mcpSnippets(MCP_URL, token, `${slug}-wallet`) : [];
+  const ordered = [...snippets.filter((x) => x.id === first), ...snippets.filter((x) => x.id !== first)];
+  const create = async () => {
+    try {
+      setError(undefined);
+      setToken(await issue({ agentId: agent._id }));
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  };
   return (
     <Sheet open onOpenChange={(o) => !o && onClose()} title={`Connect ${agent.name}`}>
       <div className="space-y-4 pb-4">
         <p className="text-body text-ink-2">
           {agent.name} connects over MCP with its own key. It can only do what you allow on this screen, and you can freeze or disconnect it any time.
         </p>
+        {agent.provider === "chatgpt" && (
+          <p className="flex items-start gap-2 rounded-btn bg-amber-soft p-3 text-label text-amber">
+            <Info className="mt-px size-4 shrink-0" />
+            ChatGPT's connectors sign in with OAuth, which isn't available yet, so ChatGPT itself can't connect today. A key works in clients that let you add an
+            Authorization header.
+          </p>
+        )}
+        {readOnly && (
+          <p className="flex items-start gap-2 rounded-btn bg-sky-soft p-3 text-label text-navy">
+            <Info className="mt-px size-4 shrink-0" />
+            It starts read-only: it can see money but not pay. To let it pay, open Limits on its card.
+          </p>
+        )}
         <CopyRow label="Server URL" value={MCP_URL} />
         {token ? (
           <>
@@ -52,12 +84,14 @@ export function ConnectSheet({ agent, onClose }: { agent: AgentView; onClose: ()
               <TriangleAlert className="mt-px size-4 shrink-0" />
               Copy it now. It won't be shown again. Making a new key turns this one off.
             </p>
-            <CopyRow label="Claude Code" value={`claude mcp add --transport http ${slug}-wallet ${MCP_URL} --header "Authorization: Bearer ${token}"`} />
-            <CopyRow
-              label="Any MCP client (JSON config)"
-              value={JSON.stringify({ mcpServers: { [`${slug}-wallet`]: { type: "http", url: MCP_URL, headers: { Authorization: `Bearer ${token}` } } } })}
-            />
-            <CopyRow label="Hermes (config.yaml)" value={`mcp_servers:\n  ${slug}-wallet:\n    url: ${MCP_URL}\n    headers:\n      Authorization: Bearer ${token}`} />
+            {(showAll ? ordered : ordered.slice(0, 1)).map((x) => (
+              <CopyRow key={x.id} label={`${x.label} · ${x.where}`} value={x.code} />
+            ))}
+            {!showAll && (
+              <button onClick={() => setShowAll(true)} className="press text-label font-semibold text-cyan-ink">
+                Show Cursor, Hermes, OpenClaw, JSON and curl
+              </button>
+            )}
             <p className="text-label text-mute">
               Any assistant works if it can add a remote MCP server (streamable HTTP) with an Authorization header: this URL, and "Bearer" plus the key.
             </p>
@@ -65,25 +99,32 @@ export function ConnectSheet({ agent, onClose }: { agent: AgentView; onClose: ()
               Done
             </Button>
           </>
+        ) : confirmRotate ? (
+          <div className="space-y-3 rounded-btn border border-line p-3">
+            <p className="text-body text-ink-2">
+              {agent.name}'s current key stops working at once. Anything set up with it needs the new key.
+            </p>
+            <ErrorText>{error}</ErrorText>
+            <div className="flex gap-2">
+              <Button tone="outline" className="flex-1" onClick={() => setConfirmRotate(false)}>
+                Keep the old key
+              </Button>
+              <Button tone="danger" className="flex-1" onClick={create}>
+                Replace it
+              </Button>
+            </div>
+          </div>
         ) : (
           <>
             <ErrorText>{error}</ErrorText>
-            <Button
-              size="lg"
-              icon={KeyRound}
-              className="w-full"
-              onClick={async () => {
-                try {
-                  setToken(await issue({ agentId: agent._id }));
-                } catch (e) {
-                  setError(errorMessage(e));
-                }
-              }}
-            >
+            <Button size="lg" icon={KeyRound} className="w-full" onClick={agent.hasKey ? () => setConfirmRotate(true) : create}>
               {agent.hasKey ? "Make a new key" : "Create access key"}
             </Button>
           </>
         )}
+        <Link href="/agents/docs" className="press flex items-center justify-center gap-1.5 text-label font-semibold text-cyan-ink">
+          <BookOpen className="size-3.5" /> Setup docs, tools and limits
+        </Link>
       </div>
     </Sheet>
   );

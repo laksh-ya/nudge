@@ -300,7 +300,8 @@ export async function seedUser(ctx: MutationCtx, userId: Id<"users">) {
   });
   await ctx.db.insert("agents", {
     userId,
-    name: "ChatGPT",
+    // An example of a read-only assistant; it has never actually called this sandbox.
+    name: "ChatGPT (example)",
     provider: "chatgpt",
     tokenHash: await sha256(token()),
     status: "active",
@@ -310,7 +311,6 @@ export async function seedUser(ctx: MutationCtx, userId: Id<"users">) {
     spentTodayMinor: 0,
     hidesBalances: true,
     connectedAt: at(4),
-    lastUsedAt: at(1, 3),
     expiresAt: now + 26 * DAY,
   });
   const openclaw = await ctx.db.insert("agents", {

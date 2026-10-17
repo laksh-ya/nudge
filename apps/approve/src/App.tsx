@@ -2,7 +2,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useEffect, useMemo, useState } from "react";
 import { Check, Clock, ExternalLink, Fingerprint, Landmark, LoaderCircle, Lock, ShieldCheck, TriangleAlert, Wallet, X } from "lucide-react";
 import { api } from "@agent-wallet/backend/api";
-import { CHAIN_ID, actionDigest, checkApproval, formatMoney, isVaultVersion, policyVaultAbi, testUsdAbi, type ChainReader, type Currency, type Op, type Truth } from "@agent-wallet/domain";
+import { CHAIN_ID, actionDigest, checkApproval, formatMoney, isVaultVersion, policyVaultAbi, testUsdAbi, Op, type ChainReader, type Currency, type Truth } from "@agent-wallet/domain";
 import { createPublicClient, http, type Address, type Hex } from "viem";
 import { createPasskey, inAppBrowser, passkeysSupported, signWithPasskey } from "./passkey";
 
@@ -113,9 +113,58 @@ function WebViewNotice() {
   );
 }
 
+/** Agents never get approval links; the owner opens them from the dashboard or Telegram. */
+const STALE = "Open the latest request from your dashboard or Telegram.";
+
+function Home() {
+  return (
+    <Frame live>
+      <div className="rise mt-16 rounded-2xl bg-white p-6 text-center shadow-sm">
+        <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-sky text-navy">
+          <Fingerprint className="size-7" />
+        </span>
+        <h1 className="mt-4 text-head font-semibold">Nothing to approve right now</h1>
+        <p className="mt-1 text-body text-ink-2">
+          This site does one thing: you approve payments and rule changes for your agent wallet with your passkey. Requests reach you as links in the
+          dashboard or Telegram.
+        </p>
+        <p className="mt-3 text-label text-mute">Base Sepolia testnet. Test dollars (tUSD) only, no real value.</p>
+      </div>
+    </Frame>
+  );
+}
+
+function Loading() {
+  // The shape of a request, so the page doesn't jump when it arrives.
+  return (
+    <Frame>
+      <div className="mt-2 overflow-hidden rounded-2xl bg-white shadow-[0_2px_12px_rgba(0,41,112,0.06)]" aria-busy="true">
+        <div className="flex flex-col items-center px-5 pt-6 pb-5">
+          <div className="h-4 w-36 animate-pulse rounded bg-page" />
+          <div className="mt-3 h-11 w-44 animate-pulse rounded-lg bg-page" />
+          <div className="mt-3 h-8 w-32 animate-pulse rounded-full bg-page" />
+        </div>
+        <div className="space-y-3 border-t border-line px-5 py-4">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex justify-between gap-4">
+              <div className="h-4 w-20 animate-pulse rounded bg-page" />
+              <div className="h-4 w-28 animate-pulse rounded bg-page" />
+            </div>
+          ))}
+        </div>
+        <div className="border-t border-line p-4">
+          <div className="h-12 animate-pulse rounded-[10px] bg-page" />
+        </div>
+      </div>
+      <p className="mt-4 text-center text-label text-mute">Checking the request…</p>
+    </Frame>
+  );
+}
+
 export function App() {
+  if (window.location.pathname === "/" || window.location.pathname === "") return <Home />;
   const r = route();
-  if (!r) return <Invalid title="This link isn't valid" text="Ask your assistant for a new one." />;
+  if (!r) return <Invalid title="This link isn't valid" text={STALE} />;
   return r.kind === "enrol" ? <Enrol token={r.token} /> : <Approve token={r.token} />;
 }
 
@@ -125,7 +174,7 @@ function Enrol({ token }: { token: string }) {
   const [busy, setBusy] = useState(false);
   const [code, setCode] = useState<string>();
   const [error, setError] = useState<string>();
-  if (info === undefined && !code) return <Frame><div className="mt-4 h-80 animate-pulse rounded-2xl bg-white" /></Frame>;
+  if (info === undefined && !code) return <Loading />;
   if (code) {
     // The app (signed in as the owner) asks for this code. A copied setup link alone gets nowhere.
     return (
@@ -203,6 +252,7 @@ function clock(ms: number) {
 function Approve({ token }: { token: string }) {
   const data = useQuery(api.approvals.get, { token });
   const submit = useMutation(api.approvals.submit);
+  const decline = useMutation(api.approvals.decline);
   const now = useNow();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -239,8 +289,8 @@ function Approve({ token }: { token: string }) {
     };
   }, [onchain, claimedAmount, claimedPayee]);
 
-  if (data === null) return <Invalid title="This link isn't valid" text="Ask your assistant for a new one." />;
-  if (data === undefined) return <Frame><div className="mt-4 h-[420px] animate-pulse rounded-2xl bg-white" /></Frame>;
+  if (data === null) return <Invalid title="This link isn't valid" text={STALE} />;
+  if (data === undefined) return <Loading />;
 
   const live = Boolean(data.onchain);
   const currency = data.currency as Currency;
@@ -253,6 +303,20 @@ function Approve({ token }: { token: string }) {
   // Signing waits for the check, and never happens when the server and the bytes disagree.
   const blocked = live && (!truth || truth.mismatches.length > 0);
   const txUrl = data.txHash ? `${data.explorer}/tx/${data.txHash}` : null;
+  // A payment if the signed bytes say so (on-chain), or the request carries an amount (test mode).
+  const payment = live ? data.onchain!.action.op === Op.Pay || truth?.amountMinor != null : data.amountMinor > 0;
+
+  const reject = async () => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await decline({ token });
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const approve = async () => {
     setBusy(true);
@@ -292,6 +356,20 @@ function Approve({ token }: { token: string }) {
               View transaction <ExternalLink className="size-3.5" />
             </a>
           )}
+        </div>
+      </Frame>
+    );
+  }
+
+  if (data.state === "cancelled") {
+    return (
+      <Frame live={live}>
+        <div className="mt-14 flex flex-col items-center text-center">
+          <span className="pop grid size-20 place-items-center rounded-full bg-line text-ink-2">
+            <X className="size-10" strokeWidth={2.5} />
+          </span>
+          <h1 className="rise mt-6 text-head font-semibold">Declined</h1>
+          <p className="rise mt-1 max-w-xs text-body text-ink-2">{payment ? "Nothing was paid." : "Nothing was changed."} The request is closed.</p>
         </div>
       </Frame>
     );
@@ -343,7 +421,7 @@ function Approve({ token }: { token: string }) {
     <Frame live={live}>
       <main className="rise mt-2 overflow-hidden rounded-2xl bg-white shadow-[0_2px_12px_rgba(0,41,112,0.06)]">
         <div className="px-5 pt-6 pb-5 text-center">
-          <div className="text-body text-ink-2">{data.agent ? `${data.agent} wants to` : "You're about to"}</div>
+          <div className="text-body text-ink-2">{headline(data.agent, payment)}</div>
           {live ? (
             // On-chain: amount and payee come only from the signed bytes and the vault.
             truth ? (
@@ -466,20 +544,31 @@ function Approve({ token }: { token: string }) {
           )}
           {open && !live ? (
             // No passkey step on this rail, so this link alone must not approve: the signed-in app does.
-            <a
-              href={WEB_URL}
-              className="press flex h-12 items-center justify-center gap-2 rounded-[10px] bg-navy text-title font-semibold text-white"
-            >
-              <Check className="size-5" strokeWidth={2.5} /> Approve or decline in the app
-            </a>
-          ) : open ? (
+            // Declining only stops the request, so the link may do that.
             <div className="grid grid-cols-[1fr_2fr] gap-2">
-              <a
-                href={WEB_URL}
-                className="press flex h-12 items-center justify-center gap-1.5 rounded-[10px] border border-line text-title font-semibold text-ink-2"
+              <button
+                disabled={busy}
+                onClick={reject}
+                className="press flex h-12 items-center justify-center gap-1.5 rounded-[10px] border border-line text-title font-semibold text-ink-2 disabled:opacity-60"
               >
                 <X className="size-4" /> Decline
+              </button>
+              <a
+                href={WEB_URL}
+                className="press flex h-12 items-center justify-center gap-2 rounded-[10px] bg-navy text-title font-semibold text-white"
+              >
+                <Check className="size-5" strokeWidth={2.5} /> Approve in the app
               </a>
+            </div>
+          ) : open ? (
+            <div className="grid grid-cols-[1fr_2fr] gap-2">
+              <button
+                disabled={busy}
+                onClick={reject}
+                className="press flex h-12 items-center justify-center gap-1.5 rounded-[10px] border border-line text-title font-semibold text-ink-2 disabled:opacity-60"
+              >
+                <X className="size-4" /> Decline
+              </button>
               <button
                 disabled={busy || blocked || !passkeysSupported()}
                 onClick={approve}
@@ -495,7 +584,7 @@ function Approve({ token }: { token: string }) {
             </div>
           ) : (
             <div className="flex h-12 items-center justify-center rounded-[10px] bg-page px-3 text-center text-body font-semibold text-ink-2">
-              {expired || data.state === "expired" ? "This request expired" : data.state === "cancelled" ? "Declined" : data.state === "failed" ? data.reason ?? "Failed" : "Already handled"}
+              {expired || data.state === "expired" ? "This request expired" : data.state === "failed" ? data.reason ?? "Failed" : "Already handled"}
             </div>
           )}
           {txUrl && (
@@ -507,10 +596,17 @@ function Approve({ token }: { token: string }) {
       </main>
       <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-label text-mute">
         <Lock className="size-3.5 shrink-0" />
-        {live ? "Checked by the wallet contract itself. Changing any detail breaks the signature." : "Test mode. This payment isn't on-chain."}
+        {live
+          ? "Checked by the wallet contract itself. Changing any detail breaks the signature. Test dollars (tUSD), no real value."
+          : "Test mode. This payment isn't on-chain."}
       </p>
     </Frame>
   );
+}
+
+function headline(agent: string | undefined, payment: boolean) {
+  if (!payment) return "You're about to approve";
+  return agent ? `${agent} wants to pay` : "You're about to pay";
 }
 
 function Detail({ label, children }: { label: string; children: React.ReactNode }) {

@@ -68,7 +68,7 @@ export default function SettingsPage() {
             <div className="text-title font-semibold">{u.name}</div>
             <div className="truncate text-label text-mute">{me.demo ? "Demo account" : me.email}</div>
           </div>
-          {isAuthenticated && (
+          {isAuthenticated && !me.demo && (
             <Button tone="outline" size="sm" onClick={() => openUserProfile()}>
               Sign-in details
             </Button>
@@ -289,7 +289,7 @@ function MoneySheet({ state, onClose }: { state: State; onClose: () => void }) {
         <Field label="Monthly spending budget">
           <MoneyInput currency={cur} value={budget} onChange={setB} />
         </Field>
-        <Field label="Emergency fund" hint="Left out of Safe to spend. Agents can never touch it.">
+        <Field label="Emergency fund" hint="Left out of Safe to spend.">
           <MoneyInput currency={cur} value={emergency} onChange={setE} />
         </Field>
         <Button type="submit" size="lg" className="w-full">
@@ -330,7 +330,9 @@ function AssistantSheet({ state, onClose }: { state: State; onClose: () => void 
           <Select value={form.reminderChannel} onChange={(e) => setForm({ ...form, reminderChannel: e.target.value as typeof form.reminderChannel })}>
             <option value="app">App</option>
             <option value="telegram">Telegram</option>
-            <option value="whatsapp">WhatsApp</option>
+            <option value="whatsapp" disabled>
+              WhatsApp (later)
+            </option>
           </Select>
         </Field>
         <Button

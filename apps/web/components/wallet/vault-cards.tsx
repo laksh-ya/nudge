@@ -166,7 +166,7 @@ export function PasskeyCard({ chain }: { chain: ChainStatus }) {
         </Link>
         {chain.setup && (
           <div className="mt-3 flex items-center gap-3 rounded-btn bg-amber-soft p-3">
-            <span className="flex-1 text-label font-medium text-amber">{chain.setup.title}: approve your agents, contacts and rules</span>
+            <span className="flex-1 text-label font-medium text-amber">{chain.setup.title}: waiting for your passkey</span>
             <ButtonLink href={approvalLink(chain.setup.token!)} size="sm">
               Approve
             </ButtonLink>

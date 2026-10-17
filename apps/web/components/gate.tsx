@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowRight, ShieldCheck } from "lucide-react";
+import { ArrowRight, FlaskConical, ShieldCheck } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useDemo } from "@/lib/demo";
@@ -72,6 +72,11 @@ function Landing() {
           <h1 className="max-w-[14ch] text-[36px] leading-[40px] font-bold tracking-[-0.03em] text-navy [font-stretch:108%] lg:text-[52px] lg:leading-[56px]">
             Let your assistants pay. Only within your rules.
           </h1>
+          <ul className="mt-5 max-w-[46ch] space-y-1.5 text-body text-ink-2 lg:text-title lg:font-normal">
+            <li>Claude and other assistants pay your saved contacts, within limits you set.</li>
+            <li>Anything bigger, and any rule you loosen, waits for your passkey.</li>
+            <li>A contract on Base Sepolia enforces it, even if an assistant&apos;s key is stolen.</li>
+          </ul>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <ButtonLink href="/sign-up" className="h-12 px-6 text-title">Create account</ButtonLink>
             <button
@@ -80,6 +85,14 @@ function Landing() {
             >
               Try the demo <ArrowRight className="size-4" strokeWidth={2.4} />
             </button>
+          </div>
+          <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-label">
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-soft px-2 py-1 font-semibold text-amber">
+              <FlaskConical className="size-3.5" /> Base Sepolia testnet, test money only
+            </span>
+            <Link href="/proof" className="inline-flex items-center gap-1 font-semibold text-cyan-ink">
+              See the proof on-chain <ArrowRight className="size-3.5" strokeWidth={2.4} />
+            </Link>
           </div>
         </div>
         <div className="rise card overflow-hidden p-0 [animation-delay:80ms]">
@@ -109,9 +122,38 @@ function Landing() {
           </div>
         </div>
       </main>
+      <footer className="mx-auto w-full max-w-5xl px-5 pb-6 text-label text-mute">
+        Testnet prototype. Wallet payments use test dollars (tUSD) with no value; bank feeds and family transfers are simulated.
+      </footer>
     </div>
   );
 }
+
+/** Pages anyone may open without an account: the proof reads only the public chain. */
+function PublicFrame({ children }: { children: React.ReactNode }) {
+  const { setDemo } = useDemo();
+  return (
+    <div className="min-h-dvh bg-page">
+      <header className="sticky top-0 z-30 border-b border-line bg-white/95 backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-3xl items-center gap-3 px-4">
+          <Link href="/" aria-label="Home">
+            <Wordmark className="text-[18px]" />
+          </Link>
+          <div className="flex-1" />
+          <button onClick={() => setDemo(true)} className="press text-label font-semibold text-navy">
+            Try the demo
+          </button>
+          <Link href="/sign-in" className="text-label font-semibold text-cyan-ink">
+            Sign in
+          </Link>
+        </div>
+      </header>
+      <main className="mx-auto max-w-[1120px] px-4 pt-4 pb-12">{children}</main>
+    </div>
+  );
+}
+
+const PUBLIC = ["/proof"];
 
 export function Gate({ children }: { children: React.ReactNode }) {
   const { isLoading, isAuthenticated } = useConvexAuth();
@@ -119,6 +161,7 @@ export function Gate({ children }: { children: React.ReactNode }) {
   const ensure = useMutation(api.users.ensure);
   const me = useQuery(api.users.me);
   const router = useRouter();
+  const path = usePathname();
 
   useEffect(() => {
     if (isAuthenticated) void ensure();
@@ -129,7 +172,7 @@ export function Gate({ children }: { children: React.ReactNode }) {
   }, [me, router]);
 
   if (isLoading || !loaded) return <Splash />;
-  if (!isAuthenticated) return <Landing />;
+  if (!isAuthenticated) return PUBLIC.some((p) => path.startsWith(p)) ? <PublicFrame>{children}</PublicFrame> : <Landing />;
   if (me === undefined || me === null) return <Splash />;
   if (me.demo)
     return (
