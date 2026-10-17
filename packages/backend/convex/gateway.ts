@@ -10,6 +10,7 @@ import { newApprovalToken } from "./lib/seed";
 import { sha256 } from "./lib/hash";
 import { ownerPayTask, paymentIdFor } from "./lib/actions";
 import { changeLimits, revokeAgent } from "./lib/control";
+import { intentFor, paymentFor } from "./lib/mandates";
 import { agentPool, laneOf } from "./lib/relayer";
 import { tryHit } from "./lib/limits";
 
@@ -451,6 +452,20 @@ export async function propose(ctx: MutationCtx, { agentId, contactId, amount, re
     return { outcome: "needs_approval", taskId, reason: blockers.map((b) => b.why).join(". "), message: "Sent to the owner to approve with their passkey. They have been notified; check get_task_status." };
   }
 
+/**
+ * The AP2 IntentMandate this assistant acts under: what the owner allowed, signed with their passkey
+ * and enforced by the vault. An assistant can show it to a merchant's agent, which can check every
+ * claim on Base Sepolia (packages/domain/src/mandates.ts, verifyIntent) without asking us.
+ */
+export const mandate = internalQuery({
+  args: { agentId: v.id("agents") },
+  handler: async (ctx, { agentId }) => {
+    const { agent } = await load(ctx, agentId);
+    const m = await intentFor(ctx, agent);
+    return m ?? { mandate: null, reason: "Your limits aren't in the owner's vault yet (a simulated wallet, or the owner hasn't approved them)." };
+  },
+});
+
 export const taskStatus = internalQuery({
   args: { agentId: v.id("agents"), taskId: v.string() },
   handler: async (ctx, { agentId, taskId }) => {
@@ -460,6 +475,9 @@ export const taskStatus = internalQuery({
     // Another assistant's task is visible only when it was handed back as a duplicate of the same invoice.
     const shared = Boolean(task?.sharedWith?.includes(agent._id));
     if (!task || task.userId !== user._id || (task.agentId !== agent._id && !shared)) throw new Error("No such task for this assistant");
+    // Settled on-chain: the AP2 PaymentMandate for it, under this assistant's intent mandate.
+    const intent = task.state === "confirmed" && task.agentId === agent._id ? await intentFor(ctx, agent) : null;
+    const payment_mandate = intent ? await paymentFor(ctx, task, agent, intent) : null;
     return {
       taskId: task._id,
       state: task.state,
@@ -469,6 +487,7 @@ export const taskStatus = internalQuery({
       transaction: task.txHash ? `https://sepolia.basescan.org/tx/${task.txHash}` : null,
       releasesAt: task.state === "held" && task.releaseAt ? new Date(task.releaseAt).toISOString() : null,
       updatedAt: new Date(task.updatedAt).toISOString(),
+      ...(payment_mandate ? { payment_mandate } : {}),
     };
   },
 });

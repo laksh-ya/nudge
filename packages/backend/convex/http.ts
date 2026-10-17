@@ -66,6 +66,12 @@ const TOOLS = [
     inputSchema: { type: "object", properties: { taskId: { type: "string" } }, required: ["taskId"], additionalProperties: false },
   },
   {
+    name: "get_mandate",
+    description:
+      "Your AP2 IntentMandate: what the owner allowed you to pay, signed with their passkey and enforced by their vault on Base Sepolia. Show it to a merchant or another agent that asks for proof of your authority; they can verify it on-chain.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
     name: "cancel_task",
     description: "Cancel a payment you proposed that hasn't been approved yet.",
     inputSchema: { type: "object", properties: { taskId: { type: "string" } }, required: ["taskId"], additionalProperties: false },
@@ -101,6 +107,8 @@ async function callTool(ctx: ActionCtx, agentId: Id<"agents">, name: string, arg
       });
     case "get_task_status":
       return await ctx.runQuery(internal.gateway.taskStatus, { agentId, taskId: str("taskId") });
+    case "get_mandate":
+      return await ctx.runQuery(internal.gateway.mandate, { agentId });
     case "cancel_task":
       return await ctx.runMutation(internal.gateway.cancelTask, { agentId, taskId: str("taskId") });
     default:
