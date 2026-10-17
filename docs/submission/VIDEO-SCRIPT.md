@@ -1,6 +1,6 @@
 # Demo video script (5 minutes)
 
-For Lakshya to record. Screen capture of the live app (https://agent-wallet-nu.vercel.app) on a laptop, plus the phone for the passkey. Use a fresh demo sandbox or a team account, never the judge account. Every transaction shown should open on the Base Sepolia explorer. Times are targets; the voiceover is a guide, say it in your own words.
+For Lakshya to record. Screen capture of the live app (https://nudge-wallet.vercel.app) on a laptop, plus the phone for the passkey. Use a fresh demo sandbox or a team account, never the judge account. Every transaction shown should open on the Base Sepolia explorer. Times are targets; the voiceover is a guide, say it in your own words.
 
 **Before recording:** vault deployed and set up (holds above $5, Claude $10 a payment / $15 a day); Telegram linked; Claude Code connected over MCP with its key; one saved contact (Blue Tokai) and one statement ready to import; the stolen-key script ready in a terminal (`onchain.e2e` stolen-key step, or the README's refusal transaction open in a tab as a fallback).
 

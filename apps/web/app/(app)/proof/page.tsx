@@ -35,7 +35,7 @@ const chain = {
 const pub = createPublicClient({ chain, transport: http(undefined, { retryCount: 3 }) });
 /** Blockscout's public index for Base Sepolia, used only to find transaction hashes. */
 const INDEX = "https://base-sepolia.blockscout.com/api/v2";
-const REPO = "https://github.com/laksh-ya/agent-wallet/tree/main";
+const REPO = "https://github.com/laksh-ya/nudge/tree/main";
 
 const usd = (units: bigint) => `$${Number(formatUnits(units, 6)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 

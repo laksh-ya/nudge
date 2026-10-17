@@ -206,7 +206,7 @@ const protectedResource = httpAction(async (_ctx, req) =>
     resource: `${new URL(req.url).origin}/mcp`,
     bearer_methods_supported: ["header"],
     resource_name: "Nudge MCP",
-    resource_documentation: `${process.env.WEB_URL ?? "https://agent-wallet-nu.vercel.app"}/agents/docs`,
+    resource_documentation: `${process.env.WEB_URL ?? "https://nudge-wallet.vercel.app"}/agents/docs`,
     scopes_supported: ["read", "prepare", "spend", "request"],
   }),
 );

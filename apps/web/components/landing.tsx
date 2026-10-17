@@ -209,7 +209,7 @@ export function Landing() {
               <Link href="/proof" className="press inline-flex h-11 items-center gap-2 rounded-full bg-white px-5 text-[15px] font-bold text-coal">
                 See the live proof <ArrowRight className="size-4" strokeWidth={2.6} />
               </Link>
-              <a href="https://github.com/laksh-ya/agent-wallet" className="press inline-flex h-11 items-center gap-2 rounded-full bg-white/10 px-5 text-[15px] font-bold text-white">
+              <a href="https://github.com/laksh-ya/nudge" className="press inline-flex h-11 items-center gap-2 rounded-full bg-white/10 px-5 text-[15px] font-bold text-white">
                 Read the code <ArrowUpRight className="size-4" strokeWidth={2.6} />
               </a>
             </div>
@@ -244,7 +244,7 @@ export function Landing() {
           <Link href="/proof" className="hover:text-coal">Proof</Link>
           <Link href="/agents/docs" className="hover:text-coal">For developers</Link>
           <Link href="/brand" className="hover:text-coal">Brand</Link>
-          <a href="https://github.com/laksh-ya/agent-wallet" className="hover:text-coal">GitHub</a>
+          <a href="https://github.com/laksh-ya/nudge" className="hover:text-coal">GitHub</a>
         </div>
         <p className="max-w-[52ch]">Testnet prototype for FinTechathon 2026. Wallet payments use test dollars (tUSD) with no value; bank feeds and family transfers are simulated.</p>
       </footer>
