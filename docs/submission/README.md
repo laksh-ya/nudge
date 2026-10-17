@@ -11,12 +11,12 @@ Verified on 17 October 2026 from the [official site](https://fintechathon.g-ican
 | Material | Current official status | File and remaining action |
 |---|---|---|
 | Team registration form | Required | Fill the original [XLSX](templates/team-information-form.xlsx) with actual registered team and member details. Keep personal information outside the public repository. |
-| English technical document | Required | [Filled official DOCX](ready/Agent-Wallet-technical-document-en.docx); editable source [TECHNICAL.md](TECHNICAL.md). Confirm registered team name and final release. |
+| English technical document | Required | [Filled official DOCX](ready/Nudge-technical-document-en.docx); editable source [TECHNICAL.md](TECHNICAL.md). Confirm registered team name and final release. |
 | Presentation deck, at most 10 minutes | Required | [Content and notes](DECK.md), [official PPTX](templates/presentation-template.pptx). Export the finished English presentation and rehearse it. An untouched template is not a finished deck. |
 | Demo video, at most 5 minutes | Required | [Timed recording script](VIDEO-SCRIPT.md), [official guide](templates/demo-video-guide-en.docx). Record real product behavior, add English subtitles and check duration. A script is not a video. |
 | Source code and README | Optional on current live site | This repository, [README](../../README.md), deployment instructions and tests. Include access to a fixed final commit. |
-| Security self-assessment | Optional on current live site | [Filled official DOCX](ready/Agent-Wallet-security-self-assessment-en.docx), [full assessment](SELF-ASSESSMENT.md). |
-| Execution evidence | Optional on current live site | [Filled official DOCX](ready/Agent-Wallet-execution-evidence-en.docx), [receipt index](EXECUTION-EVIDENCE.md), [task outcomes](../../evals/TASKS.md). Topic F evidence should include real on-chain transaction hashes. |
+| Security self-assessment | Optional on current live site | [Filled official DOCX](ready/Nudge-security-self-assessment-en.docx), [full assessment](SELF-ASSESSMENT.md). |
+| Execution evidence | Optional on current live site | [Filled official DOCX](ready/Nudge-execution-evidence-en.docx), [receipt index](EXECUTION-EVIDENCE.md), [task outcomes](../../evals/TASKS.md). Topic F evidence should include real on-chain transaction hashes. |
 
 The three optional items are still part of our planned entry because they substantiate the security and task-completion claims. Older rules describe the full six-item checklist and call video optional; the current live process and downloaded video guide call video required. We satisfy the stricter combined set. The downloaded originals explicitly call security/evidence optional. The [source manifest](templates/sources.json) records URLs, hashes and last-modified headers; originals have not been edited.
 

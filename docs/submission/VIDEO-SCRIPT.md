@@ -6,7 +6,7 @@ For Lakshya to record. Screen capture of the live app (https://agent-wallet-nu.v
 
 | Time | Screen | Voiceover |
 |---|---|---|
-| 0:00–0:20 | Title card, then the dashboard | "AI assistants can now pay for us. The question is what happens when one is fooled, or its key is stolen. Agent Wallet lets any assistant pay, inside rules a contract enforces itself, so the worst case is a number you chose." |
+| 0:00–0:20 | Title card, then the dashboard | "AI assistants can now pay for us. The question is what happens when one is fooled, or its key is stolen. Nudge lets any assistant pay, inside rules a contract enforces itself, so the worst case is a number you chose." |
 | 0:20–0:45 | Sign in; Home shows accounts, bills, safe-to-spend | "It starts as a personal finance app: accounts, bills, what's safe to spend." |
 | 0:45–1:05 | Import a statement; spending updates | "Import a statement and the numbers update. Assistants read these numbers through tools, never by guessing." |
 | 1:05–1:40 | Terminal: Claude Code. Type "Pay Blue Tokai $3 for coffee." Claude calls `propose_payment`; then the activity shows paid; click the transaction | "Here's Claude, an outside assistant, connected over MCP with its own key and its own limits. Three dollars is inside them, so it pays at once. This is the transaction on Base Sepolia, signed by Claude's own key." |

@@ -1,0 +1,103 @@
+scripts/verify-evidence.sh at 6482677 + this branch, 2026-10-17 10:21 UTC, public Base Sepolia RPC
+30 │         emit VaultCreated(address(vault), keccak256(abi.encode(x, y)), address(token));
+702 │         full = _vaultSpends[_vaultNext % VAULT_SLOTS].at > cutoff;
+PASS  docs/EVIDENCE.md:7  0x8c0912888e…  
+PASS  docs/EVIDENCE.md:19  0x16ffc2cf41…  OwnerKeyAdded PolicyChanged VaultCreated
+PASS  docs/EVIDENCE.md:20  0x251636f7e8…  OwnerAction AgentSet ContactAdded PolicyChanged
+PASS  docs/EVIDENCE.md:21  0x7d93f727d6…  PaymentExecuted Transfer
+PASS  docs/EVIDENCE.md:22  0xa119acfa4b…  PaymentHeld
+PASS  docs/EVIDENCE.md:23  0x9a7b0017f9…  PaymentReleased Transfer
+PASS  docs/EVIDENCE.md:24  0x89948646fe…  OwnerAction OwnerPaid Transfer
+PASS  docs/EVIDENCE.md:25  0x0563fdacf5…  PaymentRefused Struck
+PASS  docs/EVIDENCE.md:26  0xf9be31b8f1…  PaymentRefused Struck
+PASS  docs/EVIDENCE.md:27  0x5176f1df4e…  PaymentRefused Struck
+PASS  docs/EVIDENCE.md:28  0x07e36accf3…  PaymentRefused Struck
+PASS  docs/EVIDENCE.md:29  0x9e852068f2…  PaymentRefused Struck Frozen
+PASS  docs/EVIDENCE.md:30  0xffc6955e6e…  OwnerAction ChangeQueued
+PASS  docs/EVIDENCE.md:31  0xc1326865fc…  ChangeApplied Unfrozen
+PASS  docs/EVIDENCE.md:32  0x5463f38384…  OwnerAction AgentRemoved
+PASS  docs/EVIDENCE.md:38  0x646bcb239c…  OwnerAction OwnerPaid Transfer
+PASS  docs/EVIDENCE.md:39  0x27854e582d…  OwnerAction ChangeQueued
+PASS  docs/EVIDENCE.md:40  0x7d637bff77…  ChangeApplied Transfer
+PASS  docs/EVIDENCE.md:46  0x49bccccf43…  OwnerKeyAdded PolicyChanged VaultCreated
+PASS  docs/EVIDENCE.md:47  0x887c020976…  OwnerAction AgentSet ContactAdded PolicyChanged
+PASS  docs/EVIDENCE.md:48  0x40a37f3771…  PaymentHeld
+PASS  docs/EVIDENCE.md:49  0x2467239ea0…  PaymentHeld
+PASS  docs/EVIDENCE.md:50  0x837b5ef71b…  PaymentReleased Transfer
+PASS  docs/EVIDENCE.md:51  0xa94553426b…  PaymentReleased Transfer
+PASS  docs/EVIDENCE.md:52  0xa2fcd43972…  PaymentExecuted Transfer
+PASS  docs/EVIDENCE.md:58  0x3e3c79c8dc…  OwnerKeyAdded PolicyChanged VaultCreated
+PASS  docs/EVIDENCE.md:59  0x80c2b3f851…  OwnerAction AgentSet ContactAdded PolicyChanged
+PASS  docs/EVIDENCE.md:60  0x6e4806e456…  PaymentExecuted Transfer
+PASS  docs/EVIDENCE.md:61  0xb545a44fbd…  PaymentHeld
+PASS  docs/SECURITY.md:33  0xb545a44fbd…  PaymentHeld
+PASS  docs/EVIDENCE.md:62  0x3c683069bf…  PaymentReleased Transfer
+PASS  docs/SECURITY.md:33  0x3c683069bf…  PaymentReleased Transfer
+PASS  docs/EVIDENCE.md:63  0x85e01b5803…  OwnerAction OwnerPaid Transfer
+PASS  docs/EVIDENCE.md:64  0x3981ea8efd…  PaymentRefused Struck
+PASS  docs/EVIDENCE.md:65  0x8022158ee9…  PaymentRefused Struck
+PASS  docs/EVIDENCE.md:66  0xaf60bc9257…  PaymentRefused Struck
+PASS  docs/EVIDENCE.md:67  0xf07a86b4f0…  PaymentRefused Struck
+PASS  docs/EVIDENCE.md:68  0x8558f8a6b6…  PaymentRefused Struck Frozen
+PASS  docs/SECURITY.md:31  0x8558f8a6b6…  PaymentRefused Struck Frozen
+PASS  docs/EVIDENCE.md:69  0xfbd828ef01…  OwnerAction ChangeQueued
+PASS  docs/SECURITY.md:32  0xfbd828ef01…  OwnerAction ChangeQueued
+PASS  docs/EVIDENCE.md:70  0x8ddbdbd817…  ChangeApplied Unfrozen
+PASS  docs/SECURITY.md:32  0x8ddbdbd817…  ChangeApplied Unfrozen
+PASS  docs/EVIDENCE.md:71  0x569ff39695…  OwnerAction AgentRemoved
+PASS  docs/SECURITY.md:35  0x569ff39695…  OwnerAction AgentRemoved
+PASS  docs/EVIDENCE.md:77  0x79a892af88…  OwnerKeyAdded PolicyChanged VaultCreated
+PASS  docs/EVIDENCE.md:78  0x00c3e632d8…  OwnerAction AgentSet ContactAdded PolicyChanged
+PASS  docs/SECURITY.md:26  0x00c3e632d8…  OwnerAction AgentSet ContactAdded PolicyChanged
+PASS  docs/EVIDENCE.md:79  0x6977e3957d…  PaymentExecuted Transfer
+PASS  docs/EVIDENCE.md:80  0xddf143e627…  PaymentHeld
+PASS  docs/EVIDENCE.md:81  0x14e713bf67…  PaymentReleased Transfer
+PASS  docs/EVIDENCE.md:82  0xb671f42d4b…  OwnerAction OwnerPaid Transfer
+PASS  docs/SECURITY.md:26  0xb671f42d4b…  OwnerAction OwnerPaid Transfer
+PASS  docs/EVIDENCE.md:88  0x156869e997…  OwnerKeyAdded PolicyChanged VaultCreated
+PASS  docs/EVIDENCE.md:89  0xa8ba0f394c…  OwnerAction AgentSet ContactAdded PolicyChanged
+PASS  docs/SECURITY.md:26  0xa8ba0f394c…  OwnerAction AgentSet ContactAdded PolicyChanged
+PASS  docs/EVIDENCE.md:90  0x615d6621f0…  PaymentExecuted Transfer
+PASS  docs/EVIDENCE.md:91  0xbedd4d5f1d…  PaymentHeld
+PASS  docs/EVIDENCE.md:92  0x79f7dd41d3…  PaymentReleased Transfer
+PASS  docs/EVIDENCE.md:93  0xcda7773e04…  OwnerAction OwnerPaid Transfer
+PASS  docs/SECURITY.md:26  0xcda7773e04…  OwnerAction OwnerPaid Transfer
+PASS  docs/EVIDENCE.md:94  0x33c12bbce3…  OwnerAction OwnerPaid Transfer
+PASS  docs/EVIDENCE.md:100  0xe03c6ad282…  OwnerKeyAdded PolicyChanged VaultCreated
+PASS  docs/EVIDENCE.md:101  0xef5aa11d80…  OwnerAction AgentSet ContactAdded PolicyChanged
+PASS  docs/EVIDENCE.md:107  0xd2056b7302…  OwnerKeyAdded VaultCreated
+PASS  docs/EVIDENCE.md:108  0x089acf28e2…  OwnerAction AgentSet ContactAdded
+PASS  docs/EVIDENCE.md:109  0xde9860d4c1…  PaymentExecuted Transfer
+PASS  docs/EVIDENCE.md:110  0xb7272497d2…  OwnerAction OwnerPaid Transfer
+PASS  docs/EVIDENCE.md:111  0xe404d5f31e…  PaymentRefused
+PASS  docs/SECURITY.md:30  0xe404d5f31e…  PaymentRefused
+PASS  docs/EVIDENCE.md:112  0xb2c2e2688c…  PaymentRefused
+PASS  docs/SECURITY.md:30  0xb2c2e2688c…  PaymentRefused
+PASS  docs/EVIDENCE.md:113  0xeaa83ddf0b…  PaymentRefused
+PASS  docs/SECURITY.md:30  0xeaa83ddf0b…  PaymentRefused
+PASS  docs/EVIDENCE.md:114  0x676a0fc216…  Frozen
+PASS  docs/EVIDENCE.md:115  0x8e27c5a2fb…  OwnerAction Unfrozen
+PASS  docs/EVIDENCE.md:121  0xbebb20616a…  OwnerAction AgentSet ContactAdded
+PASS  docs/SECURITY.md:26  0xbebb20616a…  OwnerAction AgentSet ContactAdded
+PASS  docs/EVIDENCE.md:122  0x4bc75942fb…  PaymentExecuted Transfer
+PASS  docs/EVIDENCE.md:123  0x8f32ad0ba0…  OwnerAction OwnerPaid Transfer
+PASS  docs/SECURITY.md:26  0x8f32ad0ba0…  OwnerAction OwnerPaid Transfer
+PASS  docs/SECURITY.md:38  0xc42f64997e…  PaymentExecuted Transfer
+PASS  evals/README.md:90  0xc42f64997e…  PaymentExecuted Transfer
+PASS  evals/README.md:37  0x93c7ceae0d…  PaymentHeld
+PASS  docs/submission/EXECUTION-EVIDENCE.md:7  0x93c7ceae0d…  PaymentHeld
+PASS  evals/README.md:38  0x338a1ffe36…  PaymentCancelled
+PASS  docs/submission/EXECUTION-EVIDENCE.md:8  0x338a1ffe36…  PaymentCancelled
+PASS  evals/README.md:48  0x4789873e59…  PaymentHeld
+PASS  docs/submission/EXECUTION-EVIDENCE.md:9  0x4789873e59…  PaymentHeld
+PASS  evals/README.md:48  0x6ada88b429…  PaymentReleased Transfer
+PASS  docs/submission/EXECUTION-EVIDENCE.md:10  0x6ada88b429…  PaymentReleased Transfer
+PASS  evals/README.md:49  0x892203135b…  PaymentHeld
+PASS  docs/submission/EXECUTION-EVIDENCE.md:11  0x892203135b…  PaymentHeld
+PASS  evals/README.md:49  0x2ce1ea19e7…  PaymentReleased Transfer
+PASS  docs/submission/EXECUTION-EVIDENCE.md:12  0x2ce1ea19e7…  PaymentReleased Transfer
+PASS  evals/README.md:88  0x5ad0b56041…  PaymentHeld
+PASS  evals/README.md:88  0x1ee6ff876a…  PaymentHeld
+PASS  evals/README.md:89  0xbd74ac20e2…  PaymentReleased Transfer
+PASS  evals/README.md:89  0x3e85527eff…  PaymentReleased Transfer
+99/99 rows pass

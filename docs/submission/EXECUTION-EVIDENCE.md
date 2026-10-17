@@ -1,6 +1,6 @@
 # Execution evidence
 
-Agent Wallet uses Base Sepolia, chain ID 84532, and valueless test tUSD. These examples come from the committed 17 October scenarios in [evals/README.md](../../evals/README.md). Receipts verify contract events and token movements. A receipt alone does not prove a natural-language conversation, a real phone, or who controlled a UI.
+Nudge uses Base Sepolia, chain ID 84532, and valueless test tUSD. These examples come from the committed 17 October scenarios in [evals/README.md](../../evals/README.md). Receipts verify contract events and token movements. A receipt alone does not prove a natural-language conversation, a real phone, or who controlled a UI.
 
 | Scenario and contract result | Vault | Full transaction |
 |---|---|---|
