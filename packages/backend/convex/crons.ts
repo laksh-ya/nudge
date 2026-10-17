@@ -11,6 +11,9 @@ crons.interval("expire unanswered approvals", { minutes: 5 }, internal.tasks.exp
 
 crons.interval("delete idle demo sandboxes", { hours: 1 }, internal.demo.sweep, {});
 
+// Bill, renewal, goal and chat reminders, in the app and on Telegram, outside each owner's quiet hours (#12).
+crons.interval("send reminders", { minutes: 15 }, internal.reminders.run, {});
+
 crons.interval("relayer test-ETH runway", { minutes: 15 }, internal.chain.checkRunway, {});
 
 export default crons;

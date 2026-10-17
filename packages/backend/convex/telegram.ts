@@ -2,6 +2,18 @@ import { v } from "convex/values";
 import { httpAction, internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { spendAssistantTurn } from "./lib/budget";
+import { HELP } from "./messages";
+
+/** The bot's command menu; each command is the same as typing the words after it. */
+const COMMANDS: Record<string, { description: string; says: string }> = {
+  balance: { description: "What's safe to spend", says: "how much can I spend" },
+  bills: { description: "Bills due soon", says: "what bills are due" },
+  spending: { description: "Spending this month", says: "how much did I spend this month" },
+  reminders: { description: "Your reminders", says: "what reminders do I have" },
+  goals: { description: "Savings goals", says: "how are my goals" },
+  freeze: { description: "Freeze every agent now", says: "freeze all agents" },
+  help: { description: "What I can do", says: "help" },
+};
 
 /**
  * Telegram adapter for the same assistant. Linking starts in the app (a one-time code);
@@ -42,7 +54,8 @@ export const telegramWebhook = httpAction(async (ctx, req) => {
 
 export const inbound = internalMutation({
   args: { chatId: v.string(), updateId: v.number(), text: v.string(), name: v.optional(v.string()) },
-  handler: async (ctx, { chatId, updateId, text, name }) => {
+  handler: async (ctx, { chatId, updateId, text: said, name }) => {
+    let text = said;
     // Telegram redelivers updates it isn't sure we got. Each update id is handled once, ever.
     const key = `telegram:${updateId}`;
     if (await ctx.db.query("inbound").withIndex("by_key", (q) => q.eq("key", key)).unique()) return;
@@ -82,10 +95,22 @@ export const inbound = internalMutation({
       return;
     }
     const link = await ctx.db.query("chatLinks").withIndex("by_external", (q) => q.eq("channel", "telegram").eq("externalId", chatId)).unique();
+    if (/^\/help\b/i.test(text)) {
+      await ctx.scheduler.runAfter(0, internal.telegram.send, {
+        chatId,
+        text: `${link?.linkedAt ? HELP : "Link this chat first: in the app, Settings → Telegram → Get a linking code."}\n\n${Object.entries(COMMANDS)
+          .map(([c, d]) => `/${c} – ${d.description}`)
+          .join("\n")}`,
+      });
+      return;
+    }
     if (!link?.linkedAt) {
       await ctx.scheduler.runAfter(0, internal.telegram.send, { chatId, text: "This chat isn't linked to an account. Get a linking code in the app first." });
       return;
     }
+    // "/bills" is the same as typing "what bills are due".
+    const command = text.match(/^\/([a-z]+)(?:@\w+)?\s*$/i)?.[1]?.toLowerCase();
+    if (command && COMMANDS[command]) text = COMMANDS[command]!.says;
     await ctx.db.insert("messages", { userId: link.userId, role: "user", text, channel: "telegram" });
     const user = await ctx.db.get(link.userId);
     const useModel = user ? await spendAssistantTurn(ctx, user) : false;
@@ -103,13 +128,13 @@ export const chatFor = internalQuery({
 
 export const send = internalAction({
   args: { chatId: v.optional(v.string()), userId: v.optional(v.id("users")), text: v.string(), approvalUrl: v.optional(v.string()) },
-  handler: async (ctx, { chatId, userId, text, approvalUrl }) => {
+  handler: async (ctx, { chatId, userId, text, approvalUrl }): Promise<{ ok: boolean; reason?: string; retryAfter?: number; unknown: boolean }> => {
     const token = process.env.TELEGRAM_BOT_TOKEN;
-    if (!token) return;
+    if (!token) return { ok: false, reason: "Telegram is not configured", retryAfter: undefined, unknown: false };
     const chat = chatId ?? (userId ? await ctx.runQuery(internal.telegram.chatFor, { userId }) : null);
     if (!chat) {
       console.warn("telegram.send: no linked chat", userId);
-      return { ok: false, reason: "no linked chat" };
+      return { ok: false, reason: "no linked chat", retryAfter: undefined, unknown: false };
     }
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
@@ -121,9 +146,9 @@ export const send = internalAction({
         ...(approvalUrl ? { reply_markup: { inline_keyboard: [[{ text: "Review and approve", url: approvalUrl }]] } } : {}),
       }),
     });
-    const body = (await res.json().catch(() => ({}))) as { ok?: boolean; description?: string };
+    const body = (await res.json().catch(() => ({}))) as { ok?: boolean; description?: string; parameters?: { retry_after?: number } };
     if (!body.ok) console.error("telegram.send failed", res.status, body.description);
-    return { ok: Boolean(body.ok), reason: body.description };
+    return { ok: Boolean(body.ok), reason: body.description, retryAfter: res.status === 429 ? (body.parameters?.retry_after ?? 60) : undefined, unknown: res.status >= 500 || (res.ok && body.ok === undefined) };
   },
 });
 
@@ -140,6 +165,11 @@ export const setWebhook = internalAction({
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ url: `${site}/telegram`, secret_token: secret, allowed_updates: ["message"], drop_pending_updates: true }),
     });
-    return await res.json();
+    const commands = await fetch(`https://api.telegram.org/bot${token}/setMyCommands`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ commands: Object.entries(COMMANDS).map(([command, d]) => ({ command, description: d.description })) }),
+    });
+    return { webhook: await res.json(), commands: await commands.json() };
   },
 });
