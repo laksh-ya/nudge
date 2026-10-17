@@ -125,15 +125,15 @@ export function paymentIdFor(taskId: Id<"tasks">, agentId?: Id<"agents">, reques
   return requestId && agentId ? paymentIdOf(`${agentId}:${requestId}`) : paymentIdOf(taskId);
 }
 
-function policyOf(wallet: Doc<"wallets">, next?: { protectedMinor: number; dailyCeilingMinor: number }): Policy {
+function policyOf(wallet: Doc<"wallets">, next?: { protectedMinor?: number; dailyCeilingMinor?: number; holdAboveMinor?: number; holdFor?: number }): Policy {
   const v = wallet.vault;
   return {
     protectedAmount: toTokenUnits(next?.protectedMinor ?? wallet.protectedMinor),
     dailyCeiling: toTokenUnits(next?.dailyCeilingMinor ?? wallet.dailyCeilingMinor),
     newContactDelay: BigInt(v?.contactDelay ?? DEFAULT_RULES.contactDelay),
     changeDelay: BigInt(v && v.changeDelay > 0 ? v.changeDelay : DEFAULT_RULES.changeDelay),
-    holdAbove: toTokenUnits(v && v.holdFor > 0 ? v.holdAboveMinor : DEFAULT_RULES.holdAboveMinor),
-    holdFor: BigInt(v && v.holdFor > 0 ? v.holdFor : DEFAULT_RULES.holdFor),
+    holdAbove: toTokenUnits(next?.holdAboveMinor ?? (v && v.holdFor > 0 ? v.holdAboveMinor : DEFAULT_RULES.holdAboveMinor)),
+    holdFor: BigInt(next?.holdFor ?? (v && v.holdFor > 0 ? v.holdFor : DEFAULT_RULES.holdFor)),
   };
 }
 
@@ -183,6 +183,21 @@ export async function policyTask(ctx: MutationCtx, user: Doc<"users">, wallet: D
     reason: "The vault enforces these limits, so changing them needs your passkey",
     op: Op.SetPolicy,
     data: encode.setPolicy(policyOf(wallet, next)),
+    effects: { policy: true },
+  });
+}
+
+/**
+ * Extra protection: every assistant payment is held, for longer, so the owner or a guardian can stop
+ * it. Holding more and for longer only tightens, so it applies as soon as the passkey signs.
+ */
+export async function protectMoreTask(ctx: MutationCtx, user: Doc<"users">, wallet: Doc<"wallets">, holdSeconds: number) {
+  const current = wallet.vault?.holdFor ?? DEFAULT_RULES.holdFor;
+  return await ownerTask(ctx, user, {
+    title: `Hold every assistant payment for ${Math.round(holdSeconds / 60)} minutes`,
+    reason: "Gives you and your guardian time to stop a payment before it leaves",
+    op: Op.SetPolicy,
+    data: encode.setPolicy(policyOf(wallet, { holdAboveMinor: 0, holdFor: Math.max(holdSeconds, current) })),
     effects: { policy: true },
   });
 }

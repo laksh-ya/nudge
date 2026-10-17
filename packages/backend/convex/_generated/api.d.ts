@@ -18,6 +18,7 @@ import type * as crons from "../crons.js";
 import type * as crypto from "../crypto.js";
 import type * as demo from "../demo.js";
 import type * as family from "../family.js";
+import type * as guardians from "../guardians.js";
 import type * as gateway from "../gateway.js";
 import type * as home from "../home.js";
 import type * as http from "../http.js";
@@ -64,6 +65,7 @@ declare const fullApi: ApiFromModules<{
   crypto: typeof crypto;
   demo: typeof demo;
   family: typeof family;
+  guardians: typeof guardians;
   gateway: typeof gateway;
   home: typeof home;
   http: typeof http;

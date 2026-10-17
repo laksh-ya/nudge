@@ -9,6 +9,7 @@ import { formatMoney } from "@/lib/format";
 import { countdown, useNow } from "@/lib/use-now";
 import { Initial } from "@/components/brand";
 import { Button, Card, Chip, Divided, Money, PageTitle, Row, Skeleton } from "@/components/ui";
+import { GuardiansCard } from "@/components/family/guardians-card";
 
 const flag: Record<string, string> = { India: "IN", China: "CN", "United Kingdom": "UK" };
 
@@ -97,6 +98,8 @@ export default function FamilyPage() {
           </Card>
         );
       })}
+
+      <GuardiansCard />
 
       <Card title="History" pad={false}>
         <Divided className="px-4 pb-1">

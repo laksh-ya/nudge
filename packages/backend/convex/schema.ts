@@ -418,6 +418,24 @@ export default defineSchema({
     monthlyAllowanceMinor: v.optional(v.number()),
   }).index("by_user", ["userId"]),
 
+  /** Someone the owner trusts to watch held payments and stop them; they can only tighten. */
+  guardians: defineTable({
+    /** The person being looked after. */
+    userId: v.id("users"),
+    /** What the owner calls them. */
+    name: v.string(),
+    /** The guardian's own account, once they accept. */
+    guardianId: v.optional(v.id("users")),
+    status: v.union(v.literal("invited"), v.literal("active"), v.literal("removed")),
+    code: v.optional(v.string()),
+    codeExpiresAt: v.optional(v.number()),
+    createdAt: v.number(),
+    acceptedAt: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_guardian", ["guardianId"])
+    .index("by_code", ["code"]),
+
   familyRequests: defineTable({
     userId: v.id("users"),
     memberId: v.id("family"),
