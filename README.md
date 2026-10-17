@@ -83,7 +83,7 @@ A new assistant starts read-only; turn on *Prepare payments* or *Pay within limi
 | Suite | What it covers | Result |
 |---|---|---|
 | Contracts (Foundry) | Unit, fuzz and invariant tests, plus the review's adversarial cases | 150 passing |
-| Backend (Vitest, convex-test) | Gateway decisions, approvals, contacts, MCP, chat intents, reminders, guardian | 349 passing |
+| Backend (Vitest, convex-test) | Gateway decisions, approvals, contacts, MCP, chat intents, reminders, guardian | 357 passing |
 | Domain (Vitest) | Encoding, signatures, statements, proof decoding | 63 passing |
 | End to end on Base Sepolia | The real backend and a fresh vault per run: pay, hold, approve, stolen key, freeze, pay and withdraw | [`packages/domain/test`](packages/domain/test) |
 | Attacks and evals | Contract attacks, live attacks on the deployed app, prompt injection with real models | [`evals/`](evals/README.md) |

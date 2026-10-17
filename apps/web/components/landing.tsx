@@ -196,7 +196,7 @@ export function Landing() {
             <dl className="mt-8 grid grid-cols-3 gap-4 text-left">
               {[
                 ["150", "contract tests"],
-                ["349", "backend tests"],
+                ["357", "backend tests"],
                 ["5", "strikes and a stolen key freezes"],
               ].map(([n, l]) => (
                 <div key={l}>
