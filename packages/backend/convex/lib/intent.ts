@@ -69,6 +69,9 @@ const MONTH_WORD = new RegExp(`\\b(${MONTHS.join("|")}|jan|feb|mar|apr|jun|jul|a
  * ("2 coffees", "3 days") and years are not amounts. "$", "usd" and "dollars" mean the agent
  * wallet; "₹", "rs", "inr" and "rupees" the owner's own money; "5k" is 5000.
  */
+const ID_BEFORE = /(?:[a-z]-?|#\s?|\b(?:account|acct|a\/c|invoice|inv|order|ref|reference|id|no\.?|number)\s?#?)$/;
+const CURRENCY_BEFORE = /(?:\$|usd|us\$|₹|rs\.?|inr)\s?$/;
+
 export function amounts(text: string): Amount[] {
   const t = normalize(text);
   const out: Amount[] = [];
@@ -78,6 +81,9 @@ export function amounts(text: string): Amount[] {
     const before = t.slice(Math.max(0, index - 12), index);
     let after = t.slice(end, end + 16);
     if (/[\d.]$/.test(t.slice(0, index))) continue;
+    // "BT-1001", "#4471", "account 4471": reference numbers, never amounts.
+    if (ID_BEFORE.test(before) && !CURRENCY_BEFORE.test(before)) continue;
+    if (/^[a-z]/.test(after) && !/^(?:k|thousand|lakhs?|lac|dollars?|bucks|usd|rupees?|rs|inr)\b/.test(after)) continue;
     if (UNIT_AFTER.test(after)) continue;
     if (MONTH_WORD.test(before) && !/[$₹]\s?$/.test(before)) continue;
     if (/\b(?:at|by|around)\s$/.test(before) && !/^\s?(k\b|dollars?|bucks|usd|rupees?|rs\b|inr)/.test(after)) continue;
@@ -92,9 +98,9 @@ export function amounts(text: string): Amount[] {
     let cur: Cur | null = null;
     if (/(\$|usd|us\$)\s?$/.test(before)) cur = "USD";
     else if (/(₹|rs\.?|inr)\s?$/.test(before)) cur = "LOCAL";
-    const suffix = after.match(/^\s?(dollars?|bucks|usd|rupees?|rs\b|inr)/);
+    const suffix = after.match(/^\s?(dollars?|bucks|usd|rupees?|rs\b|inr|美元|美金|卢比)/);
     if (suffix) {
-      cur = /dollar|buck|usd/.test(suffix[1]!) ? "USD" : "LOCAL";
+      cur = /dollar|buck|usd|美/.test(suffix[1]!) ? "USD" : "LOCAL";
       end += suffix[0].length;
     }
     if (!Number.isFinite(major) || major <= 0) continue;
@@ -112,15 +118,22 @@ export function pickAmount(list: Amount[]) {
  * Only a short, direct order pays on its own (#59). A question, a negation, quoted or pasted text,
  * or more than one number gets an approval card instead: the parser can't tell a request from a quote.
  */
+/** A minus sign on an amount, not the hyphen in "BT-1001". */
+export const NEGATIVE = /(?<![\p{L}\d])-\s*[$₹€£]?\s*\d|[$₹€£]\s*-\s*\d/u;
+
 export function isDirectOrder(text: string) {
-  const t = text.toLowerCase();
+  const t = text.toLowerCase().trim();
   return (
     text.length <= 80 &&
-    /^(please\s+)?(pay|send|transfer)\b/.test(t.trim()) &&
-    !/-\s*[$₹€£]?\s*\d|[$₹€£]\s*-\s*\d/.test(text) &&
+    // The verb leads in English; Hinglish ends with it ("Blue Tokai ko $4 bhej do"); Chinese is 给 X 付 N.
+    (/^(please\s+)?(pay|send|transfer|tip)\b/.test(t) ||
+      /^[^,.!?]{1,40}\bko\b[^,.!?]{1,20}\bbhej(?:o|\s?do|\s?de|\s?dijiye)?\b/.test(t) ||
+      /^给[^，,。！？]{1,40}(?:付|支付|转)/.test(t)) &&
+    !NEGATIVE.test(text) &&
     !/[\n?"“”‘’`]|'\s|\s'|^'|'$/.test(text.trim()) &&
-    !/\b(don'?t|do not|not|never|no|stop|cancel|wait|should|whether|if|maybe|later)\b/.test(t) &&
-    (t.match(/\d[\d,]*(?:\.\d+)?/g) ?? []).length === 1
+    !/\b(don'?t|do not|not|never|no|stop|cancel|wait|should|whether|if|maybe|later|mat|nahi|nahin)\b|不|别/.test(t) &&
+    // Exactly one number in the whole message, not counting reference IDs ("invoice BT-1001").
+    (t.replace(/\b[a-z]+-?\d+\b|#\s?\d+|\b(?:account|acct|invoice|inv|order|ref|reference|id|number)\s?#?\s?\d+/g, "").match(/\d[\d,]*(?:\.\d+)?/g) ?? []).length === 1
   );
 }
 
@@ -229,6 +242,9 @@ const SAFE_Q = /\b(afford|safe to spend|can i spend|could i spend|left to spend|
 const SCAM =
   /\b(legit|scam|phish\w*|fraud\w*|overdue|lose access|suspend\w*|deactivat\w*|verify your|urgent\w*|immediately|final notice|gift ?cards?|lottery|prize|you(?:'ve| have) won|kyc|otp|click (?:the|this) link)\b/;
 
+/** A payment order: "pay", "send", "transfer", "tip"; Hinglish "bhej do"; Chinese 付 / 支付 / 转账. */
+const PAY_VERB = /\b(pay|send|transfer|tip)\b|\bbhej(?:o|na|\s?do|\s?de|\s?dijiye)?\b|付|支付|转账|转给/;
+
 export function classify(text: string): Intent {
   const t = normalize(text);
   if (!t || /^\/?(help|start)$|^what can you do|^what do you do|^how do(es)? (this|it) work|^commands$/.test(t)) return { kind: "help" };
@@ -252,7 +268,7 @@ export function classify(text: string): Intent {
   if (controlOrder && /\bfreeze\b|\bpanic\b|\bemergency stop\b/.test(t) && !/\bdon'?t freeze\b|\bunfreeze\b/.test(t)) return { kind: "freeze" };
   if (controlOrder && /\b(stop|lock|pause|halt|block|kill|disable)\b\s+(?:all\s+|every\s+|my\s+|the\s+)*(agents?|assistants?|payments|spending|everything|the wallet|wallet|ai)\b/.test(t)) return { kind: "freeze" };
 
-  const verb = /\b(pay|send|transfer)\b/.test(t);
+  const verb = PAY_VERB.test(t);
   if (/^(?:no[,.!\s]+)?(?:don'?t|do not|never)\s+(?:pay|send|transfer)\b|^(?:please\s+)?stop\s+(?:paying|sending)\b/.test(t)) return { kind: "dont_pay" };
   if (verb && SCAM.test(t)) return { kind: "scam" };
   if (HEDGE.test(t) && !amount) return { kind: "hedge" };
@@ -280,7 +296,13 @@ export function classify(text: string): Intent {
 
   if (verb) {
     // Someone else's words, or a question, is never an order.
-    if (/[\n"“”‘’`]|'\s|\s'|^'|'$/.test(text.trim())) return { kind: "quoted" };
+    // Pasted or quoted text: only the owner's own words around it can ask for a payment, and then
+    // only with a card ("This is my bill, please pay it:\n…"). "pay" only inside the quote is refused.
+    if (/[\n"“”‘’`]|'\s|\s'|^'|'$/.test(text.trim())) {
+      const own = normalize(text.trim().split(/[\n"“”‘’`]|'\s|\s'|^'/)[0] ?? "");
+      if (!PAY_VERB.test(own)) return { kind: "quoted" };
+      return { kind: "pay", amount, reason: reasonOf(own), direct: false };
+    }
     if (!polite && /\?|^(?:should|shall|is|are|was|do|does|did|what|why|when|how|which|whether)\b|\b(?:should i|or wait|whether)\b/.test(t)) return { kind: "pay_question", amount };
     // "actually, pay Blue Tokai $6": a fresh order that replaces the open one.
     if (START_MARK.test(t)) {
