@@ -16,7 +16,7 @@ Nudge is a wallet your AI assistants can pay from, on a leash you set. Small pay
 
 <img src="docs/images/hero.jpg" alt="Nudge: Let your AI pay. Only within your rules." width="820">
 
-| **99 / 99** | **8 / 8** | **570** | **3 / 3** |
+| **99 / 99** | **8 / 8** | **586** | **3 / 3** |
 |:---:|:---:|:---:|:---:|
 | cited Base Sepolia transactions re-verified from a public node | end-to-end tests on Base Sepolia through the real backend | contract, backend and domain tests passing | race and lost-receipt tests: never over the limit, never paid twice |
 
@@ -113,7 +113,7 @@ Full model, risks and what isn't covered: [docs/SECURITY.md](docs/SECURITY.md) Â
 
 | Suite | Covers | Result | Where |
 |---|---|---|---|
-| Contracts (Foundry) | Unit, fuzz and invariant tests, adversarial review cases | 150 passing | [`contracts/test`](contracts/test) |
+| Contracts (Foundry) | Unit, fuzz and invariant tests, adversarial review cases | 166 passing | [`contracts/test`](contracts/test) |
 | Backend (Vitest) | Gateway decisions, approvals, contacts, MCP, chat, reminders, guardian | 357 passing | [`packages/backend/convex`](packages/backend/convex) |
 | Domain (Vitest) | Encoding, WebAuthn, statements, proof decoding | 63 passing | [`packages/domain/test`](packages/domain/test) |
 | On-chain end to end | Real backend, fresh vault: pay, hold, approve, stolen key, freeze, pay and withdraw | 8 / 8 | [`onchain.e2e`](packages/domain/test/onchain.e2e.test.ts) |
