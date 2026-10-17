@@ -182,8 +182,10 @@ describe("errors a model can act on", () => {
   it("a frozen or expired assistant hears what happened and who can fix it", async () => {
     const w = await world(FULL);
     await w.t.run((ctx) => ctx.db.patch(w.agent, { expiresAt: NOW - 1 }));
-    expect((await w.call("get_overview")).content[0]!.text).toBe("Hermes's access has expired. Ask the owner to extend it in Agents → Hermes → Limits.");
-    await w.t.run((ctx) => ctx.db.patch(w.agent, { status: "frozen" }));
+    const expired = await w.rpc("tools/list");
+    expect(expired.res.status).toBe(401);
+    expect(expired.body!.error!.message).toBe("Hermes's access has expired. Ask the owner to extend it in Agents → Hermes → Limits.");
+    await w.t.run((ctx) => ctx.db.patch(w.agent, { status: "frozen", expiresAt: NOW + DAY }));
     const { res, body } = await w.rpc("tools/list");
     expect(res.status).toBe(403);
     expect(body!.error!.message).toMatch(/Hermes is frozen by its owner/);
@@ -251,5 +253,42 @@ describe("argument checks (pure)", () => {
   });
   it("toolsFor never leaks payment tools to a read-only key", () => {
     expect(toolsFor(["read"]).some((x) => x.name === "propose_payment")).toBe(false);
+  });
+});
+
+
+describe("unusable keys and malformed MCP requests", () => {
+  it("revoking an assistant rejects its key before initialize or tools/list", async () => {
+    const w = await world(FULL);
+    await w.t.run((ctx) => ctx.db.patch(w.agent, { status: "revoked" }));
+    for (const method of ["initialize", "tools/list", "tools/call"]) {
+      expect((await w.rpc(method)).res.status).toBe(401);
+    }
+    expect(await w.tasks()).toHaveLength(0);
+  });
+
+  it("invalid JSON-RPC envelopes return an error rather than throwing or paying", async () => {
+    const w = await world(FULL);
+    const pay = { method: "tools/call", params: { name: "propose_payment", arguments: { contactId: w.payee, amount: 3, reason: "coffee" } } };
+    for (const body of [null, 1, "tools/list", {}, { jsonrpc: "1.0", id: 1, ...pay }, { jsonrpc: "2.0", ...pay }, { jsonrpc: "2.0", id: 1, method: "tools/call", params: [] }, { jsonrpc: "2.0", id: {}, ...pay }]) {
+      const res = await w.t.fetch("/mcp", { method: "POST", headers: { authorization: `Bearer ${w.key}` }, body: JSON.stringify(body) });
+      expect(res.status).toBe(200);
+      expect((await res.json()).error.code).toBe(-32600);
+    }
+    expect(await w.tasks()).toHaveLength(0);
+    expect(sent).toHaveLength(0);
+  });
+
+  it("one invalid batch entry does not prevent a valid read response", async () => {
+    const w = await world(["read"]);
+    const res = await w.t.fetch("/mcp", { method: "POST", headers: { authorization: `Bearer ${w.key}` }, body: JSON.stringify([null, { jsonrpc: "2.0", id: 2, method: "tools/list" }]) });
+    const out = await res.json();
+    expect(out[0].error.code).toBe(-32600);
+    expect(out[1].id).toBe(2);
+    expect(out[1].result.tools.length).toBeGreaterThan(0);
+  });
+
+  it("does not advertise an optional-id payment as idempotent", () => {
+    expect(MCP_TOOLS.find((t) => t.name === "propose_payment")!.annotations.idempotentHint).toBe(false);
   });
 });

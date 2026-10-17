@@ -19,6 +19,16 @@ const http = httpRouter();
  */
 type Rpc = { jsonrpc: "2.0"; id?: string | number | null; method: string; params?: Record<string, unknown> };
 
+function isRpc(value: unknown): value is Rpc {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const msg = value as Record<string, unknown>;
+  if (msg.jsonrpc !== "2.0" || typeof msg.method !== "string" || !msg.method) return false;
+  if (msg.params !== undefined && (msg.params === null || typeof msg.params !== "object" || Array.isArray(msg.params))) return false;
+  if (msg.id !== undefined && msg.id !== null && typeof msg.id !== "string" && (typeof msg.id !== "number" || !Number.isFinite(msg.id))) return false;
+  // MCP tool calls are requests. A payment without a response id cannot be tracked safely.
+  return msg.id !== undefined || msg.method.startsWith("notifications/");
+}
+
 /**
  * Browser-based MCP clients (MCP Inspector, web agents) need CORS. Keys travel in a header, never a
  * cookie, so allowing any origin exposes nothing a caller doesn't already hold.
@@ -88,7 +98,9 @@ function cleanError(e: unknown) {
   return (m.match(/Uncaught Error: ([^\n]+)/)?.[1] ?? m).slice(0, 200);
 }
 
-async function handle(ctx: ActionCtx, agent: Caller, msg: Rpc) {
+async function handle(ctx: ActionCtx, agent: Caller, value: unknown) {
+  if (!isRpc(value)) return { jsonrpc: "2.0", id: null, error: { code: -32600, message: "Invalid JSON-RPC 2.0 request" } };
+  const msg = value;
   const reply = (result: unknown) => ({ jsonrpc: "2.0", id: msg.id ?? null, result });
   const fail = (code: number, message: string) => ({ jsonrpc: "2.0", id: msg.id ?? null, error: { code, message } });
   // Refusals a model can read and relay. Arguments and permissions come back as tool errors, not
@@ -142,14 +154,15 @@ http.route({
   handler: httpAction(async (ctx, req) => {
     const auth = req.headers.get("authorization") ?? "";
     if (!auth.trim()) return unauthorized(req, "Missing access key. Send the header Authorization: Bearer <key>, using a key from the owner's Agents screen.");
-    const token = auth.match(/^Bearer\s+(aw_[A-Za-z0-9_-]{20,})$/)?.[1];
+    const token = auth.match(/^Bearer\s+(aw_[A-Za-z0-9_-]{20,})$/i)?.[1];
     if (!token) return unauthorized(req, "Invalid or revoked access key. Ask the owner for a new key from the Agents screen.");
     const agent = await ctx.runQuery(internal.gateway.agentByToken, { tokenHash: await sha256(token) });
-    if (!agent) return unauthorized(req, "Invalid or revoked access key. Ask the owner for a new key from the Agents screen.");
+    if (!agent || agent.status === "revoked") return unauthorized(req, "Invalid or revoked access key. Ask the owner for a new key from the Agents screen.");
+    if (agent.expiresAt <= Date.now()) return unauthorized(req, `${agent.name}'s access has expired. Ask the owner to extend it in Agents → ${agent.name} → Limits.`);
     if (agent.status === "frozen") return rpcError(-32003, `${agent.name} is frozen by its owner. Nothing can be read or paid until the owner unfreezes it on the Agents screen.`, 403);
-    let body: Rpc | Rpc[];
+    let body: unknown;
     try {
-      body = (await req.json()) as Rpc | Rpc[];
+      body = await req.json();
     } catch {
       return rpcError(-32700, "Parse error: the body must be JSON-RPC 2.0", 400);
     }
