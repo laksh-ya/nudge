@@ -14,6 +14,7 @@ import { TaskCard } from "@/components/task-card";
 import { Button, Card, Chip, Meter, PageTitle, Skeleton } from "@/components/ui";
 import { ContactLimitForm, PasskeyCard, RulesCard, WaitingCard } from "@/components/wallet/vault-cards";
 import { ContactsCard } from "@/components/wallet/contacts-card";
+import { MoveMoneyCard } from "@/components/wallet/move-money-card";
 
 export default function WalletPage() {
   const data = useQuery(api.wallet.get);
@@ -162,6 +163,15 @@ export default function WalletPage() {
           </Button>
         </div>
       </Card>
+
+      {v && wallet.status === "live" && (
+        <MoveMoneyCard
+          payees={payees}
+          payableMinor={Math.max(0, v.balanceMinor - v.heldMinor - v.protectedMinor)}
+          withdrawableMinor={Math.max(0, v.balanceMinor - v.heldMinor)}
+          changeDelay={v.changeDelay}
+        />
+      )}
 
       {chain && <RulesCard chain={chain} />}
 
