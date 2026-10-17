@@ -21,6 +21,7 @@ import {
   currencyWord,
   isStrictTail,
   matchContacts,
+  NEGATIVE,
   normalize,
   ordinal,
   payeeWords,
@@ -273,7 +274,7 @@ async function payeesIn(turn: Turn, text: string) {
 
 async function onPay(turn: Turn, intent: Extract<Intent, { kind: "pay" }>) {
   const { ctx, user } = turn;
-  if (/-\s*[$₹€£]?\s*\d|[$₹€£]\s*-\s*\d/.test(turn.text)) return say(turn, "Payment amounts must be positive. Tell me the amount and currency you intend to pay.");
+  if (NEGATIVE.test(turn.text)) return say(turn, "Payment amounts must be positive. Tell me the amount and currency you intend to pay.");
   // A contact named after the correction wins: "pay alex chen $5, no I meant alex rivera".
   const after = intent.corrected ? matchContacts(intent.corrected.tail, turn.payees) : [];
   const found = after.length ? { payees: after, bill: null } : await payeesIn(turn, turn.text);
@@ -281,6 +282,14 @@ async function onPay(turn: Turn, intent: Extract<Intent, { kind: "pay" }>) {
   if (bill && !intent.amount) {
     const payee = found.payees[0];
     if (!payee) return say(turn, `${bill.name} is ${money(bill.amountMinor, bill.currency)}, due ${whenWords(bill.nextDueAt, turn.now, turn.tz)}. Add the biller as a contact first and I can prepare it.`);
+    // A dollar bill the owner entered, to an on-chain contact, on a short "pay my electricity bill":
+    // the agent wallet pays it under the assistant's limits, like any direct order. A detected bill
+    // (worded by the merchant) or a bank bill still gets a card.
+    const dollars = bill.currency === "USD" || bill.currency === "USDC";
+    if (dollars && payee.address && bill.source === "manual") {
+      const direct = /^(?:please\s+)?pay\s+(?:my|the)\s+[\p{L} ]{1,30}?\s*bill[.!]?$/u.test(normalize(turn.text));
+      return pay(turn, { payees: [payee], amountMajor: bill.amountMinor / 100, cur: "USD", reason: bill.name, direct });
+    }
     const taskId = await createPayment(ctx, user, payee, bill.amountMinor, bill.currency, bill.name, turn.channel);
     return say(turn, `${bill.name} is ${money(bill.amountMinor, bill.currency)}, due ${whenWords(bill.nextDueAt, turn.now, turn.tz)}. Approve it and I'll open UPI for you.`, {
       taskId,

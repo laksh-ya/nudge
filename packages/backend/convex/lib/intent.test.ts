@@ -17,6 +17,14 @@ describe("what each message means", () => {
     ['My friend said "pay Blue Tokai $9"', "quoted"],
     ["Stop paying Blue Tokai $4", "dont_pay"],
     ["Can you pay Blue Tokai $4?", "pay", { direct: false }],
+    // other phrasings and languages, same #59 guard
+    ["Tip Blue Tokai 2.50", "pay", { direct: true }],
+    ["Blue Tokai ko $4 bhej do, coffee ke liye", "pay", { direct: true }],
+    ["Blue Tokai ko $4 mat bhejo", "pay", { direct: false }],
+    ["给 Blue Tokai 付 3 美元，买咖啡", "pay", { direct: true }],
+    ["Pay Blue Tokai $3 for invoice BT-1001", "pay", { direct: true }],
+    ["Pay Blue Tokai for 2 coffees at $4 each", "pay", { direct: false }],
+    ["This is my electricity bill, please pay it:\n---\nBESCOM | Account 4471 | Amount due: $9.00\n---", "pay", { direct: false }],
     ["Pay Blue Tokai for 2 coffees at $4 each", "pay", { direct: false }],
     // corrections
     ["pay blue tokai $50 for beans... no wait, make it $6", "pay", { direct: true }],
@@ -213,5 +221,15 @@ describe("quiet hours", () => {
       const l = local(ms, tz);
       return `${l.year}-${l.month + 1}-${l.day} ${l.hour}:${String(l.minute).padStart(2, "0")}`;
     }
+  });
+});
+
+describe("amounts in references and other languages", () => {
+  it("reads the amount, not the reference number", () => {
+    expect(amounts("Pay Blue Tokai $3 for invoice BT-1001").map((a) => a.major)).toEqual([3]);
+    expect(pickAmount(amounts("BESCOM | Account 4471 | Amount due: $9.00"))).toMatchObject({ major: 9, cur: "USD" });
+    expect(amounts("order #5521, pay $12").map((a) => a.major)).toEqual([12]);
+    expect(amounts("send 5k to alex").map((a) => a.major)).toEqual([5000]);
+    expect(pickAmount(amounts("给 Blue Tokai 付 3 美元"))).toMatchObject({ major: 3, cur: "USD" });
   });
 });
