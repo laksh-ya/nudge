@@ -110,6 +110,7 @@ export const encode = {
     (opts.version ?? VAULT_VERSION) >= 3
       ? encodeAbiParameters([{ type: "bytes32" }, { type: "address" }, { type: "bool" }, { type: "uint128" }], [contactId, payee, immediate, opts.dailyCap ?? 0n])
       : encodeAbiParameters([{ type: "bytes32" }, { type: "address" }, { type: "bool" }], [contactId, payee, immediate]),
+  removeContact: (contactId: Hex) => encodeAbiParameters([{ type: "bytes32" }], [contactId]),
   setPolicy: (p: Policy) =>
     encodeAbiParameters(POLICY, [p.protectedAmount, p.dailyCeiling, p.newContactDelay, p.changeDelay, p.holdAbove, p.holdFor]),
   unfreeze: (agent: Address) => encodeAbiParameters([{ type: "address" }], [agent]),
@@ -193,6 +194,16 @@ export function describe(op: Op, data: Hex, names: Record<string, string> = {}):
           { label: "Address", value: payee, mono: true },
           { label: "Agents can pay", value: immediate ? "Right away" : "After the waiting period" },
           ...(v3 ? [{ label: "All agents, per 24 hours", value: cap ? money(cap) : "No cap for this contact" }] : []),
+        ],
+      };
+    }
+    case Op.RemoveContact: {
+      const [contactId] = decodeAbiParameters([{ type: "bytes32" }], data);
+      return {
+        title: `Remove ${names[contactId] || "a contact"} from the vault`,
+        lines: [
+          { label: "Contact ID", value: `${contactId.slice(0, 10)}…`, mono: true },
+          { label: "Agents can pay", value: "Never again, unless you add it back" },
         ],
       };
     }

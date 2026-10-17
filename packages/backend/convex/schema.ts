@@ -284,6 +284,12 @@ export default defineSchema({
     onchain: v.optional(v.boolean()),
     /** All agents together, per 24 hours, to this contact. Enforced by v3 vaults (refusal 2012). */
     dailyCapMinor: v.optional(v.number()),
+    /** Added by the owner in the app (not seeded). */
+    addedAt: v.optional(v.number()),
+    /** Waiting for the owner's passkey to add it to the vault; agents are refused until then. */
+    pendingPasskey: v.optional(v.boolean()),
+    /** When the vault's waiting period for this new contact ends; agents are refused before it. */
+    activeAt: v.optional(v.number()),
   }).index("by_user", ["userId"]),
 
   agents: defineTable({

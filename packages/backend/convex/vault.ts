@@ -7,7 +7,7 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { isSandbox, requireViewer, viewer } from "./lib/auth";
 import { newApprovalToken } from "./lib/seed";
-import { addKeyTask, contactCapTask, setupTask } from "./lib/actions";
+import { DEFAULT_RULES, addKeyTask, contactCapTask, setupTask } from "./lib/actions";
 import { laneOf, lanePool, relayer } from "./lib/relayer";
 import { hit, tryHit } from "./lib/limits";
 import { spendDeploy } from "./lib/budget";
@@ -623,9 +623,17 @@ export const onQueued = internalMutation({
 async function applyEffects(ctx: MutationCtx, t: Doc<"tasks">) {
   const e = t.effects;
   if (!e) return;
+  const w = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", t.userId)).unique();
   for (const a of e.agents) await ctx.db.patch(a, { onchain: true });
-  for (const p of e.payees) await ctx.db.patch(p, { onchain: true });
-  if (e.contactCap) await ctx.db.patch(e.contactCap.payeeId, { dailyCapMinor: e.contactCap.dailyCapMinor || undefined });
+  for (const id of e.payees) {
+    // Removed while the approval was out: nothing to mark here.
+    const p = await ctx.db.get(id);
+    if (!p) continue;
+    // A contact the owner added waits out the vault's own period from now before agents can pay it.
+    const wait = p.pendingPasskey ? { trusted: true, pendingPasskey: undefined, activeAt: Date.now() + (w?.vault?.contactDelay ?? DEFAULT_RULES.contactDelay) * 1000 } : {};
+    await ctx.db.patch(id, { onchain: true, ...wait });
+  }
+  if (e.contactCap && (await ctx.db.get(e.contactCap.payeeId))) await ctx.db.patch(e.contactCap.payeeId, { dailyCapMinor: e.contactCap.dailyCapMinor || undefined });
   if (e.grant) {
     const g = e.grant;
     await ctx.db.patch(g.agentId, {
@@ -636,7 +644,6 @@ async function applyEffects(ctx: MutationCtx, t: Doc<"tasks">) {
     });
   }
   if (e.removeAgent) await ctx.db.patch(e.removeAgent, { onchain: false, status: "revoked" });
-  const w = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", t.userId)).unique();
   if (e.policy && w?.proposedPolicy?.taskId === t._id) {
     const p = w.proposedPolicy;
     await ctx.db.patch(w._id, { protectedMinor: p.protectedMinor, dailyCeilingMinor: p.dailyCeilingMinor, perPaymentMinor: p.perPaymentMinor, proposedPolicy: undefined });

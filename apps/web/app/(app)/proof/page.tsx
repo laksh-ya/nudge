@@ -1,9 +1,10 @@
 "use client";
 
-import { useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { createPublicClient, formatUnits, http, parseEventLogs, type Address, type Hex } from "viem";
-import { ExternalLink, ShieldCheck } from "lucide-react";
+import { createPublicClient, formatUnits, getAddress, http, isAddress, parseEventLogs, type Address, type Hex } from "viem";
+import { ExternalLink, Radio, ShieldCheck } from "lucide-react";
 import {
   CHAIN_ID,
   addressLabels,
@@ -20,7 +21,9 @@ import {
 } from "@agent-wallet/domain";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { Card, Divided, Empty, PageTitle, Skeleton } from "@/components/ui";
+import { EXPLORER, REFERENCE_VAULT, REFERENCE_VAULTS } from "@/lib/config";
+import { Button, Card, Divided, Empty, PageTitle, Skeleton } from "@/components/ui";
+import { Input } from "@/components/form";
 
 /** Read straight from Base Sepolia in this browser: our server is not in the path. */
 const chain = {
@@ -41,8 +44,8 @@ const usd = (units: bigint) => `$${Number(formatUnits(units, 6)).toLocaleString(
  * block explorer's index finds them. The explorer only points; every event shown is decoded from
  * the receipt fetched from Base Sepolia itself, keeping only logs the vault emitted.
  */
-async function vaultTransactions(vault: Address, deployTx: Hex) {
-  const hashes = new Set<Hex>([deployTx]);
+async function vaultTransactions(vault: Address, deployTx?: Hex) {
+  const hashes = new Set<Hex>(deployTx ? [deployTx] : []);
   let params: Record<string, string> | null = {};
   for (let page = 0; page < 20 && params; page++) {
     const q = new URLSearchParams(params).toString();
@@ -55,7 +58,7 @@ async function vaultTransactions(vault: Address, deployTx: Hex) {
   return [...hashes];
 }
 
-async function vaultLog(vault: Address, deployTx: Hex) {
+async function vaultLog(vault: Address, deployTx?: Hex) {
   const hashes = await vaultTransactions(vault, deployTx);
   const events: ProofEvent[] = [];
   for (let i = 0; i < hashes.length; i += 5) {
@@ -89,65 +92,145 @@ async function vaultState(vault: Address, token: Address) {
   };
 }
 
+/** Which contract a vault runs and its token, from the vault itself (a first-version vault has no VERSION). */
+async function vaultInfo(vault: Address) {
+  const [version, token] = await Promise.all([
+    pub.readContract({ address: vault, abi: policyVaultAbi, functionName: "VERSION" }).then(Number, () => 1),
+    pub.readContract({ address: vault, abi: policyVaultAbi, functionName: "token" }),
+  ]);
+  return { version, token: token as Address };
+}
+
+/** ?vault=0x… from the address bar, read once on load (any vault can be checked; nothing else is trusted from it). */
+function useVaultParam() {
+  const [param, setParam] = useState<Address | null | undefined>(undefined);
+  useEffect(() => {
+    const raw = new URLSearchParams(window.location.search).get("vault");
+    setParam(raw && isAddress(raw, { strict: false }) ? getAddress(raw) : null);
+  }, []);
+  return [param, setParam] as const;
+}
+
 const dot: Record<ProofLine["tone"], string> = { good: "bg-green", bad: "bg-red", warn: "bg-amber", neutral: "bg-line" };
 
 export default function ProofPage() {
-  const chainStatus = useQuery(api.vault.status);
-  const agents = useQuery(api.agents.list);
-  const wallet = useQuery(api.wallet.get);
+  const router = useRouter();
+  // Logged-out visitors have no vault of their own; they see the reference vault straight away.
+  const { isAuthenticated, isLoading } = useConvexAuth();
+  const signedIn = isAuthenticated ? {} : "skip";
+  const statusQuery = useQuery(api.vault.status, signedIn);
+  const chainStatus = isAuthenticated ? statusQuery : isLoading ? undefined : null;
+  const agents = useQuery(api.agents.list, signedIn);
+  const wallet = useQuery(api.wallet.get, signedIn);
+  const [param, setParam] = useVaultParam();
   const w = chainStatus?.wallet;
-  const vault = w?.status === "live" && w.address ? (w.address as Address) : null;
+  const own = w?.status === "live" && w.address ? (getAddress(w.address) as Address) : null;
+  // A vault named in the link wins; then your own; then the judge account's, so a visitor always sees a real record.
+  const vault = param ?? own ?? (getAddress(REFERENCE_VAULT) as Address);
+  const mine = Boolean(own && vault === own);
   const [lines, setLines] = useState<ProofLine[] | null>(null);
   const [risk, setRisk] = useState<Exposure | null>(null);
+  const [version, setVersion] = useState<number | null>(null);
   const [logError, setLogError] = useState<string | null>(null);
   const [riskError, setRiskError] = useState<string | null>(null);
-  const current = isVaultVersion(w?.version);
+  const [typed, setTyped] = useState("");
 
-  const ready = vault && w?.deployTx && w.tokenAddress && agents && wallet;
+  // Your own vault waits for your names; any other vault is read without them.
+  const ready = param !== undefined && chainStatus !== undefined && (!mine || Boolean(agents && wallet));
   useEffect(() => {
     if (!ready) return;
     let stop = false;
-    const names = {
-      agents: Object.fromEntries(agents.filter((a) => a.chainAddress).map((a) => [a.chainAddress!.toLowerCase(), a.name])),
-      contacts: contactLabels(wallet.payees.map((p) => ({ id: contactIdOf(p._id), name: p.name }))),
-      addresses: addressLabels(wallet.payees),
-    };
+    setLines(null);
+    setRisk(null);
+    setVersion(null);
+    setLogError(null);
+    setRiskError(null);
+    const names =
+      mine && agents && wallet
+        ? {
+            agents: Object.fromEntries(agents.filter((a) => a.chainAddress).map((a) => [a.chainAddress!.toLowerCase(), a.name])),
+            contacts: contactLabels(wallet.payees.map((p) => ({ id: contactIdOf(p._id), name: p.name }))),
+            addresses: addressLabels(wallet.payees),
+          }
+        : { agents: {}, contacts: {}, addresses: {} };
     const why = (e: unknown) => (e instanceof Error ? e.message.split("\n")[0]!.slice(0, 160) : "Couldn't read Base Sepolia");
     // Read independently: a slow log scan shouldn't hide the exposure, or the other way round.
-    vaultLog(vault, w.deployTx as Hex).then(
+    vaultLog(vault, mine ? (w?.deployTx as Hex | undefined) : undefined).then(
       (events) => !stop && setLines(events.map((e) => describeEvent(e, names)).reverse()),
       (e) => !stop && setLogError(why(e)),
     );
-    if (current) {
-      vaultState(vault, w.tokenAddress as Address).then(
-        (state) => !stop && setRisk(exposure(state)),
-        (e) => !stop && setRiskError(why(e)),
-      );
-    }
+    vaultInfo(vault)
+      .then(async (info) => {
+        if (stop) return;
+        setVersion(info.version);
+        if (!isVaultVersion(info.version)) return;
+        const state = await vaultState(vault, info.token);
+        if (!stop) setRisk(exposure(state));
+      })
+      .catch((e) => !stop && setRiskError(why(e)));
     return () => {
       stop = true;
     };
     // Re-read when the vault changes, not on every query tick.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vault, w?.deployTx, w?.tokenAddress, current, Boolean(agents), Boolean(wallet)]);
+  }, [vault, ready, mine]);
 
-  if (chainStatus === undefined) return <Skeleton className="mx-auto h-96 max-w-3xl rounded-card" />;
-  if (!vault) {
-    return (
-      <div className="mx-auto max-w-3xl">
-        <PageTitle>Proof</PageTitle>
-        <Card>
-          <Empty>Put your wallet on-chain (Wallet screen) and its record shows up here, read from Base Sepolia.</Empty>
-        </Card>
-      </div>
-    );
-  }
-  const explorer = w?.explorer ?? "https://sepolia.basescan.org";
+  if (!ready) return <Skeleton className="mx-auto h-96 max-w-3xl rounded-card" />;
+  const current = version === null || isVaultVersion(version);
+  const reference = REFERENCE_VAULTS.find((r) => r.address.toLowerCase() === vault.toLowerCase());
+  const explorer = w?.explorer ?? EXPLORER;
+  const show = (address: string | null) => {
+    setParam(address ? (getAddress(address) as Address) : null);
+    router.replace(address ? `/proof?vault=${address}` : "/proof");
+  };
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <PageTitle>Proof</PageTitle>
+
+      <div className={cn("rounded-card p-4 text-label", mine ? "bg-green-soft text-green" : "bg-sky-soft text-navy")}>
+        <div className="flex items-center gap-1.5 font-semibold">
+          <Radio className="size-4" />
+          {mine ? "Your vault, read live from Base Sepolia" : reference ? `Reference vault: ${reference.label}, read live from Base Sepolia` : "A vault, read live from Base Sepolia"}
+        </div>
+        <p className="mt-1 text-ink-2">
+          {mine
+            ? "Names come from your own contacts and agents."
+            : reference
+              ? `${reference.note} ${own ? "" : "Your own vault appears here once your wallet is on-chain (Wallet screen)."}`
+              : "Names aren't shown for a vault that isn't yours; addresses and amounts come from the chain."}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {own && (
+            <button onClick={() => show(null)} className={cn("press rounded-full px-3 py-1 font-semibold", mine ? "bg-green text-white" : "bg-white text-navy")}>
+              Your vault
+            </button>
+          )}
+          {REFERENCE_VAULTS.map((r) => (
+            <button
+              key={r.address}
+              onClick={() => show(r.address)}
+              className={cn("press rounded-full px-3 py-1 font-semibold", r === reference && !mine ? "bg-navy text-white" : "bg-white text-navy")}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+        <form
+          className="mt-3 flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (isAddress(typed.trim(), { strict: false })) show(typed.trim());
+          }}
+        >
+          <Input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="Any vault address, 0x…" aria-label="Vault address" className="num h-10 flex-1" spellCheck={false} autoCapitalize="off" />
+          <Button type="submit" tone="outline" disabled={!isAddress(typed.trim(), { strict: false })}>
+            Check
+          </Button>
+        </form>
+      </div>
+
       <p className="text-label text-ink-2">
-        Everything here is read in your browser from Base Sepolia, not from our server: each event is decoded from its transaction receipt (a public explorer index only finds which transactions to fetch). Amounts, refusal codes and times come from the chain; names come from your own contacts and agents.
+        Everything here is read in your browser from Base Sepolia, not from our server: each event is decoded from its transaction receipt (a public explorer index only finds which transactions to fetch). Amounts, refusal codes and times come from the chain. Test dollars (tUSD), no real value.
       </p>
 
       <Card title="If every agent key leaked right now">
@@ -174,7 +257,7 @@ export default function ProofPage() {
             </ul>
           </>
         ) : !current ? (
-          <p className="text-label text-ink-2">This is a first-version vault without these limits. Move to the current vault on the Wallet screen to get them.</p>
+          <p className="text-label text-ink-2">This is a first-version vault without these limits.{mine ? " Move to the current vault on the Wallet screen to get them." : ""}</p>
         ) : riskError ? (
           <p className="text-label text-red">{riskError}</p>
         ) : (

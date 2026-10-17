@@ -310,6 +310,12 @@ export async function propose(ctx: MutationCtx, { agentId, contactId, amount, re
       await ctx.db.insert("activity", { userId: user._id, kind: "agent", title: `${agent.name} tried an unknown payee`, detail: "Refused: not in your contacts", tone: "bad" });
       return { outcome: "refused", code: "2010", reason: "Unknown contact. Payments can only go to the owner's saved contacts; use list_contacts." };
     }
+    // A contact the owner just added isn't payable by agents until the vault has it and its waiting period ends.
+    if (payee.pendingPasskey || (payee.activeAt && payee.activeAt > Date.now())) {
+      const when = payee.pendingPasskey ? "the owner approves it with their passkey" : `${new Date(payee.activeAt!).toISOString().slice(0, 16).replace("T", " ")} UTC`;
+      await ctx.db.insert("activity", { userId: user._id, kind: "agent", title: `${agent.name} tried to pay ${payee.name} too early`, detail: `Refused: a new contact, active after ${when}`, tone: "warn" });
+      return { outcome: "refused", code: "2002", reason: `${payee.name} is a new contact. Agents can pay it after ${when}.` };
+    }
     const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
     if (!wallet) return { outcome: "refused", code: "2001", reason: "The owner hasn't set up an agent wallet" };
     const purpose = reason.trim().slice(0, 140) || undefined;

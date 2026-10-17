@@ -54,7 +54,8 @@ export const state = query({
         suggested: obligations.filter((o) => o.status === "suggested").length,
         confirmed: obligations.filter((o) => o.status === "active").length,
       },
-      wallet,
+      // Setup links, challenges and the passkey confirmation code never go to the browser (as in wallet.get).
+      wallet: wallet ? { ...wallet, enrolToken: undefined, enrolChallenge: undefined, candidate: undefined } : null,
       agents: agents.map((a) => ({ _id: a._id, provider: a.provider, name: a.name, status: a.status })),
       family: family.map((f) => ({ _id: f._id, name: f.name, relation: f.relation, status: f.status })),
       chat: link
@@ -224,7 +225,7 @@ export const addTestFunds = mutation({
     if (wallet.status === "live") throw new Error("Your vault holds real test tokens on-chain; it was funded when it was created");
     if (wallet.balanceMinor >= 100_000) throw new Error("Test balance is capped at $1,000");
     await ctx.db.patch(wallet._id, { balanceMinor: wallet.balanceMinor + 10_000 });
-    await ctx.db.insert("activity", { userId: user._id, kind: "payment", title: "Added $100.00 test USDC", detail: "Simulated funds", tone: "neutral" });
+    await ctx.db.insert("activity", { userId: user._id, kind: "payment", title: "Added $100.00 tUSD (test dollars, no value)", detail: "Simulated funds", tone: "neutral" });
   },
 });
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
-import { Activity, Bell, Bot, ChartPie, HeartHandshake, House, MessageCircle, Settings, ShieldCheck, Snowflake, Users, Wallet } from "lucide-react";
+import { Activity, Bell, Bot, ChartPie, ChevronRight, HeartHandshake, House, Menu, MessageCircle, Settings, ShieldCheck, Snowflake, Users, Wallet } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -108,6 +108,37 @@ function Sidebar() {
   );
 }
 
+/** Everything the phone's tab bar has no room for, two taps from any screen. */
+function MoreMenu() {
+  const [open, setOpen] = useState(false);
+  const path = usePathname();
+  const more = NAV.filter((n) => !TABS.some((t) => t.href === n.href));
+  return (
+    <>
+      <button onClick={() => setOpen(true)} aria-label="More" aria-haspopup="dialog" className="press grid size-9 place-items-center rounded-full text-navy hover:bg-page">
+        <Menu className="size-5" strokeWidth={1.9} />
+      </button>
+      <Sheet open={open} onOpenChange={setOpen} title="More">
+        <nav className="divide-y divide-line pb-4">
+          {more.map(({ href, label, icon: Icon }) => (
+            <Link
+              key={href}
+              href={href}
+              onClick={() => setOpen(false)}
+              aria-current={active(path, href) ? "page" : undefined}
+              className="press flex h-12 items-center gap-3 text-body font-medium text-ink"
+            >
+              <Icon className="size-5 text-navy" strokeWidth={1.9} />
+              <span className="flex-1">{label}</span>
+              <ChevronRight className="size-4 text-mute" />
+            </Link>
+          ))}
+        </nav>
+      </Sheet>
+    </>
+  );
+}
+
 function TopBar() {
   const me = useQuery(api.users.me);
   const path = usePathname();
@@ -123,12 +154,10 @@ function TopBar() {
           <Wordmark className="text-[18px]" />
         )}
       </div>
-      <Link href="/family" aria-label="Family" className="press grid size-9 place-items-center rounded-full text-navy hover:bg-page">
-        <Users className="size-5" strokeWidth={1.9} />
-      </Link>
       <Link href="/activity" aria-label="Activity" className="press grid size-9 place-items-center rounded-full text-navy hover:bg-page">
         <Bell className="size-5" strokeWidth={1.9} />
       </Link>
+      <MoreMenu />
     </header>
   );
 }

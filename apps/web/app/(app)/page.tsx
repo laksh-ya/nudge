@@ -19,6 +19,7 @@ import {
   Wallet,
   ChartPie,
 } from "lucide-react";
+import { CURRENCIES } from "@agent-wallet/domain";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { approvalLink } from "@/lib/config";
@@ -26,6 +27,7 @@ import { ago, dueLabel, formatMoney } from "@/lib/format";
 import { AgentMark } from "@/components/brand";
 import { ActivityIcon } from "@/components/activity-icon";
 import { SetupCard } from "@/components/setup-card";
+import { JudgeTour } from "@/components/judge-tour";
 import { ButtonLink, Card, Chip, Divided, IconTile, Meter, Money, Row, Skeleton, TextLink } from "@/components/ui";
 
 const ACTIONS = [
@@ -60,6 +62,7 @@ function useHidden() {
 export default function Home() {
   const data = useQuery(api.home.overview);
   const recent = useQuery(api.activity.list);
+  const me = useQuery(api.users.me);
   const [hidden, toggleHidden] = useHidden();
   const [open, setOpen] = useState(false);
 
@@ -138,13 +141,15 @@ export default function Home() {
             )}
           </div>
           <Link href="/agents" className="press flex items-center justify-between gap-3 bg-navy-soft px-5 py-3 text-body">
-            <span className="text-white/75">Agents can spend now</span>
+            <span className="text-white/75">Left today for agents</span>
             <span className="flex items-center gap-2 font-semibold">
               <span className="num">{formatMoney(o.agentAuthority, o.walletCurrency)}</span>
-              <Chip tone="cyan" className="bg-white/10 text-cyan">Test USDC</Chip>
+              <Chip tone="cyan" className="bg-white/15 text-white">tUSD · test</Chip>
             </span>
           </Link>
         </section>
+
+        {me?.demo && <JudgeTour />}
 
         <SetupCard />
 
@@ -227,6 +232,15 @@ export default function Home() {
 
       <div className="min-w-0 space-y-4 lg:space-y-6 lg:pt-[54px]">
         <Card title="Coming up" action={<TextLink href="/money?tab=bills">All bills</TextLink>}>
+          {o.upcoming.length === 0 && (
+            <p className="text-body text-mute">
+              No bills found yet.{" "}
+              <Link href="/money?tab=accounts" className="font-semibold text-cyan-ink">
+                Import a statement
+              </Link>{" "}
+              and regular payments show up here.
+            </p>
+          )}
           <Divided>
             {o.upcoming.slice(0, 4).map((b) => (
               <Row
@@ -247,7 +261,7 @@ export default function Home() {
 
         <Card title="This month" action={<TextLink href="/money">Details</TextLink>}>
           <div className="flex items-baseline justify-between">
-            <span className="figure text-figure">{hidden ? "₹ ••••" : formatMoney(o.spentThisMonth, o.currency)}</span>
+            <span className="figure text-figure">{hidden ? `${CURRENCIES[o.currency].symbol.trim()} ••••` : formatMoney(o.spentThisMonth, o.currency)}</span>
             <span className="num text-label text-mute">of {formatMoney(o.budget, o.currency)}</span>
           </div>
           <Meter

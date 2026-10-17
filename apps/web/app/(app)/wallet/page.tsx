@@ -2,22 +2,25 @@
 
 import { useMutation, useQuery } from "convex/react";
 import { isVaultVersion } from "@agent-wallet/domain";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Check, Clock, Copy, ExternalLink, Lock, ShieldCheck, Snowflake, Store, User } from "lucide-react";
+import { Check, ChevronRight, Copy, ExternalLink, Lock, Snowflake } from "lucide-react";
 import { approvalLink } from "@/lib/config";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { formatMoney, shortAddress } from "@/lib/format";
 import { TaskCard } from "@/components/task-card";
-import { Button, Card, Chip, Divided, IconTile, Meter, PageTitle, Row, Skeleton } from "@/components/ui";
+import { Button, Card, Chip, Meter, PageTitle, Skeleton } from "@/components/ui";
 import { ContactLimitForm, PasskeyCard, RulesCard, WaitingCard } from "@/components/wallet/vault-cards";
+import { ContactsCard } from "@/components/wallet/contacts-card";
 
 export default function WalletPage() {
   const data = useQuery(api.wallet.get);
   const home = useQuery(api.home.overview);
   const tasks = useQuery(api.tasks.list);
   const chain = useQuery(api.vault.status);
+  const agents = useQuery(api.agents.list);
   const setFrozen = useMutation(api.wallet.setFrozen).withOptimisticUpdate((store, { frozen }) => {
     const current = store.getQuery(api.wallet.get, {});
     if (current?.wallet && frozen) store.setQuery(api.wallet.get, {}, { ...current, wallet: { ...current.wallet, frozen } });
@@ -56,10 +59,12 @@ export default function WalletPage() {
   const balance = v ? v.balanceMinor : wallet.balanceMinor;
   const protectedMinor = v ? v.protectedMinor : wallet.protectedMinor;
   const ceiling = v ? v.ceilingMinor : wallet.dailyCeilingMinor;
-  const left = v ? Math.max(0, v.ceilingMinor - v.spentMinor) : home.overview.agentAuthority;
+  // What agents together have spent today against the ceiling: the vault's own count, or the simulator's.
+  const spentToday = v ? v.spentMinor : (agents ?? []).reduce((s, a) => s + a.spentTodayMinor, 0);
+  const left = Math.max(0, ceiling - spentToday);
   const spendable = v ? v.headroomMinor : Math.max(0, wallet.balanceMinor - wallet.protectedMinor);
   const frozen = v ? v.frozen : wallet.frozen;
-  const spentToday = ceiling - Math.min(ceiling, left);
+  const canSpend = (agents ?? []).some((a) => a.status === "active" && a.scopes.includes("spend"));
   const walletTasks = (tasks ?? []).filter((t) => t.currency === "USDC").slice(0, 5);
 
   return (
@@ -71,7 +76,7 @@ export default function WalletPage() {
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-2 text-label text-white/70">
               Agent wallet
-              <Chip className="bg-white/10 text-cyan">Base Sepolia · test</Chip>
+              <Chip className="bg-white/15 text-white">Base Sepolia · tUSD, no value</Chip>
             </span>
             {frozen && (
               <Chip className="bg-white/15 text-white">
@@ -106,6 +111,11 @@ export default function WalletPage() {
             </div>
           )}
         </div>
+        {!v && (
+          <Link href="/proof" className="press flex items-center justify-between gap-3 border-t border-white/10 px-5 py-2.5 text-label font-semibold text-cyan">
+            See a live vault enforce these rules on Base Sepolia <ChevronRight className="size-4 shrink-0" />
+          </Link>
+        )}
         <div className="grid grid-cols-2 border-t border-white/10">
           <div className="border-r border-white/10 px-5 py-3">
             <div className="flex items-center gap-1.5 text-label text-white/60">
@@ -123,12 +133,21 @@ export default function WalletPage() {
       {chain && (chain.ready || chain.wallet?.status === "live") && <PasskeyCard chain={chain} />}
       {chain && <WaitingCard chain={chain} />}
 
-      <Card title={v ? "All agents, last 24 hours" : "Today's ceiling for all agents"}>
+      <Card title={v ? "All agents, last 24 hours" : "Left today for all agents"}>
         <div className="flex items-baseline justify-between">
           <span className="figure text-figure">{formatMoney(left, "USDC", { cents: true })}</span>
           <span className="num text-label text-mute">left of {formatMoney(ceiling, "USDC")}</span>
         </div>
         <Meter value={spentToday} max={ceiling} tone={frozen ? "red" : "cyan"} className="mt-2" />
+        {agents && !frozen && !canSpend && (
+          <p className="mt-2 text-label text-ink-2">
+            No agent can pay yet. Give one &quot;Pay within limits&quot; in{" "}
+            <Link href="/agents" className="font-semibold text-cyan-ink">
+              Agents
+            </Link>
+            .
+          </p>
+        )}
         <div className="mt-4">
           <Button
             tone={frozen ? "primary" : "danger"}
@@ -146,31 +165,9 @@ export default function WalletPage() {
 
       {chain && <RulesCard chain={chain} />}
 
-      <Card title="Contacts" pad={false}>
-        <Divided className="px-4 pb-1">
-          {payees.map((p) => (
-            <Row
-              key={p._id}
-              leading={<IconTile icon={p.kind === "person" ? User : Store} tone={p.trusted ? "sky" : "amber"} />}
-              title={p.name}
-              sub={<span className="num">{p.address ? shortAddress(p.address) : p.handle}{p.onchain ? " · in vault" : ""}
-                  {p.dailyCapMinor ? ` · agents ${formatMoney(p.dailyCapMinor, "USDC")}/day` : ""}
-                </span>
-              }
-              trailing={
-                p.trusted ? (
-                  <ShieldCheck className="size-[18px] text-green" aria-label="Trusted" />
-                ) : (
-                  <Chip tone="amber">
-                    <Clock className="size-3" /> New, on hold
-                  </Chip>
-                )
-              }
-            />
-          ))}
-        </Divided>
+      <ContactsCard payees={payees} live={chain?.wallet?.status === "live"} contactDelay={v?.contactDelay}>
         {chain && <ContactLimitForm chain={chain} payees={payees} />}
-      </Card>
+      </ContactsCard>
 
       {walletTasks.length > 0 && (
         <Card title="Wallet payments">
