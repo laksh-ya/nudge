@@ -20,6 +20,25 @@ Nudge is a wallet where Claude and your other assistants pay your saved contacts
 
 > FinTechathon 2026 entry, Topic F (Agent Wallet). Testnet prototype: wallet payments use test dollars (tUSD) with no value; bank feeds and family transfers are simulated.
 
+<div align="center">
+
+| **99 / 99** | **8 / 8** | **570** | **3 / 3** |
+|:---:|:---:|:---:|:---:|
+| cited Base Sepolia transactions re-verified from a public node | end-to-end tests on Base Sepolia through the real backend | contract, backend and domain tests passing | race and lost-receipt tests: never over the limit, never paid twice |
+
+</div>
+
+## Judge's tour, three minutes
+
+| | Open | What you'll see |
+|---|---|---|
+| 1 | [**Try the demo**](https://nudge-wallet.vercel.app) | A private sandbox in your browser: assistants, limits, contacts, a chat that pays |
+| 2 | [**Proof page**](https://nudge-wallet.vercel.app/proof) | Every payment, hold, approval and refusal decoded live from Base Sepolia, not from our server |
+| 3 | [**A stolen key, refused**](https://sepolia.basescan.org/tx/0x0563fdacf54f69d18a35f7d5a0a4668bd881781b2635c565df17ecf8eb9c80bd) | An agent key used behind our back: the vault refuses it (code 2003), and freezes it on the fifth try |
+| 4 | [**Connect your own AI**](https://nudge-wallet.vercel.app/agents/docs) | Claude Code, Cursor or any MCP client gets its own key and starts read-only |
+| 5 | [**Approve on your phone**](https://nudge-approve.vercel.app) | The passkey signs the exact amount and payee; nothing else can loosen a rule |
+| 6 | [**Telegram**](https://t.me/heynudge_bot) · [**Brand**](https://nudge-wallet.vercel.app/brand) | Approvals and reminders in chat; the cast and the rules behind the look |
+
 ## Why
 
 Giving an AI assistant your card is all or nothing. A prompt injection, a confused model, or a leaked API key can spend everything. Nudge gives your AI an allowance instead: a small on-chain vault sits between your assistants and your money.
@@ -52,6 +71,31 @@ flowchart LR
 ```
 
 The model never decides what's allowed: the gateway is ordinary code, and the vault re-checks everything on-chain, so even a request that skips our server is held to the same rules. Details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+### The layers
+
+| | Layer | What it does |
+|---|---|---|
+| ① | **Surfaces** | Web app, approval site (passkeys), Telegram, and any outside AI over MCP |
+| ② | **Gateway** | Plain code decides pay, ask or refuse: per-agent limits, contacts, holds, freeze. The model never decides |
+| ③ | **Relayer** | Queues and sends transactions one at a time per key, reconciles lost receipts, never pays twice |
+| ④ | **PolicyVault** | The contract on Base Sepolia re-checks every rule, so a stolen key gets the same answer as our server |
+| ⑤ | **Proof** | AP2 mandates and receipts anyone can verify against the chain; the proof page reads them live |
+
+## Features
+
+| Feature | Why it matters |
+|---|---|
+| **A key and limits per assistant** | Claude, ChatGPT, Hermes and others each get their own key, per-payment and daily caps, and a list of who they may pay |
+| **Passkey for anything bigger** | Over a limit, a new contact or any loosened rule needs your passkey over the exact action; loosening then waits a delay you can cancel |
+| **Stolen-key proof** | The vault enforces every rule on-chain; five refusals freeze that key on their own |
+| **Freeze in one tap** | From the app or a chat message; unfreezing needs the passkey and the vault's delay |
+| **Family guardian** | Someone you trust sees held payments and can stop them or freeze, but can never pay or loosen |
+| **Any AI over MCP** | A public, permission-filtered MCP server; read-only by default |
+| **AP2 mandates** | Intent, Cart and Payment mandates from the vault, verifiable by anyone on Base Sepolia |
+| **Pay and withdraw yourself** | From the Wallet screen, signed by your passkey; withdrawals wait the delay |
+| **A chat that won't be fooled** | Corrections cancel the old request; questions, quoted text and scam messages never become payments |
+| **Every assistant has a face** | Characters show at a glance who's paying, waiting or caught ([brand](docs/BRAND.md)) |
 
 ## What's live
 
@@ -110,6 +154,19 @@ The claim, who can do what, the controls with their evidence, and the known risk
 Nudge is the friend who taps you on the shoulder before your AI spends something it shouldn't. Every assistant gets a face, and the face says what's happening: paid, held, waiting for your passkey, refused, frozen. The logo, the cast of characters, colour, type, voice and motion are one package, [`packages/brand`](packages/brand), used by both apps; the rules are in [docs/BRAND.md](docs/BRAND.md) and the living sheet is at [`/brand`](https://nudge-wallet.vercel.app/brand).
 
 <img src="packages/brand/assets/cast.svg" alt="The cast: Nudge, Claude, ChatGPT, Hermes, OpenClaw, Poke and any other assistant" width="720">
+
+## Tech stack
+
+| Layer | Stack |
+|---|---|
+| **Chain** | Base Sepolia (84532), test dollars (tUSD) |
+| **Contracts** | Solidity 0.8.30 · Foundry (fuzz and invariant tests) · OpenZeppelin WebAuthn / P-256 |
+| **Backend** | Convex: transactional mutations, scheduler, crons, HTTP actions (MCP, Telegram) |
+| **Web** | Next.js 16 · TypeScript · Tailwind CSS 4 · Clerk sign-in |
+| **Approval site** | Vite + React on its own domain, strict CSP, browser WebAuthn with no library |
+| **Chain client** | viem |
+| **Assistant** | Claude (Anthropic SDK) with the same tools as MCP; rule-based when no key is set |
+| **Brand** | `packages/brand`: characters, tokens, logo, dot art, exported SVGs |
 
 ## Project structure
 

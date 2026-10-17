@@ -56,7 +56,7 @@ We do not claim resistance to prompt injection as such. A tricked agent can stil
 | Held-payment cancel doesn't refund the 24-hour budget | Keeps the rolling window simple and conservative | Only reduces what agents can spend |
 | Public RPC nodes lag a block | sepolia.base.org is load-balanced | Reads retried, re-read after each transaction, gas estimated only when the vault is visible |
 | Unaudited contract | Prototype | 151 forge tests including fuzz, invariants and requirement tests from an internal review (`docs/TESTING.md`); no admin or upgrade path |
-| Passkeys are bound to the approval site's domain (`agent-wallet-approve.vercel.app`) | WebAuthn ties a passkey to one site; if that domain went away, existing passkeys could not sign | Production: an owned domain as the passkey site, with WebAuthn related origins for any second domain; moving the site later means enrolling new passkeys |
+| Passkeys are bound to the approval site's domain (`nudge-approve.vercel.app`) | WebAuthn ties a passkey to one site; if that domain went away, existing passkeys could not sign | Production: an owned domain as the passkey site, with WebAuthn related origins for any second domain; moving the site later means enrolling new passkeys |
 | `vercel.app` is unreachable from mainland China | Hosting choice for the prototype | Video and on-chain evidence need no access; production would sit on a domain and host reachable there |
 | Strikes can be tripped deliberately to freeze an agent | Only that agent's own key can strike it | A stolen key freezing itself is the intended outcome |
 
