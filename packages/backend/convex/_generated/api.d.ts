@@ -31,6 +31,7 @@ import type * as lib_control from "../lib/control.js";
 import type * as lib_hash from "../lib/hash.js";
 import type * as lib_ledger from "../lib/ledger.js";
 import type * as lib_limits from "../lib/limits.js";
+import type * as lib_mcp from "../lib/mcp.js";
 import type * as lib_overview from "../lib/overview.js";
 import type * as lib_relayer from "../lib/relayer.js";
 import type * as lib_sandbox from "../lib/sandbox.js";
@@ -79,6 +80,7 @@ declare const fullApi: ApiFromModules<{
   "lib/hash": typeof lib_hash;
   "lib/ledger": typeof lib_ledger;
   "lib/limits": typeof lib_limits;
+  "lib/mcp": typeof lib_mcp;
   "lib/overview": typeof lib_overview;
   "lib/relayer": typeof lib_relayer;
   "lib/sandbox": typeof lib_sandbox;

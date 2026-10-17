@@ -13,6 +13,7 @@ import { changeLimits, revokeAgent } from "./lib/control";
 import { intentFor, paymentFor } from "./lib/mandates";
 import { agentPool, laneOf } from "./lib/relayer";
 import { tryHit } from "./lib/limits";
+import { scopeMessage, toolsFor } from "./lib/mcp";
 
 /**
  * The single path outside assistants (MCP) and chat channels use to touch money.
@@ -115,7 +116,7 @@ export const agentByToken = internalQuery({
   handler: async (ctx, { tokenHash }) => {
     const agent = await ctx.db.query("agents").withIndex("by_token_hash", (q) => q.eq("tokenHash", tokenHash)).unique();
     if (!agent) return null;
-    return { _id: agent._id, name: agent.name, status: agent.status, expiresAt: agent.expiresAt };
+    return { _id: agent._id, name: agent.name, status: agent.status, expiresAt: agent.expiresAt, scopes: agent.scopes };
   },
 });
 
@@ -124,16 +125,57 @@ type Agent = Doc<"agents">;
 async function load(ctx: QueryCtx, agentId: Id<"agents">) {
   const agent = await ctx.db.get(agentId);
   if (!agent) throw new Error("Unknown assistant");
-  if (agent.status === "revoked") throw new Error("This assistant was disconnected by its owner");
-  if (agent.status === "frozen") throw new Error("This assistant is frozen by its owner");
-  if (agent.expiresAt < Date.now()) throw new Error("This assistant's access has expired");
+  if (agent.status === "revoked") throw new Error(`${agent.name} was disconnected by its owner. The owner can reconnect it from the Agents screen with a new key.`);
+  if (agent.status === "frozen") throw new Error(`${agent.name} is frozen by its owner. Nothing can be read or paid until the owner unfreezes it on the Agents screen.`);
+  if (agent.expiresAt < Date.now()) throw new Error(`${agent.name}'s access has expired. Ask the owner to extend it in Agents → ${agent.name} → Limits.`);
   const user = (await ctx.db.get(agent.userId))!;
   return { agent, user };
 }
 
+/** Refuses in words a model can pass on: what this assistant can't do and where the owner allows it. */
 function need(agent: Agent, scope: Agent["scopes"][number]) {
-  if (!agent.scopes.includes(scope)) throw new Error(`Not allowed: this assistant doesn't have the "${scope}" permission`);
+  if (!agent.scopes.includes(scope)) throw new Error(scopeMessage(agent.name, scope, agent.scopes));
 }
+
+/**
+ * What this assistant may do right now, in dollars, so a model can plan before it asks and explain
+ * a refusal. On a live vault the vault's own numbers win where they're stricter.
+ */
+export const myLimits = internalQuery({
+  args: { agentId: v.id("agents") },
+  handler: async (ctx, { agentId }) => {
+    const { agent, user } = await load(ctx, agentId);
+    const usd = (minor: number) => ({ amountMinor: minor, currency: "USD", display: formatMoney(minor, "USDC") });
+    const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
+    const live = Boolean(wallet && wallet.status === "live" && isVaultVersion(wallet.version));
+    const agentVault = live && agent.vault?.active ? agent.vault : undefined;
+    const spend = agent.scopes.includes("spend");
+    const perPayment = spend ? Math.min(agent.perPaymentMinor, agentVault?.perPaymentMinor ?? Infinity) : 0;
+    const dailyCap = spend ? Math.min(agent.dailyCapMinor, agentVault?.dailyCapMinor ?? Infinity) : 0;
+    const can = (s: Agent["scopes"][number]) => agent.scopes.includes(s);
+    return {
+      assistant: agent.name,
+      permissions: agent.scopes,
+      canSeeMoney: can("read"),
+      canProposePayments: can("prepare"),
+      canPayWithinLimits: spend,
+      canAskOwnerForMore: can("request"),
+      perPaymentLimit: usd(perPayment),
+      dailyLimit: usd(dailyCap),
+      leftToday: usd(Math.max(0, dailyCap - agent.spentTodayMinor)),
+      balancesHidden: agent.hidesBalances,
+      walletFrozen: Boolean(wallet?.frozen || wallet?.vault?.frozen),
+      enforcedOnChain: live,
+      accessExpiresAt: new Date(agent.expiresAt).toISOString(),
+      tools: toolsFor(agent.scopes).map((t) => t.name),
+      note: !can("prepare")
+        ? scopeMessage(agent.name, "prepare", agent.scopes)
+        : !spend
+          ? `Every payment you propose goes to the owner to approve. To pay small amounts without asking, the owner can turn on "Pay within limits" in Agents → ${agent.name} → Limits.`
+          : `Payments up to ${formatMoney(perPayment, "USDC")} each and ${formatMoney(dailyCap, "USDC")} a day go through on their own; anything more${can("request") ? " goes to the owner to approve" : " is refused"}.`,
+    };
+  },
+});
 
 export const overview = internalQuery({
   args: { agentId: v.id("agents") },
