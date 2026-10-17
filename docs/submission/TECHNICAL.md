@@ -72,6 +72,14 @@ sequenceDiagram
 
 The relayer signs locally and stores the signed bytes, nonce and hash on the task before broadcasting. If the node's reply is lost, the task becomes `unknown` (never `failed`) and keeps its reservation. Reconciliation re-sends the same bytes every 30 seconds, which cannot pay twice. A release or finalize whose nonce another transaction took goes back to held or queued and is sent again. Callbacks that arrive after a task settled are recorded but never reopen it.
 
+### 3.4 Mandates any party can verify (AP2)
+
+AP2's IntentMandate, CartMandate and PaymentMandate are produced from the vault (`packages/domain/src/mandates.ts`) with AP2's own field names, and the proof sits beside them under `x-policyvault`. A verifier needs only a Base Sepolia node. It finds the transaction where the contract verified the owner's passkey (also when a loosening waited out the delay), checks the grant's limits, expiry and contacts against the vault, and says whether the grant is still in force. An assistant presents its intent mandate over MCP (`get_mandate`); each settled payment returns its payment mandate. In AP2 as designed, a payment network or a credential issuer vouches for the user's authorisation; here the contract that enforces it is the record.
+
+### 3.5 Family guardian
+
+An owner can name a guardian (a family member with their own account). The guardian sees held payments and assistant requests, never balances, gets an alert when a payment is held, and can stop it or freeze the assistants. Both are actions the vault's guardian role already allows, so a guardian can only tighten. Extra protection is one passkey approval that holds every assistant payment for 10 to 60 minutes.
+
 ## 4. Algorithms and invariants
 
 **Agent payment checks** (`PolicyVault.agentPay`), in order. A failure emits `PaymentRefused` with a code and returns, so the refusal is itself on-chain evidence:

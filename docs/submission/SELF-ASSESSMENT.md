@@ -17,6 +17,7 @@ We do **not** claim resistance to prompt injection as such. A fooled assistant c
 | Outside assistant over MCP (bearer key, per assistant) | That assistant | Read what the owner allows; pay a saved contact inside its own limits (it holds no key: the backend signs with that assistant's own vault key) | Anything above its limits (the owner gets the card; the assistant never gets a link or token) | Approve anything; see hidden balances; act after it is frozen or disconnected |
 | Approval site (separate origin) | The owner's passkey | Nothing without a signature | Every loosening and every over-limit payment | Sign without user verification; sign for another site or vault; reuse a signature |
 | Guardian (our relayer key) | The service | Freeze the vault or an agent; cancel a held payment or queued change; submit what the owner signed | – | Move money; add agents or contacts; loosen any rule |
+| Family guardian (own account, linked with a one-use code) | Someone the owner trusts | See held payments and assistant requests; stop a held payment; freeze the assistants | – | See balances or statements; approve, pay, add contacts or change limits; act after the owner removes them |
 | Demo visitor | A private sandbox | Their own sandbox only | Their own sandbox's actions | See another account; open the judge account without the judge key |
 
 ## 3. Risk register
@@ -47,6 +48,7 @@ Full matrix of the 68 P0 attacks from our corpus, each with its tests, eval case
 | Rule-based chat (no model) vs the same 38 attacks | `chat-rules.eval.test.ts` | 0 paid anyone but the owner's own choice |
 | Approval link abuse (self-approval, token reuse, leaking data) | `approvals.test.ts`, `gateway.audit.test.ts` G1–G2 | Agent never gets a link; token holder who isn't the owner can't act |
 | Gateway decisions | `matrix.test.ts`: 96 cases (scope x amount x frozen x new contact x live/simulated) against an oracle | All agree |
+| Forged AP2 mandates (raised limit, invented merchant, wrong agent, later expiry, edited text, bigger payment) | `mandates.e2e.test.ts` on Base Sepolia | All six caught; the genuine ones verify |
 | Telegram inbound | `matrix.test.ts` | Group, forwarded, bot, unlinked ignored; redelivery handled once; re-link needs the owner |
 | Races and lost receipts on Base Sepolia | `resilience.e2e.test.ts` | Four racing $6 requests: two accepted, two to the owner; lost receipt settled once |
 
