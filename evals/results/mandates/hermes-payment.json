@@ -1,0 +1,35 @@
+{
+  "ap2.mandates.PaymentMandate": {
+    "payment_mandate_contents": {
+      "payment_mandate_id": "0x76feeab4bc9e091c1f82e6afaf843e8524624f6053e1386976cc529ec8ecb90e",
+      "payment_details_id": "0x54bc5c62e849b9d1e5f9863af5cd54d1cf599e7afd69a073e9a38e2f66b298eb",
+      "payment_details_total": {
+        "label": "Tea order",
+        "amount": {
+          "currency": "USD",
+          "value": "7.00"
+        }
+      },
+      "payment_response": {
+        "request_id": "0x54bc5c62e849b9d1e5f9863af5cd54d1cf599e7afd69a073e9a38e2f66b298eb",
+        "method_name": "https://agent-wallet-nu.vercel.app/ap2/policyvault",
+        "details": {
+          "chain_id": 84532,
+          "vault": "0x31F68A8d36e4392725d2F09261D42a529e6aDc32",
+          "agent": "0x66E7FC51742f0ccF2ce7D18dD4ee4401F43339ce",
+          "transaction": "https://sepolia.basescan.org/tx/0x2ce1ea19e768ce0b6583556dd68288cd5b8770325a9db1bfc54c8fda8966a29b"
+        }
+      },
+      "merchant_agent": "Blue Tokai",
+      "timestamp": "2026-10-16T21:56:16.000Z"
+    },
+    "user_authorization": "intent-mandate:0xaddf0ff0dfd24e181e2090930b88ec0b8b929aa4314445dee0da61204657b113"
+  },
+  "x-policyvault": {
+    "tx": "0x892203135b4d83bd0da98a6cbd83c0a627a91f593ad2bb630a8f25f7f2c708ae",
+    "release_tx": "0x2ce1ea19e768ce0b6583556dd68288cd5b8770325a9db1bfc54c8fda8966a29b",
+    "held": true,
+    "payee": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+    "intent_mandate_id": "0xaddf0ff0dfd24e181e2090930b88ec0b8b929aa4314445dee0da61204657b113"
+  }
+}

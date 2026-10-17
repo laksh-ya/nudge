@@ -1,6 +1,6 @@
 import { v } from "convex/values";
-import { base64url, EXPLORER, formatMoney, isVaultVersion, keyIdOf, Op, REFUSAL, testPayeeAddress, VAULT_VERSION } from "@agent-wallet/domain";
-import type { Hex } from "viem";
+import { base64url, EXPLORER, formatMoney, isVaultVersion, keyIdOf, Op, REFUSAL, testPayeeAddress, VAULT_VERSION, type IntentMandate } from "@agent-wallet/domain";
+import type { Address, Hex } from "viem";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -12,6 +12,7 @@ import { laneOf, lanePool, relayer } from "./lib/relayer";
 import { hit, tryHit } from "./lib/limits";
 import { spendDeploy } from "./lib/budget";
 import { chainReady } from "./chain";
+import { cartFor, intentFor, paymentFor } from "./lib/mandates";
 
 const HEX32 = /^0x[0-9a-fA-F]{64}$/;
 
@@ -40,6 +41,38 @@ function allowedRpIds() {
 async function walletOf(ctx: MutationCtx, userId: Id<"users">) {
   return await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", userId)).unique();
 }
+
+/** Every AP2 mandate this owner's vault enforces or has settled, for the proof page and for export. */
+export const mandates = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await viewer(ctx);
+    if (!user) return null;
+    const w = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
+    if (!w?.address || w.status !== "live") return { intents: [], payments: [], carts: [] };
+    const agents = (await ctx.db.query("agents").withIndex("by_user", (q) => q.eq("userId", user._id)).take(50)).filter((a) => a.chainAddress);
+    const intents = new Map<string, IntentMandate>();
+    for (const a of agents) {
+      const m = await intentFor(ctx, a);
+      if (m) intents.set(a._id, m);
+    }
+    const tasks = await ctx.db.query("tasks").withIndex("by_user_updated", (q) => q.eq("userId", user._id)).order("desc").take(100);
+    const payments = [];
+    const carts = [];
+    for (const t of tasks) {
+      const agent = t.agentId ? agents.find((a) => a._id === t.agentId) : undefined;
+      const intent = agent ? intents.get(agent._id) : undefined;
+      if (agent && intent) {
+        const m = await paymentFor(ctx, t, agent, intent);
+        if (m) payments.push(m);
+      } else {
+        const c = await cartFor(ctx, t, w.address as Address);
+        if (c) carts.push(c);
+      }
+    }
+    return { intents: [...intents.values()], payments: payments.slice(0, 30), carts: carts.slice(0, 30) };
+  },
+});
 
 export const status = query({
   args: {},

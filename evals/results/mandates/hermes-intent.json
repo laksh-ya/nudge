@@ -1,0 +1,76 @@
+{
+  "ap2.mandates.IntentMandate": {
+    "user_cart_confirmation_required": false,
+    "natural_language_description": "Hermes may pay Ramesh Iyer, BESCOM, Exa, Blue Tokai, Ananya Mehta, at most 10.00 USD a payment and 15.00 USD in any 24 hours, until 2026-10-23. Payments above 5.00 USD wait 2 minutes so I can cancel. All assistants together stay under 40.00 USD a day and never touch the 50.00 USD I keep protected. Anything else needs my passkey.",
+    "merchants": [
+      "Ramesh Iyer",
+      "BESCOM",
+      "Exa",
+      "Blue Tokai",
+      "Ananya Mehta"
+    ],
+    "skus": null,
+    "requires_refundability": false,
+    "intent_expiry": "2026-10-23T21:28:51.000Z"
+  },
+  "x-policyvault": {
+    "chain_id": 84532,
+    "vault": "0x31F68A8d36e4392725d2F09261D42a529e6aDc32",
+    "agent": "0x66E7FC51742f0ccF2ce7D18dD4ee4401F43339ce",
+    "agent_name": "Hermes",
+    "per_payment_max": {
+      "currency": "USD",
+      "value": "10.00"
+    },
+    "daily_max": {
+      "currency": "USD",
+      "value": "15.00"
+    },
+    "wallet_daily_ceiling": {
+      "currency": "USD",
+      "value": "40.00"
+    },
+    "protected_amount": {
+      "currency": "USD",
+      "value": "50.00"
+    },
+    "hold_above": {
+      "currency": "USD",
+      "value": "5.00"
+    },
+    "hold_seconds": 120,
+    "contacts": [
+      {
+        "name": "Ramesh Iyer",
+        "address": "0x25c0a9C9E552dDC40f8964ADA9B19e889E7870Cd",
+        "contact_id": "0x626adb852f76dc77f29ea7b3e5ec613df63120be454b532b8f9a8f6ebe92faaf"
+      },
+      {
+        "name": "BESCOM",
+        "address": "0x14590D251053dda381070c857dCf2929EAEb2Bb1",
+        "contact_id": "0xa0986c6730855e4828873fb50d08739700f157494784d4e6aa762a29ecbbfb11"
+      },
+      {
+        "name": "Exa",
+        "address": "0x7Ef4B87D512aB6c34564a25188eF702f0bACBDce",
+        "contact_id": "0x7ebfbfc58935a9db13ae829f8d0822255170141a9389fea5974f3fbf77baae32"
+      },
+      {
+        "name": "Blue Tokai",
+        "address": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+        "contact_id": "0x3fec9aa86a47ea594cdf7d313a8f45d2d917229d37b588aa5910214aeeb327a7"
+      },
+      {
+        "name": "Ananya Mehta",
+        "address": "0x3B9409698E7990bfab8e0d1ae687C0E6e2Dc0d89",
+        "contact_id": "0x026b58734af76b35f79c354e4236aca2bdb374dd11b78587c5c722e90a273f06"
+      }
+    ],
+    "user_authorization": {
+      "method": "webauthn-p256-verified-by-contract",
+      "signed_tx": "0xcd850ae2336a93b4be5a0c223c03b89041566563d6af1b18cfb344d7a99b25f2",
+      "applied_tx": "0xec08718c1e586be72a30fe6dff64615e5c8628721e7e6b39edb758965d5d7ca3"
+    }
+  },
+  "mandate_id": "0xaddf0ff0dfd24e181e2090930b88ec0b8b929aa4314445dee0da61204657b113"
+}
