@@ -16,7 +16,7 @@ import { base64url, toWebAuthnAuth } from "../src/webauthn";
 export const CONVEX = process.env.E2E_CONVEX_URL;
 export const JWK = process.env.E2E_DEMO_JWK;
 export const SITE = CONVEX?.replace(".convex.cloud", ".convex.site");
-export const RP_ID = "agent-wallet-approve.vercel.app";
+export const RP_ID = "nudge-approve.vercel.app";
 export const enabled = Boolean(CONVEX && JWK);
 
 export const chain = {

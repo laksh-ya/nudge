@@ -192,6 +192,10 @@ function Enrol({ token }: { token: string }) {
             {code.slice(0, 3)} {code.slice(3)}
           </div>
           <p className="rise mt-3 text-label text-mute">Valid for 15 minutes. If you didn't start this, don't type it anywhere.</p>
+          {/* Same device: straight back to the screen that asks for this code. On another device, open Nudge there. */}
+          <a href={`${WEB_URL}/wallet`} className="press rise mt-6 flex h-12 w-full max-w-xs items-center justify-center rounded-[10px] bg-navy text-title font-semibold text-white">
+            Back to Nudge to enter it
+          </a>
         </div>
       </Frame>
     );

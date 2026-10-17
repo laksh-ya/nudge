@@ -7,6 +7,9 @@ import type { ActionCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { sha256 } from "./lib/hash";
 import { telegramWebhook } from "./telegram";
+import { storeAddress, paymentRequired, verifyProof } from "./commerce";
+import { NETWORK, b64, unb64, type PaymentProof } from "./lib/commerce";
+import { agentGuide } from "./lib/agentGuide";
 import { MCP_INSTRUCTIONS, findTool, invalidArgs, toolDenied, toolsFor } from "./lib/mcp";
 
 /** JSON-RPC batches are capped; MCP itself dropped batching in 2025-06-18. */
@@ -62,8 +65,11 @@ type Caller = { _id: Id<"agents">; name: string; scopes: string[] };
 
 async function callTool(ctx: ActionCtx, agentId: Id<"agents">, name: string, args: Record<string, unknown>) {
   const str = (k: string) => String(args[k] ?? "");
+  const opt = (k: string) => (args[k] === undefined || args[k] === null || args[k] === "" ? undefined : String(args[k]));
   const num = (k: string) => Number(args[k]);
   switch (name) {
+    case "get_guide":
+      return { guide: agentGuide(`${process.env.CONVEX_SITE_URL ?? ""}/mcp`) };
     case "get_my_limits":
       return await ctx.runQuery(internal.gateway.myLimits, { agentId });
     case "get_overview":
@@ -79,11 +85,58 @@ async function callTool(ctx: ActionCtx, agentId: Id<"agents">, name: string, arg
     case "propose_payment":
       return await ctx.runMutation(internal.gateway.proposePayment, {
         agentId,
-        contactId: str("contactId"),
+        contactId: opt("contactId"),
+        toAddress: opt("toAddress"),
+        name: opt("name"),
         amount: num("amount"),
         reason: str("reason"),
-        requestId: args.requestId === undefined ? undefined : str("requestId"),
+        requestId: opt("requestId"),
       });
+    case "list_pending":
+      return await ctx.runQuery(internal.agentTools.pending, { agentId });
+    case "get_plan":
+      return await ctx.runQuery(internal.agentTools.plan, { agentId });
+    case "list_reminders":
+      return await ctx.runQuery(internal.agentTools.reminders, { agentId });
+    case "set_reminder":
+      return await ctx.runMutation(internal.agentTools.setReminder, { agentId, text: str("text"), at: str("at"), repeat: opt("repeat") });
+    case "cancel_reminder":
+      return await ctx.runMutation(internal.agentTools.cancelReminder, { agentId, reminderId: str("reminderId") });
+    case "add_bill":
+      return await ctx.runMutation(internal.agentTools.addBill, {
+        agentId,
+        name: str("name"),
+        amount: num("amount"),
+        due: str("due"),
+        repeats: opt("repeats"),
+        kind: opt("kind"),
+        contactId: opt("contactId"),
+        payWith: opt("payWith"),
+      });
+    case "add_to_plan":
+      return await ctx.runMutation(internal.agentTools.addPlan, { agentId, kind: str("kind"), name: str("name"), amount: num("amount"), date: str("date"), repeats: opt("repeats") });
+    case "list_goals":
+      return await ctx.runQuery(internal.agentTools.goals, { agentId });
+    case "add_contact":
+      return await ctx.runMutation(internal.agentTools.addContact, { agentId, name: str("name"), address: str("address"), kind: opt("kind") });
+    case "request_limits":
+      return await ctx.runMutation(internal.agentTools.requestLimits, {
+        agentId,
+        perPayment: num("perPayment"),
+        perDay: num("perDay"),
+        days: args.days === undefined ? undefined : num("days"),
+        why: str("why"),
+      });
+    case "pay_x402":
+      return await ctx.runAction(internal.commerce.payX402, { agentId, url: str("url"), maxPrice: num("maxPrice"), requestId: opt("requestId") });
+    case "watch_price":
+      return await ctx.runMutation(internal.commerce.watchPrice, { agentId, url: str("url"), item: str("item"), maxPrice: num("maxPrice"), days: args.days === undefined ? undefined : num("days") });
+    case "list_watches":
+      return await ctx.runQuery(internal.commerce.listWatches, { agentId });
+    case "cancel_watch":
+      return await ctx.runMutation(internal.commerce.cancelWatch, { agentId, watchId: str("watchId") });
+    case "get_card":
+      return await ctx.runMutation(internal.commerce.getCard, { agentId, amount: num("amount"), merchant: str("merchant"), reason: str("reason") });
     case "get_task_status":
       return await ctx.runQuery(internal.gateway.taskStatus, { agentId, taskId: str("taskId") });
     case "get_mandate":
@@ -111,12 +164,18 @@ async function handle(ctx: ActionCtx, agent: Caller, value: unknown) {
     case "initialize":
       return reply({
         protocolVersion: typeof msg.params?.protocolVersion === "string" ? msg.params.protocolVersion : "2025-06-18",
-        capabilities: { tools: { listChanged: false } },
+        capabilities: { tools: { listChanged: false }, resources: { listChanged: false } },
         serverInfo: { name: "nudge", title: "Nudge", version: "0.3.0" },
         instructions: MCP_INSTRUCTIONS,
       });
     case "ping":
       return reply({});
+    case "resources/list":
+      return reply({ resources: [{ uri: "nudge://guide", name: "guide", title: "Nudge for agents", description: "How to act for the user with Nudge: the approval-link rule, playbooks and every tool.", mimeType: "text/markdown" }] });
+    case "resources/read": {
+      if (msg.params?.uri !== "nudge://guide") return fail(-32602, `Unknown resource "${String(msg.params?.uri ?? "")}". Call resources/list.`);
+      return reply({ contents: [{ uri: "nudge://guide", mimeType: "text/markdown", text: agentGuide(`${process.env.CONVEX_SITE_URL ?? ""}/mcp`) }] });
+    }
     case "tools/list":
       // Only what this key may call: a read-only assistant never sees propose_payment.
       return reply({ tools: toolsFor(agent.scopes) });
@@ -181,6 +240,66 @@ http.route({
     }
     const out = await handle(ctx, caller, body);
     return out ? json(out) : new Response(null, { status: 202, headers: CORS });
+  }),
+});
+
+// ------------------------------------------------------------------ Nudge's demo x402 store
+
+const storeJson = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
+  new Response(JSON.stringify(body, null, 2), { status, headers: { "content-type": "application/json", ...CORS, "access-control-expose-headers": "X-PAYMENT-RESPONSE", ...headers } });
+
+/** The catalog: every item with its x402 URL and current price. */
+http.route({
+  path: "/x402/store",
+  method: "GET",
+  handler: httpAction(async (ctx, req) => {
+    const base = new URL(req.url).origin;
+    const items = await ctx.runMutation(internal.commerce.storeCatalog, {});
+    return storeJson({
+      store: "Nudge demo x402 store (Base Sepolia, test dollars)",
+      payTo: storeAddress(),
+      items: items.map((i) => ({ slug: i.slug, name: i.name, price: (i.priceMinor / 100).toFixed(2), url: `${base}/x402/store/item?slug=${i.slug}` })),
+      howToPay: "GET an item URL: it answers 402 with an x402 `accepts` offer (scheme transfer, network base-sepolia, asset tUSD). Pay payTo on-chain, then GET again with header X-PAYMENT = base64(JSON {x402Version:1, scheme:'transfer', network:'base-sepolia', payload:{txHash}}). A Nudge agent does all of this with the pay_x402 tool.",
+    });
+  }),
+});
+
+http.route({
+  path: "/x402/store/item",
+  method: "GET",
+  handler: httpAction(async (ctx, req) => {
+    const url = new URL(req.url);
+    const slug = url.searchParams.get("slug") ?? "";
+    const row = await ctx.runMutation(internal.commerce.storeItem, { slug });
+    if (!row) return storeJson({ error: `No item "${slug}". See /x402/store.` }, 404);
+    const resource = `${url.origin}/x402/store/item?slug=${row.slug}`;
+    const header = req.headers.get("x-payment");
+    if (!header) return storeJson(paymentRequired(resource, row), 402);
+    const proof = unb64<PaymentProof>(header);
+    if (!proof) return storeJson({ ...paymentRequired(resource, row), error: "X-PAYMENT isn't base64 JSON" }, 402);
+    const check = await verifyProof(proof, storeAddress(), row);
+    if (!check.ok) return storeJson({ ...paymentRequired(resource, row), error: check.why }, 402);
+    if (!(await ctx.runMutation(internal.commerce.redeem, { proof: check.key, slug: row.slug }))) {
+      return storeJson({ ...paymentRequired(resource, row), error: "That payment was already used for a purchase" }, 402);
+    }
+    const settlement = b64({ success: true, network: NETWORK, transaction: check.tx ?? null, payer: null });
+    return storeJson({ item: row.name, paid: (row.priceMinor / 100).toFixed(2), content: row.content }, 200, { "X-PAYMENT-RESPONSE": settlement });
+  }),
+});
+
+/** Demo control: drop (or restore) an item's price to try a price watch. Resets after a day. */
+http.route({
+  path: "/x402/store/price",
+  method: "POST",
+  handler: httpAction(async (ctx, req) => {
+    const url = new URL(req.url);
+    const slug = url.searchParams.get("slug") ?? "";
+    const price = url.searchParams.get("price");
+    const cents = price === null ? undefined : Math.round(Number(price) * 100);
+    if (cents !== undefined && !(cents > 0)) return storeJson({ error: "price must be a positive number of dollars" }, 400);
+    const row = await ctx.runMutation(internal.commerce.setStorePrice, { slug, priceMinor: cents });
+    if (!row) return storeJson({ error: `No item "${slug}"` }, 404);
+    return storeJson({ slug: row.slug, price: (row.priceMinor / 100).toFixed(2) });
   }),
 });
 

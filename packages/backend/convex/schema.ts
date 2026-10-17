@@ -116,6 +116,57 @@ export const importKind = v.union(
 
 // All money fields are integers in the currency's minor unit.
 export default defineSchema({
+  /**
+   * AP2 human-not-present intents: "buy this when it's at or below this price". The watcher buys on
+   * the owner's behalf through the same gateway decision as any payment.
+   */
+  watches: defineTable({
+    userId: v.id("users"),
+    agentId: v.id("agents"),
+    url: v.string(),
+    item: v.string(),
+    maxPriceMinor: v.number(),
+    status: v.union(v.literal("active"), v.literal("bought"), v.literal("waiting"), v.literal("cancelled"), v.literal("expired")),
+    lastPriceMinor: v.optional(v.number()),
+    lastCheckedAt: v.optional(v.number()),
+    lastError: v.optional(v.string()),
+    taskId: v.optional(v.id("tasks")),
+    expiresAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * The owner's plan: money they expect in (salary, a refund) and out (rent, a trip) that isn't a
+   * bill yet. Used for the projection and by the assistant; nothing here is marked received until
+   * the owner says so.
+   */
+  plans: defineTable({
+    userId: v.id("users"),
+    kind: v.union(v.literal("income"), v.literal("expense")),
+    name: v.string(),
+    amountMinor: v.number(),
+    currency,
+    dueAt: v.number(),
+    repeat: v.optional(v.union(v.literal("monthly"), v.literal("weekly"))),
+    done: v.optional(v.boolean()),
+  }).index("by_user_due", ["userId", "dueAt"]),
+
+  /** The demo x402 store (Nudge's own test merchant): prices the owner can drop to try a watch. */
+  storeItems: defineTable({
+    slug: v.string(),
+    name: v.string(),
+    priceMinor: v.number(),
+    basePriceMinor: v.number(),
+    /** Recent price changes, so a payment is checked against the price when it was made. */
+    history: v.optional(v.array(v.object({ priceMinor: v.number(), from: v.number() }))),
+    /** The bought content handed back once paid. */
+    content: v.string(),
+  }).index("by_slug", ["slug"]),
+
+  /** Payment proofs the demo store already accepted, so one payment unlocks one purchase. */
+  storeReceipts: defineTable({ proof: v.string(), slug: v.string() }).index("by_proof", ["proof"]),
+
   users: defineTable({
     tokenIdentifier: v.string(),
     name: v.string(),
@@ -139,6 +190,8 @@ export default defineSchema({
     privateReminders: v.optional(v.boolean()),
     onboardingStep: v.optional(v.string()),
     onboardedAt: v.optional(v.number()),
+    /** Which model the Nudge assistant (app and Telegram) uses; "basic" means no model, rules only. */
+    assistantModel: v.optional(v.string()),
     lastSeenAt: v.optional(v.number()),
   }).index("by_token", ["tokenIdentifier"]),
 
@@ -243,6 +296,12 @@ export default defineSchema({
     occurrences: v.optional(v.number()),
     lastPaidAt: v.optional(v.number()),
     accountId: v.optional(v.id("accounts")),
+    /**
+     * How the owner pays it: from the Nudge wallet (the assistant can pay it within its limits,
+     * otherwise with the passkey), from a bank account or card (accountId; Nudge reminds and hands off),
+     * or by hand (Nudge only reminds).
+     */
+    payWith: v.optional(v.union(v.literal("wallet"), v.literal("account"), v.literal("manual"))),
     /** The due date the last reminder was sent for, so each cycle reminds once. */
     remindedFor: v.optional(v.number()),
   })
@@ -359,6 +418,7 @@ export default defineSchema({
       v.literal("poke"),
       /** Any other MCP client, named by the owner (Codex, Gemini, Instinct, ...). */
       v.literal("other"),
+      v.literal("instinct"),
     ),
     status: v.union(v.literal("active"), v.literal("frozen"), v.literal("revoked"), v.literal("pending")),
     scopes: v.array(v.union(v.literal("read"), v.literal("prepare"), v.literal("spend"), v.literal("request"))),
@@ -438,6 +498,20 @@ export default defineSchema({
     requestId: v.optional(v.string()),
     /** Other assistants that proposed this same payment (same requestId) and were sent to this task. */
     sharedWith: v.optional(v.array(v.id("agents"))),
+    /** What an agent bought with this payment: an x402 resource, a one-time card, or a price-watch buy. */
+    purchase: v.optional(
+      v.object({
+        kind: v.union(v.literal("x402"), v.literal("card"), v.literal("watch")),
+        url: v.optional(v.string()),
+        item: v.optional(v.string()),
+        merchant: v.optional(v.string()),
+        /** The x402 resource the merchant returned once paid (truncated). */
+        resource: v.optional(v.string()),
+        deliveryError: v.optional(v.string()),
+        card: v.optional(v.object({ number: v.string(), exp: v.string(), cvc: v.string(), last4: v.string() })),
+        watchId: v.optional(v.id("watches")),
+      }),
+    ),
     paymentId: v.optional(v.string()),
     /** The signed transaction, stored before broadcast: reconciliation looks for exactly this one. */
     rawTx: v.optional(v.string()),

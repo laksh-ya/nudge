@@ -6,7 +6,8 @@
   "exports": {
     "./api": "./convex/_generated/api.js",
     "./dataModel": "./convex/_generated/dataModel.d.ts",
-    "./mcp": "./convex/lib/mcp.ts"
+    "./mcp": "./convex/lib/mcp.ts",
+    "./guide": "./convex/lib/agentGuide.ts"
   },
   "scripts": {
     "dev": "convex dev",

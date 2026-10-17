@@ -16,4 +16,7 @@ crons.interval("send reminders", { minutes: 15 }, internal.reminders.run, {});
 
 crons.interval("relayer test-ETH runway", { minutes: 15 }, internal.chain.checkRunway, {});
 
+// AP2 human-not-present purchases: check each price watch and buy when the price is right.
+crons.interval("price watches", { minutes: 1 }, internal.commerce.sweepWatches, {});
+
 export default crons;

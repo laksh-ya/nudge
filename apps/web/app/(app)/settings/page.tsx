@@ -23,12 +23,20 @@ import { COUNTRIES, FIAT_CODES, country as countryInfo, formatMoney, type Curren
 import { api } from "@/lib/api";
 import { useDemo } from "@/lib/demo";
 import { Initial } from "@/components/brand";
+import { PasskeyRules } from "@/components/passkey-rules";
 import { Choice, ErrorText, Field, Input, MoneyInput, Select, Toggle, errorMessage, fromMinorUnits, toMinorUnits } from "@/components/form";
 import { Button, Card, Chip, Divided, IconTile, PageTitle, Row, Sheet, Skeleton } from "@/components/ui";
 
 type Editing = "profile" | "money" | "assistant" | "fresh" | null;
 
-const MODE_LABEL = { draft: "Draft only", approve: "Ask every time", limited: "Small things on autopilot" };
+const MODE_LABEL = { draft: "Ask every time", approve: "Ask every time", limited: "Small things on its own" };
+const MODEL_LABEL = {
+  auto: "Automatic (best available)",
+  "claude-opus-5-5": "Claude Opus 5.5 (smartest)",
+  "claude-sonnet-5-5": "Claude Sonnet 5.5 (balanced)",
+  "claude-haiku-5-5": "Claude Haiku 5.5 (fastest)",
+  basic: "Basic (no AI model, rules only)",
+} as const;
 
 export default function SettingsPage() {
   const state = useQuery(api.onboarding.state);
@@ -94,12 +102,13 @@ export default function SettingsPage() {
       <Card title="Assistant" pad={false}>
         <Divided className="px-4 pb-1">
           <Row onClick={() => setEditing("assistant")} leading={<IconTile icon={Bot} tone="page" />} title="What it may do" trailing={<span className="text-body text-ink-2">{MODE_LABEL[u.autonomy]}</span>} />
-          <Row onClick={() => setEditing("assistant")} leading={<IconTile icon={Bell} tone="page" />} title="Reminders" trailing={<span className="text-body text-ink-2">{u.reminderChannel === "app" ? "App" : u.reminderChannel} · quiet {u.quietFrom}–{u.quietTo}</span>} />
+          <Row onClick={() => setEditing("assistant")} leading={<IconTile icon={Bell} tone="page" />} title="Reminders" trailing={<span className="text-body text-ink-2">{u.reminderChannel === "app" ? "App" : "App and Telegram"}{u.quietFrom ? ` · quiet ${u.quietFrom}–${u.quietTo}` : ""}</span>} />
           <Row href="/agents" leading={<IconTile icon={Bot} tone="page" />} title="Connected assistants" trailing={<span className="text-body text-ink-2">{state.agents.length}</span>} />
         </Divided>
       </Card>
 
       <Card title="Security" pad={false}>
+        <PasskeyRules />
         <Divided className="px-4 pb-1">
           <Row
             href="/wallet"
@@ -160,7 +169,11 @@ export default function SettingsPage() {
         size="lg"
         icon={LogOut}
         className="w-full"
-        onClick={() => (isAuthenticated ? signOut({ redirectUrl: "/" }) : setDemo(false))}
+        onClick={() => {
+          // Leaving never drops you into the demo: the demo flag goes too.
+          setDemo(false);
+          if (isAuthenticated) void signOut({ redirectUrl: "/" });
+        }}
       >
         {isAuthenticated ? "Sign out" : "Leave demo"}
       </Button>
@@ -311,6 +324,7 @@ function AssistantSheet({ state, onClose }: { state: State; onClose: () => void 
     quietTo: u.quietTo,
     reminderLeadDays: u.reminderLeadDays,
     privateReminders: u.privateReminders,
+    assistantModel: u.assistantModel,
   });
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string>();
@@ -340,19 +354,37 @@ function AssistantSheet({ state, onClose }: { state: State; onClose: () => void 
   return (
     <Sheet open onOpenChange={(o) => !o && onClose()} title="Assistant">
       <div className="space-y-3 pb-4">
-        {(["draft", "approve", "limited"] as const).map((m) => (
+        {(["approve", "limited"] as const).map((m) => (
           <Choice key={m} selected={form.autonomy === m} onClick={() => setForm({ ...form, autonomy: m })} className="w-full">
             {MODE_LABEL[m]}
           </Choice>
         ))}
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Quiet from">
-            <Input type="time" value={form.quietFrom} onChange={(e) => setForm({ ...form, quietFrom: e.target.value })} />
-          </Field>
-          <Field label="Until">
-            <Input type="time" value={form.quietTo} onChange={(e) => setForm({ ...form, quietTo: e.target.value })} />
-          </Field>
+        <Field label="AI model for Nudge (app and Telegram)" hint="Payments always follow your limits and passkey, whichever model answers.">
+          <Select value={form.assistantModel} onChange={(e) => setForm({ ...form, assistantModel: e.target.value as typeof form.assistantModel })}>
+            {(Object.keys(MODEL_LABEL) as (keyof typeof MODEL_LABEL)[]).map((m) => (
+              <option key={m} value={m}>
+                {MODEL_LABEL[m]}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-body font-semibold">Quiet hours</div>
+            <div className="text-label text-mute">Optional. Reminders wait until they end.</div>
+          </div>
+          <Toggle checked={Boolean(form.quietFrom)} onChange={(on) => setForm({ ...form, quietFrom: on ? "22:00" : "", quietTo: on ? "08:00" : "" })} label="Quiet hours" />
         </div>
+        {form.quietFrom && (
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Quiet from">
+              <Input type="time" value={form.quietFrom} onChange={(e) => setForm({ ...form, quietFrom: e.target.value })} />
+            </Field>
+            <Field label="Until">
+              <Input type="time" value={form.quietTo} onChange={(e) => setForm({ ...form, quietTo: e.target.value })} />
+            </Field>
+          </div>
+        )}
         <Field label="Reminders to">
           <Select value={form.reminderChannel} onChange={(e) => setForm({ ...form, reminderChannel: e.target.value as typeof form.reminderChannel })}>
             <option value="app">App</option>
@@ -362,7 +394,7 @@ function AssistantSheet({ state, onClose }: { state: State; onClose: () => void 
             </option>
           </Select>
         </Field>
-        <Field label="Remind me about bills and renewals" hint="Reminders wait until your quiet hours end.">
+        <Field label="Remind me about bills and renewals">
           <Select value={form.reminderLeadDays} onChange={(e) => setForm({ ...form, reminderLeadDays: Number(e.target.value) })}>
             {[0, 1, 2, 3, 5, 7, 14].map((d) => (
               <option key={d} value={d}>

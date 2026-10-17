@@ -11,15 +11,16 @@ import { ago, formatMoney } from "@/lib/format";
 import { AgentMark } from "@/components/brand";
 import { FreezeAll } from "@/components/shell";
 import { ConnectSheet, PermissionsSheet, type AgentView } from "@/components/agents/agent-sheets";
+import { Purchases } from "@/components/agents/purchases";
 import { Button, Card, Chip, Meter, PageTitle, Sheet, Skeleton } from "@/components/ui";
 import { errorMessage } from "@/components/form";
 
 const DAY = 86_400_000;
 
-const scopeLabel = { read: "See money", prepare: "Prepare payments", spend: "Pay within limits", request: "Ask for more" };
 /** Clients that take a bearer key in a header: these connect today. */
 const PROVIDERS = [
-  { id: "claude" as const, label: "Claude Code", hint: "Terminal command" },
+  { id: "claude" as const, label: "Claude Code", hint: "Paste the setup text" },
+  { id: "instinct" as const, label: "Instinct", hint: "Paste the setup text" },
   { id: "other" as const, name: "Cursor", label: "Cursor", hint: "mcp.json" },
   { id: "hermes" as const, label: "Hermes", hint: "config.yaml" },
   { id: "openclaw" as const, label: "OpenClaw", hint: "openclaw.json" },
@@ -93,6 +94,7 @@ export default function AgentsPage() {
           )}
         </div>
       )}
+      <Purchases />
       {target && sheet?.kind === "connect" && <ConnectSheet agent={target} onClose={() => setSheet(null)} />}
       {target && sheet?.kind === "permissions" && <PermissionsSheet agent={target} onClose={() => setSheet(null)} />}
       <Sheet open={adding} onOpenChange={setAdding} title="Connect an assistant">
@@ -188,7 +190,7 @@ function AgentCard({
 }) {
   const frozen = a.status === "frozen";
   const pending = a.status === "pending" || (a.provider !== "own" && !a.hasKey);
-  const canSpend = a.scopes.includes("spend");
+  const canSpend = a.scopes.includes("spend") && a.perPaymentMinor > 0;
   const daysLeft = Math.max(0, Math.round((a.expiresAt - Date.now()) / DAY));
   return (
     <Card className={cn("flex flex-col", frozen && "bg-[#fbfcfd]")}>
@@ -219,18 +221,13 @@ function AgentCard({
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {a.scopes.map((s) => (
-          <Chip key={s} tone={s === "spend" ? "cyan" : "neutral"}>
-            {scopeLabel[s]}
-          </Chip>
-        ))}
-        {a.hidesBalances && (
+      {a.hidesBalances && (
+        <div className="mt-3">
           <Chip>
-            <EyeOff className="size-3" /> No balances
+            <EyeOff className="size-3" /> Balances hidden
           </Chip>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="mt-4 flex-1">
         {canSpend ? (
@@ -254,7 +251,7 @@ function AgentCard({
             )}
           </>
         ) : (
-          <p className="text-label text-mute">Can't spend. Anything it prepares comes to you.</p>
+          <p className="text-label text-mute">Asks you before every payment, with a link you approve by passkey. Set limits to let it pay small amounts alone.</p>
         )}
       </div>
 

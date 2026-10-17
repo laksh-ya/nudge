@@ -9,10 +9,12 @@
  */
 
 import type * as activity from "../activity.js";
+import type * as agentTools from "../agentTools.js";
 import type * as agents from "../agents.js";
 import type * as approvals from "../approvals.js";
 import type * as assistant from "../assistant.js";
 import type * as chain from "../chain.js";
+import type * as commerce from "../commerce.js";
 import type * as connections from "../connections.js";
 import type * as contacts from "../contacts.js";
 import type * as crons from "../crons.js";
@@ -25,7 +27,9 @@ import type * as home from "../home.js";
 import type * as http from "../http.js";
 import type * as imports from "../imports.js";
 import type * as lib_actions from "../lib/actions.js";
+import type * as lib_agentGuide from "../lib/agentGuide.js";
 import type * as lib_assist from "../lib/assist.js";
+import type * as lib_commerce from "../lib/commerce.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_budget from "../lib/budget.js";
 import type * as lib_control from "../lib/control.js";
@@ -50,6 +54,7 @@ import type * as money from "../money.js";
 import type * as onboarding from "../onboarding.js";
 import type * as ops from "../ops.js";
 import type * as owner from "../owner.js";
+import type * as plan from "../plan.js";
 import type * as rates from "../rates.js";
 import type * as reminders from "../reminders.js";
 import type * as tasks from "../tasks.js";
@@ -66,10 +71,12 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   activity: typeof activity;
+  agentTools: typeof agentTools;
   agents: typeof agents;
   approvals: typeof approvals;
   assistant: typeof assistant;
   chain: typeof chain;
+  commerce: typeof commerce;
   connections: typeof connections;
   contacts: typeof contacts;
   crons: typeof crons;
@@ -82,7 +89,9 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   imports: typeof imports;
   "lib/actions": typeof lib_actions;
+  "lib/agentGuide": typeof lib_agentGuide;
   "lib/assist": typeof lib_assist;
+  "lib/commerce": typeof lib_commerce;
   "lib/auth": typeof lib_auth;
   "lib/budget": typeof lib_budget;
   "lib/control": typeof lib_control;
@@ -107,6 +116,7 @@ declare const fullApi: ApiFromModules<{
   onboarding: typeof onboarding;
   ops: typeof ops;
   owner: typeof owner;
+  plan: typeof plan;
   rates: typeof rates;
   reminders: typeof reminders;
   tasks: typeof tasks;

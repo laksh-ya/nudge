@@ -32,6 +32,7 @@ function Guardian() {
   const [code, setCode] = useState(params.get("code") ?? "");
   const [note, setNote] = useState<string>();
   useEffect(() => setCode(params.get("code") ?? ""), [params]);
+  const invite = useQuery(api.guardians.invitation, code.trim().length === 8 ? { code } : "skip");
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
@@ -57,6 +58,14 @@ function Guardian() {
             Accept
           </Button>
         </form>
+        {invite?.valid && (
+          <p className="mt-2 rounded-[10px] bg-sky-soft p-2.5 text-label text-navy">
+            {invite.self
+              ? "That's your own invite: a guardian has to be someone else."
+              : `From ${invite.ownerName}${invite.ownerEmail ? ` (${invite.ownerEmail})` : ""}, who invited you as "${invite.invitedAs}". Accept only if you know them.`}
+          </p>
+        )}
+        {invite && !invite.valid && <p className="mt-2 text-label text-red">That code isn't valid any more. Ask for a new one.</p>}
         {note && <p className="mt-2 text-label text-ink-2">{note}</p>}
       </Card>
       {data === undefined ? <Skeleton className="h-48 rounded-card" /> : data?.protecting.map((p) => <Person key={p.linkId} ownerId={p.ownerId} />)}

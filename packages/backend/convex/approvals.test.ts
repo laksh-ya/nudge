@@ -85,14 +85,15 @@ function assertion(challenge: Hex, opts: { key?: Uint8Array } = {}) {
 const taskState = (f: Awaited<ReturnType<typeof fixture>>, token: string) =>
   f.t.run(async (ctx) => (await ctx.db.query("tasks").withIndex("by_approval_token", (q) => q.eq("approvalToken", token)).unique())!.state);
 
-describe("approval tokens never reach agents (#6)", () => {
-  it("an over-limit request returns no link or token to the agent", async () => {
+describe("approval links in an agent's hands can't approve anything (#6, revised 18 Oct)", () => {
+  // The agent now hands the owner the link (no trip to the website), so the link must be harmless
+  // to the agent: approving needs the signed-in owner or their passkey (next tests).
+  it("an over-limit request returns the approval link for the owner", async () => {
     const f = await fixture();
     const r = await f.t.mutation(internal.gateway.proposePayment, { agentId: f.agent, contactId: f.payee, amount: 12, reason: "over the limit" });
     expect(r.outcome).toBe("needs_approval");
     const task = await f.t.run((ctx) => ctx.db.get(taskOf(r)));
-    expect(JSON.stringify(r)).not.toContain(task!.approvalToken!);
-    expect(r).not.toHaveProperty("approvalUrl");
+    expect(r).toMatchObject({ approvalUrl: `https://nudge-approve.vercel.app/a/${task!.approvalToken}` });
   });
 
   it("a token holder who isn't the signed-in owner can neither approve nor decline", async () => {

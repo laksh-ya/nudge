@@ -88,6 +88,17 @@ describe("chat payments without a model", () => {
     expect(task?.state ?? "none").not.toBe("submitted");
   });
 
+  it("pays a new address only with the owner's approval", async () => {
+    const f = await fixture();
+    await f.t.mutation(internal.messages.reply, { userId: f.alice, text: "Pay 0x00000000000000000000000000000000000000c3 $5 for the book" });
+    const m = await lastReply(f);
+    const task = (await f.t.run((ctx) => ctx.db.get(m.taskId!)))!;
+    expect(task.state).toBe("awaiting_approval");
+    const payee = (await f.t.run((ctx) => ctx.db.get(task.payeeId!)))!;
+    expect(payee.address!.toLowerCase()).toBe("0x00000000000000000000000000000000000000c3");
+    expect(payee.trusted).toBe(false);
+  });
+
   it("posts one reply, not a second gateway note", async () => {
     const f = await fixture();
     await f.t.mutation(internal.messages.reply, { userId: f.alice, text: "Pay Blue Tokai $4" });

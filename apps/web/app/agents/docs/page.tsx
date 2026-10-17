@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, Clock, KeyRound, ShieldCheck, Smartphone, Snowflake, UserCheck } from "lucide-react";
-import { MCP_TOOLS, OUTCOMES, REASON_CODES, SCOPE_LABELS } from "@agent-wallet/backend/mcp";
+import { MCP_TOOLS, OUTCOMES, REASON_CODES } from "@agent-wallet/backend/mcp";
+import { setupPrompt } from "@agent-wallet/backend/guide";
 import { Wordmark } from "@/components/brand";
 import { CodeBlock } from "@/components/agents/code-block";
 import { MCP_URL } from "@/lib/config";
@@ -21,6 +22,7 @@ const SERVER_URL = process.env.NEXT_PUBLIC_CONVEX_SITE_URL ? MCP_URL : "https://
 const KEY = "aw_YOUR_KEY";
 
 const SECTIONS = [
+  ["agent", "Give this to your agent"],
   ["what", "What it is"],
   ["key", "Get a key"],
   ["connect", "Connect a client"],
@@ -41,6 +43,8 @@ function H2({ id, children }: { id: string; children: React.ReactNode }) {
 function C({ children }: { children: React.ReactNode }) {
   return <code className="num rounded bg-page px-1 py-px text-[0.92em] text-navy">{children}</code>;
 }
+
+const GROUP_LABEL: Record<string, string> = { start: "Start", money: "Money", plan: "Plans", pay: "Paying", commerce: "Buying" };
 
 function firstSentence(text: string) {
   const line = text.split("\n")[0]!;
@@ -80,6 +84,20 @@ export default function AgentDocsPage() {
           ))}
         </nav>
 
+        <H2 id="agent">Give this to your agent</H2>
+        <div className="space-y-3 text-body text-ink-2">
+          <p>
+            The quickest way: paste this into your assistant (Claude, Instinct, Hermes, any MCP client). It connects itself, reads the guide written for agents,
+            and asks you for your key. In the app, Agents → Connect copies the same text with your key already in it.
+          </p>
+          <CodeBlock label="Setup text for your assistant" code={setupPrompt({ mcpUrl: SERVER_URL })} />
+          <p>
+            Agents read <a className="font-semibold text-cyan-ink" href="/agents/guide.md">/agents/guide.md</a> (also at{" "}
+            <a className="font-semibold text-cyan-ink" href="/llms.txt">/llms.txt</a>, and over MCP as the <C>get_guide</C> tool and the{" "}
+            <C>nudge://guide</C> resource): the one rule, how to talk to you, playbooks and every tool.
+          </p>
+        </div>
+
         <H2 id="what">What it is</H2>
         <div className="space-y-3 text-body text-ink-2">
           <p>
@@ -99,7 +117,7 @@ export default function AgentDocsPage() {
             <>Open the app and sign in, or choose <b>Try the demo</b> for a private sandbox.</>,
             <>Go to <b>Agents → Connect an assistant</b>, pick your client (or name any other MCP assistant), then <b>Create access key</b>.</>,
             <>Copy the key. It is shown once and stored only as a hash; making a new key turns the old one off.</>,
-            <>A new assistant starts read-only. To let it pay, open <b>Limits</b> on its card and turn on <b>{SCOPE_LABELS.prepare}</b> (every payment comes to the owner) or <b>{SCOPE_LABELS.spend}</b> with per-payment and daily amounts.</>,
+            <>A new assistant can see your money and ask for anything; every payment comes to you as an approval link. To let it pay small amounts on its own, open <b>Limits</b> on its card and set what it may pay per payment and per day (you approve that once with your passkey).</>,
           ].map((step, i) => (
             <li key={i} className="flex gap-3">
               <span className="grid size-6 shrink-0 place-items-center rounded-full bg-sky text-label font-bold text-navy">{i + 1}</span>
@@ -132,15 +150,15 @@ export default function AgentDocsPage() {
 
         <H2 id="tools">Tools</H2>
         <p className="mb-4 text-body text-ink-2">
-          <C>tools/list</C> returns only the tools your key may call. Call <C>get_my_limits</C> first: it says what you may do, in dollars, and why anything is
-          off.
+          Every key sees every tool. What an assistant may do <i>on its own</i> is set by its limits; anything beyond them returns an approval link for the
+          owner. Call <C>get_my_limits</C> first.
         </p>
         <div className="overflow-hidden rounded-tile border border-line bg-white">
           <table className="w-full text-left text-body">
             <thead className="bg-page text-label text-mute">
               <tr>
                 <th className="px-3 py-2 font-semibold">Tool</th>
-                <th className="px-3 py-2 font-semibold">Needs</th>
+                <th className="px-3 py-2 font-semibold">For</th>
                 <th className="hidden px-3 py-2 font-semibold sm:table-cell">What it does</th>
               </tr>
             </thead>
@@ -158,7 +176,7 @@ export default function AgentDocsPage() {
                       )}
                       <div className="mt-1 text-label text-ink-2 sm:hidden">{firstSentence(t.description)}</div>
                     </td>
-                    <td className="px-3 py-2.5 text-label whitespace-nowrap text-ink-2">{t.requires ? SCOPE_LABELS[t.requires] : "Any key"}</td>
+                    <td className="px-3 py-2.5 text-label whitespace-nowrap text-ink-2">{GROUP_LABEL[t.group]}</td>
                     <td className="hidden px-3 py-2.5 text-label text-ink-2 sm:table-cell">{firstSentence(t.description)}</td>
                   </tr>
                 );
@@ -167,9 +185,7 @@ export default function AgentDocsPage() {
           </table>
         </div>
         <p className="mt-3 text-label text-mute">
-          Calling a tool your key can't use returns <C>isError: true</C> with a sentence you can show the user, for example: "Hermes can only read the owner's
-          money; it isn't allowed to make payments. Ask the owner to turn on "{SCOPE_LABELS.prepare}" for Hermes in Agents → Hermes → Limits." Wrong argument
-          types (a string <C>"5"</C> for an amount) are refused the same way, never coerced.
+          Wrong argument types (a string <C>"5"</C> for an amount) come back as <C>isError: true</C> with a sentence the model can act on, never coerced.
         </p>
 
         <H2 id="outcomes">Outcomes and codes</H2>
@@ -205,7 +221,7 @@ export default function AgentDocsPage() {
         <ul className="list-disc space-y-1.5 pl-5 text-body text-ink-2">
           <li>60 calls a minute per assistant, counting each call in a batch; then HTTP 429 with <C>Retry-After: 60</C>. Batches hold 1 to 5 calls.</li>
           <li>Amounts are US dollars in whole cents, at least $0.01. Per-payment and daily limits are the owner's, per assistant; a wallet-wide daily ceiling and a protected amount apply to all assistants.</li>
-          <li>Payments go only to saved contacts (<C>list_contacts</C>). A new contact waits for the owner during its waiting period.</li>
+          <li>Payments go to saved contacts (<C>contactId</C>) or to any address (<C>toAddress</C>). Anyone not yet trusted in the vault is paid only with the owner's passkey.</li>
           <li>A <C>requestId</C> is unique per wallet: the same id never pays twice, even from two assistants.</li>
           <li>Access lasts 1 to 365 days, set by the owner. HTTP 401 means the key is missing, wrong or revoked; 403 means the owner froze this assistant.</li>
           <li>The owner can hide balances; reads then leave amounts out and <C>can_afford</C> answers <C>hidden: true</C>.</li>
@@ -214,7 +230,7 @@ export default function AgentDocsPage() {
         <H2 id="security">Security model</H2>
         <div className="grid gap-3 sm:grid-cols-2">
           {[
-            { icon: UserCheck, title: "The agent never gets approval links", body: "Anything over the limits goes to the owner directly (dashboard, Telegram). The reply to the agent is only needs_approval and a taskId." },
+            { icon: UserCheck, title: "An approval link can't approve", body: "Anything over the limits comes back with a link the agent hands the owner (and the owner is notified too). Opening it only shows the request; approving needs the owner's passkey." },
             { icon: Smartphone, title: "The owner approves on their phone", body: "Approval is a passkey signature over the exact payment, on a separate approval site. Signing in to the app never authorises money." },
             { icon: ShieldCheck, title: "The vault enforces limits on-chain", body: "On a live wallet each assistant pays with its own key, and the Base Sepolia vault checks the limits again. A stolen key can't exceed them; five refusals freeze it." },
             { icon: KeyRound, title: "One key per assistant", body: "Keys are shown once and stored as a hash. Making a new key or disconnecting turns the old one off at once." },

@@ -15,7 +15,7 @@ import { base64url, spkiToXY, toWebAuthnAuth } from "../../src/webauthn";
 import { sha256 as sha256Hex } from "../../../backend/convex/lib/hash";
 import { Sim } from "./sim";
 
-export const RP_ID = "agent-wallet-approve.vercel.app";
+export const RP_ID = "nudge-approve.vercel.app";
 /** Anvil's first default account: public test key, also the guardian of every eval vault. */
 export const RELAYER_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" as const;
 const DAY = 86_400_000;

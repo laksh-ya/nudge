@@ -36,7 +36,7 @@ async function accepts(ctx: MutationCtx, t: Doc<"tasks">, next: { ok?: boolean; 
 const ENROL_MINUTES = 15;
 
 function allowedRpIds() {
-  return (process.env.RP_IDS ?? "agent-wallet-approve.vercel.app,localhost").split(",").map((s) => s.trim());
+  return (process.env.RP_IDS ?? "nudge-approve.vercel.app,localhost").split(",").map((s) => s.trim());
 }
 
 async function walletOf(ctx: MutationCtx, userId: Id<"users">) {

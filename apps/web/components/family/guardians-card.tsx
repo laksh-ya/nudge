@@ -46,7 +46,13 @@ export function GuardiansCard() {
               key={g._id}
               leading={<Initial name={g.name} size={40} />}
               title={g.name}
-              sub={g.status === "active" ? "Can stop held payments and freeze your assistants" : g.code ? `Invited · code ${g.code}` : "Invite expired"}
+              sub={
+                g.status === "active"
+                  ? `Signed in as ${g.account?.name ?? "their own account"}${g.account?.email ? ` · ${g.account.email}` : ""} · can stop held payments and freeze assistants`
+                  : g.code
+                    ? `Invited · code ${g.code} · only works once, for 24 hours`
+                    : "Invite expired"
+              }
               trailing={
                 <button aria-label={`Remove ${g.name}`} className="press grid size-9 place-items-center rounded-full text-mute hover:bg-page" onClick={() => remove({ linkId: g._id })}>
                   <X className="size-4" />

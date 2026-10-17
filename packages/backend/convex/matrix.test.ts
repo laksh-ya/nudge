@@ -36,18 +36,20 @@ const SCOPES: Record<Scopes, ("read" | "prepare" | "spend" | "request")[]> = {
 type Amount = "within" | "overPerPayment" | "overDaily";
 type Case = { scopes: Scopes; amount: Amount; walletFrozen: boolean; newContact: boolean; live: boolean };
 
-/** What the rules say should happen, independent of gateway.ts. Limits: $15 a payment, $25 a day. */
-function oracle(c: Case): { throws: true } | { outcome: string; code?: string } {
-  if (c.scopes === "readOnly") return { throws: true }; // no "prepare": can't even propose
+/**
+ * What the rules say should happen, independent of gateway.ts. Limits: $15 a payment, $25 a day.
+ * Since 18 Oct: inside the limits the assistant pays on its own; anything else goes to the owner
+ * with an approval link (the assistant gets the link; approving needs the passkey). Only a frozen
+ * wallet is a hard stop. Scopes no longer hide or refuse anything: without "spend" every payment asks.
+ */
+function oracle(c: Case): { outcome: string; code?: string } {
   const reasons: string[] = [];
   if (c.walletFrozen) reasons.push("1002");
   if (!SCOPES[c.scopes].includes("spend")) reasons.push("2002");
   if (c.amount !== "within") reasons.push("2003");
   if (c.newContact) reasons.push("2006");
   if (reasons.length === 0) return { outcome: "submitted" };
-  // A frozen wallet is a hard stop; an assistant that may spend but not ask the owner is refused.
   if (c.walletFrozen) return { outcome: "refused", code: "1002" };
-  if (!SCOPES[c.scopes].includes("request") && SCOPES[c.scopes].includes("spend")) return { outcome: "refused", code: reasons[0] };
   return { outcome: "needs_approval" };
 }
 
@@ -92,10 +94,6 @@ describe("gateway decision matrix (scope x limits x frozen x new contact x live/
     const w = await world(c);
     const want = oracle(c);
     const run = () => w.t.mutation(internal.gateway.proposePayment, { agentId: w.agent, contactId: w.payee, amount: AMOUNT[c.amount], reason: "matrix" });
-    if ("throws" in want) {
-      await expect(run()).rejects.toThrow(/can only read .* "Prepare payments"/);
-      return;
-    }
     const got = await run();
     expect(got.outcome).toBe(want.outcome);
     if (want.code) expect("code" in got ? got.code : undefined).toBe(want.code);
@@ -104,6 +102,8 @@ describe("gateway decision matrix (scope x limits x frozen x new contact x live/
     if (got.outcome === "needs_approval") {
       const task = await w.t.run((ctx) => ctx.db.get(got.taskId as Id<"tasks">));
       expect(task!.state).toBe("awaiting_approval");
+      // The link is the task's own approval page, nothing more.
+      expect(got.approvalUrl).toBe(`https://nudge-approve.vercel.app/a/${task!.approvalToken}`);
     }
   });
 

@@ -57,22 +57,12 @@ async function world(scopes: Scope[], name = "Hermes") {
 
 const names = (tools: { name: string }[]) => tools.map((x) => x.name).sort();
 
-describe("tools/list is filtered by the key's permissions", () => {
-  it("a read-only key sees the read tools and get_my_limits, and no payment tools", async () => {
+describe("tools/list: every connected assistant sees every tool", () => {
+  it("a key with no spending limit still lists every tool, including payments, plans and commerce", async () => {
     const w = await world(["read"]);
-    const { body } = await w.rpc("tools/list");
-    const listed = names(body!.result.tools);
-    expect(listed).toEqual(["can_afford", "get_my_limits", "get_overview", "list_bills", "list_contacts", "spending_this_month"]);
-    for (const hidden of ["propose_payment", "get_task_status", "cancel_task", "get_mandate"]) expect(listed).not.toContain(hidden);
-  });
-
-  it("a key that may prepare payments also sees propose_payment and status tools, but no mandate until it may spend", async () => {
-    const w = await world(["read", "prepare", "request"]);
     const listed = names((await w.rpc("tools/list")).body!.result.tools);
-    expect(listed).toEqual(expect.arrayContaining(["propose_payment", "get_task_status", "cancel_task"]));
-    expect(listed).not.toContain("get_mandate");
-    const full = await world(FULL);
-    expect(names((await full.rpc("tools/list")).body!.result.tools)).toEqual(names(MCP_TOOLS));
+    expect(listed).toEqual(names(MCP_TOOLS));
+    for (const t of ["propose_payment", "list_pending", "get_plan", "set_reminder", "add_contact", "request_limits", "pay_x402", "watch_price", "get_card"]) expect(listed).toContain(t);
   });
 
   it("every listed tool has a title, read/write annotations, a closed schema and no internal fields", async () => {
@@ -85,7 +75,7 @@ describe("tools/list is filtered by the key's permissions", () => {
       expect(tool).not.toHaveProperty("requires");
     }
     const pay = MCP_TOOLS.find((x) => x.name === "propose_payment")!;
-    for (const word of ["dollars", "submitted", "held", "confirmed", "needs_approval", "refused", "duplicate", "never receive an approval link"]) expect(pay.description).toContain(word);
+    for (const word of ["dollars", "submitted", "held", "confirmed", "needs_approval", "refused", "duplicate", "approvalUrl", "passkey"]) expect(pay.description).toContain(word);
   });
 
   it("every tool in the catalog is wired to the gateway", async () => {
@@ -99,43 +89,32 @@ describe("tools/list is filtered by the key's permissions", () => {
   });
 });
 
-describe("a read-only key can't pay", () => {
-  it("calling propose_payment anyway is refused in plain words, and nothing is created", async () => {
+describe("a key without its own limit asks instead of being refused", () => {
+  it("propose_payment returns an approval link for the owner, and nothing is paid", async () => {
     const w = await world(["read"]);
     const out = await w.call("propose_payment", { contactId: w.payee, amount: 3, reason: "coffee" });
-    expect(out.isError).toBe(true);
-    const text = out.content[0]!.text;
-    expect(text).toBe('Hermes can only read the owner\'s money; it isn\'t allowed to make payments. Ask the owner to turn on "Prepare payments" for Hermes in Agents → Hermes → Limits.');
-    expect(text).not.toMatch(/permission|scope|"prepare"/);
-    expect(await w.tasks()).toHaveLength(0);
+    expect(out.isError).toBe(false);
+    expect(out.structuredContent).toMatchObject({ outcome: "needs_approval" });
+    expect(out.structuredContent.approvalUrl).toMatch(/^https:\/\/nudge-approve\.vercel\.app\/a\/.{16,}$/);
+    const [task] = await w.tasks();
+    expect(task!.state).toBe("awaiting_approval");
     expect(sent).toHaveLength(0);
   });
 
-  it("the gateway itself refuses too, whoever calls it, with the same sentence", async () => {
-    const w = await world(["read"]);
-    await expect(w.t.mutation(internal.gateway.proposePayment, { agentId: w.agent, contactId: w.payee, amount: 3, reason: "x" })).rejects.toThrow(
-      /Hermes can only read the owner's money; it isn't allowed to make payments\. Ask the owner to turn on "Prepare payments"/,
-    );
-    expect(await w.tasks()).toHaveLength(0);
+  it("it can pay someone new by address: the owner approves that with the passkey too", async () => {
+    const w = await world(FULL);
+    const out = await w.call("propose_payment", { toAddress: "0x00000000000000000000000000000000000000c3", name: "New Shop", amount: 2, reason: "a test" });
+    expect(out.structuredContent).toMatchObject({ outcome: "needs_approval" });
+    expect(out.structuredContent.reason).toMatch(/New Shop isn't a trusted contact yet/);
+    const bad = await w.call("propose_payment", { toAddress: "0x123", amount: 2, reason: "x" });
+    expect(bad.structuredContent).toMatchObject({ outcome: "refused", code: "2014" });
   });
 
-  it("status, cancel and mandate tools are refused for it as well", async () => {
+  it("status and overview work for it, with balances", async () => {
     const w = await world(["read"]);
-    for (const name of ["get_task_status", "cancel_task"]) {
-      const out = await w.call(name, { taskId: "x" });
-      expect(out.isError).toBe(true);
-      expect(out.content[0]!.text).toMatch(/Prepare payments/);
-    }
-    const mandate = await w.call("get_mandate");
-    expect(mandate.isError).toBe(true);
-    expect(mandate.content[0]!.text).toMatch(/no spending mandate.*"Pay within limits"/);
-  });
-
-  it("a key without 'See money' is told where the owner turns it on", async () => {
-    const w = await world(["prepare"]);
-    const out = await w.call("get_overview");
-    expect(out.isError).toBe(true);
-    expect(out.content[0]!.text).toMatch(/isn't allowed to see the owner's money\. Ask the owner to turn on "See money"/);
+    const o = await w.call("get_overview");
+    expect(o.isError).toBe(false);
+    expect(o.structuredContent.nudgeWallet).toMatch(/\$250\.00/);
   });
 });
 
@@ -143,13 +122,13 @@ describe("errors a model can act on", () => {
   it("get_my_limits explains what the key may do, in dollars", async () => {
     const ro = await world(["read"]);
     const mine = (await ro.call("get_my_limits")).structuredContent;
-    expect(mine).toMatchObject({ assistant: "Hermes", canSeeMoney: true, canProposePayments: false, canPayWithinLimits: false, perPaymentLimit: { amountMinor: 0, currency: "USD" } });
-    expect(mine.tools).not.toContain("propose_payment");
-    expect(mine.note).toMatch(/Prepare payments/);
+    expect(mine).toMatchObject({ assistant: "Hermes", payOnYourOwn: false, perPaymentLimit: { amountMinor: 0, currency: "USD" } });
+    expect(mine.tools).toContain("propose_payment");
+    expect(mine.note).toMatch(/approval link/);
     const full = await world(FULL);
     const limits = (await full.call("get_my_limits")).structuredContent;
-    expect(limits).toMatchObject({ canPayWithinLimits: true, perPaymentLimit: { amountMinor: 1500, display: "$15.00" }, dailyLimit: { amountMinor: 2500 }, leftToday: { amountMinor: 2100 } });
-    expect(limits.note).toMatch(/\$15\.00 each and \$25\.00 a day/);
+    expect(limits).toMatchObject({ payOnYourOwn: true, perPaymentLimit: { amountMinor: 1500, display: "$15.00" }, dailyLimit: { amountMinor: 2500 }, leftToday: { amountMinor: 2100 } });
+    expect(limits.note).toMatch(/\$15\.00 a payment and \$25\.00 a day on your own/);
   });
 
   it("an amount sent as a string is refused, not coerced, and nothing is paid", async () => {
@@ -251,8 +230,9 @@ describe("argument checks (pure)", () => {
     expect(invalidArgs(pay, [1])).toMatch(/JSON object/);
     expect(invalidArgs(pay, { contactId: "c", amount: Number.NaN, reason: "r" })).toMatch(/must be a number/);
   });
-  it("toolsFor never leaks payment tools to a read-only key", () => {
-    expect(toolsFor(["read"]).some((x) => x.name === "propose_payment")).toBe(false);
+  it("toolsFor lists every tool, without internal fields", () => {
+    expect(toolsFor(["read"]).map((x) => x.name)).toEqual(MCP_TOOLS.map((x) => x.name));
+    expect(toolsFor(["read"])[0]).not.toHaveProperty("group");
   });
 });
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
-import { Activity, Bell, Bot, ChartPie, ChevronRight, HeartHandshake, House, Menu, MessageCircle, Settings, ShieldCheck, Snowflake, Users, Wallet } from "lucide-react";
+import { Activity, Bell, Bot, ChartPie, ChevronRight, HeartHandshake, House, Menu, MessageCircle, Settings, ShieldCheck, Snowflake, Users, Wallet, CalendarRange } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -11,10 +11,13 @@ import { useDemo } from "@/lib/demo";
 import { Initial, Wordmark } from "./brand";
 import { Button, Sheet } from "./ui";
 
+/** The first MAIN_COUNT items are everyday screens; the rest sit under "More". */
+const MAIN_COUNT = 6;
 const NAV = [
   { href: "/", label: "Home", icon: House },
   { href: "/assistant", label: "Assistant", icon: MessageCircle },
   { href: "/money", label: "Money", icon: ChartPie },
+  { href: "/plan", label: "Plan", icon: CalendarRange },
   { href: "/wallet", label: "Wallet", icon: Wallet },
   { href: "/agents", label: "Agents", icon: Bot },
   { href: "/family", label: "Family", icon: Users },
@@ -74,21 +77,26 @@ function Sidebar() {
       <Link href="/" className="flex h-16 items-center px-6">
         <Wordmark />
       </Link>
-      <nav className="flex-1 space-y-0.5 px-3 pt-2">
-        {NAV.map(({ href, label, icon: Icon }) => {
+      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 pt-2">
+        {NAV.map(({ href, label, icon: Icon }, i) => {
           const on = active(path, href);
+          // The everyday screens first; the rest under a quieter "More" label.
+          const more = i >= MAIN_COUNT;
           return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                "flex h-10 items-center gap-3 rounded-btn px-3 text-body font-medium transition-colors",
-                on ? "bg-sky font-semibold text-navy" : "text-ink-2 hover:bg-page hover:text-ink",
-              )}
-            >
-              <Icon className="size-[18px]" strokeWidth={on ? 2.2 : 1.8} />
-              {label}
-            </Link>
+            <div key={href}>
+              {i === MAIN_COUNT && <div className="px-3 pt-4 pb-1 text-[11px] font-semibold tracking-wide text-mute uppercase">More</div>}
+              <Link
+                href={href}
+                className={cn(
+                  "flex items-center gap-3 rounded-btn px-3 font-medium transition-colors",
+                  more ? "h-9 text-label" : "h-10 text-body",
+                  on ? "bg-sky font-semibold text-navy" : "text-ink-2 hover:bg-page hover:text-ink",
+                )}
+              >
+                <Icon className={more ? "size-4" : "size-[18px]"} strokeWidth={on ? 2.2 : 1.8} />
+                {label}
+              </Link>
+            </div>
           );
         })}
       </nav>

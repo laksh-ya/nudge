@@ -27,7 +27,7 @@ import { ago, dueLabel, formatMoney } from "@/lib/format";
 import { AgentMark } from "@/components/brand";
 import { ActivityIcon } from "@/components/activity-icon";
 import { SetupCard } from "@/components/setup-card";
-import { JudgeTour } from "@/components/judge-tour";
+import { DemoTour } from "@/components/demo-tour";
 import { ButtonLink, Card, Chip, Divided, IconTile, Meter, Money, Row, Skeleton, TextLink } from "@/components/ui";
 
 const ACTIONS = [
@@ -149,7 +149,7 @@ export default function Home() {
           </Link>
         </section>
 
-        {me?.demo && <JudgeTour />}
+        {me?.demo && <DemoTour />}
 
         <SetupCard />
 

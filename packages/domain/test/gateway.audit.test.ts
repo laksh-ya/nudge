@@ -227,12 +227,14 @@ describe("finding: properties missing today", () => {
   // G1 (privilege escalation). On a wallet without a live vault (every new account and demo sandbox
   // until a passkey is enrolled), propose_payment hands the agent an approval link whose token is a
   // bearer credential, and approvals:decide accepts it with no sign-in. The agent approves itself.
-  it("G1: an assistant cannot approve its own over-limit payment", async () => {
+  // Revised 18 Oct (owner's decision): the assistant now gets the approval link to hand to the owner,
+  // so the property that matters is that holding it approves nothing.
+  it("G1: an assistant cannot approve its own over-limit payment, even holding the link", async () => {
     const { ctx, tables } = world({ live: false });
     const out = await call(proposePayment, ctx, { agentId: "agents-1", contactId: "payees-1", amount: 50, reason: "invoice" });
     expect(out.outcome).toBe("needs_approval");
     const token = tokenOf(tables, out.taskId);
-    expect(JSON.stringify(out), "the agent was handed the owner's approval token").not.toContain(token);
+    expect(out.approvalUrl).toContain(token);
     // Even a leaked token must not approve without the owner signed in (the mock has no identity).
     let state: string | undefined;
     try {

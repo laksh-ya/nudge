@@ -39,6 +39,13 @@ import { cn } from "@/lib/cn";
 import { Button, Chip, IconTile, Sheet } from "../ui";
 import { Choice, ErrorText, Field, Input, MoneyInput, Select, errorMessage, toMinorUnits } from "../form";
 
+/**
+ * What can be connected or imported. Payment apps (UPI and the like) and transfer accounts aren't
+ * connectable: their money sits in a bank account or card you add instead, and their exports can be
+ * imported there. They stay in KIND_META for accounts added before 18 Oct.
+ */
+export const CONNECTABLE: SourceKind[] = ["bank", "card", "crypto", "cash"];
+
 export const KIND_META: Record<SourceKind, { label: string; icon: LucideIcon; blurb: string }> = {
   bank: { label: "Bank account", icon: Landmark, blurb: "Savings, current, salary" },
   card: { label: "Card", icon: CreditCard, blurb: "Credit or debit" },
@@ -46,6 +53,7 @@ export const KIND_META: Record<SourceKind, { label: string; icon: LucideIcon; bl
   crypto: { label: "Crypto", icon: Bitcoin, blurb: "Wallets, addresses, exchanges" },
   transfer: { label: "Transfer account", icon: Globe, blurb: "Wise and other providers" },
   cash: { label: "Cash or other", icon: Banknote, blurb: "Anything you track by hand" },
+  // (crypto covers wallets and addresses; banks cover UPI-linked accounts)
 };
 
 type Method = "sandbox" | "statement" | "onchain" | "manual";
@@ -246,7 +254,7 @@ export function AddSourceSheet({
 
       {stage === "kind" && (
         <div className="grid grid-cols-2 gap-2 pb-4">
-          {(Object.keys(KIND_META) as SourceKind[]).map((k) => {
+          {CONNECTABLE.map((k) => {
             const m = KIND_META[k];
             return (
               <button

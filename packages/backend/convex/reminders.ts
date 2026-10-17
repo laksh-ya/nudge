@@ -5,7 +5,7 @@ import type { MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { requireViewer, viewer } from "./lib/auth";
-import { goalPlan, telegramLinked, wantsTelegram } from "./lib/assist";
+import { createReminder, goalPlan, telegramLinked, wantsTelegram } from "./lib/assist";
 import { DAY, MINUTE, afterQuietHours, daysUntil, dateLabel, inQuietHours, nextRepeat, safeTz, whenWords } from "./lib/schedule";
 
 /**
@@ -181,6 +181,23 @@ export const list = query({
     const tz = safeTz(user.timezone);
     const rows = await ctx.db.query("reminders").withIndex("by_user", (q) => q.eq("userId", user._id).eq("status", "scheduled")).take(100);
     return rows.map((r) => ({ _id: r._id, text: r.text, dueAt: r.dueAt, repeat: r.repeat ?? null, when: dateLabel(r.dueAt, tz, true) }));
+  },
+});
+
+/** A reminder the owner sets from the Plan screen (the same row a chat or an agent creates). */
+export const create = mutation({
+  args: { text: v.string(), dueAt: v.number(), repeat: v.optional(v.union(v.literal("monthly"), v.literal("weekly"))), obligationId: v.optional(v.id("obligations")) },
+  handler: async (ctx, { text, dueAt, repeat, obligationId }) => {
+    const user = await requireViewer(ctx);
+    const what = text.trim().replace(/\s+/g, " ").slice(0, 140);
+    if (!what) throw new ConvexError("Say what to remind you about");
+    if (!Number.isFinite(dueAt) || dueAt < Date.now() - 60_000) throw new ConvexError("Pick a time in the future");
+    if (dueAt > Date.now() + 400 * DAY) throw new ConvexError("Up to about a year ahead");
+    if (obligationId) {
+      const b = await ctx.db.get(obligationId);
+      if (!b || b.userId !== user._id) throw new ConvexError("No such bill");
+    }
+    return await createReminder(ctx, user, { text: what, dueAt, repeat, obligationId });
   },
 });
 

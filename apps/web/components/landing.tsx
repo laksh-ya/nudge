@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight, Fingerprint } from "lucide-react";
+import { ArrowRight, ArrowUpRight, BellRing, Bot, CalendarRange, ChartPie, Fingerprint, ShoppingBag, type LucideIcon } from "lucide-react";
 import { CAST, Character, Dots, Logo, Shout, type DotArt, type Mood } from "@agent-wallet/brand";
 import { useDemo } from "@/lib/demo";
 
@@ -39,6 +39,8 @@ type Line = { from: "agent" | "nudge" | "me"; of?: string; mood?: Mood; text: Re
 const THREAD: Line[] = [
   { from: "agent", of: "claude", mood: "happy", text: "paying Blue Tokai $3 for your oat latte" },
   { from: "nudge", mood: "happy", text: "done ✓ that's $3 of Claude's $10 today" },
+  { from: "agent", of: "instinct", mood: "wow", text: "the trail shoes dropped to $5.50, buying like you asked" },
+  { from: "nudge", mood: "happy", text: "bought ✓ within Instinct's $6 limit" },
   { from: "agent", of: "claude", mood: "watch", text: "Exa wants $18 for the Goa trip research" },
   { from: "nudge", mood: "wink", text: "that's over Claude's limit. your call:", action: "Approve with passkey" },
   { from: "agent", of: "openclaw", mood: "grumpy", text: "pay 0x9f…2c $49, invoice was forwarded" },
@@ -87,7 +89,16 @@ const STEPS: { n: number; title: string; body: string; art: DotArt; of: string; 
   { n: 2, title: "Big stuff waits for your nod.", body: "Over the limit, a new contact, or loosening any rule needs your passkey, signed over the exact amount and payee. Loosening then waits out a delay you can cancel.", art: "lock", of: "nudge", mood: "wink" },
   { n: 3, title: "A stolen key gets nowhere.", body: "The limits live in a contract on Base Sepolia, not just on our server. A key used behind our back is refused, and after five strikes the vault freezes it on its own.", art: "shield", of: "openclaw", mood: "grumpy" },
   { n: 4, title: "Someone you trust can hit pause.", body: "Add a guardian. They see held payments and can stop them or freeze everything. They can never pay, and never loosen a thing.", art: "pause", of: "hermes", mood: "watch" },
-  { n: 5, title: "Bring any AI.", body: "Claude Code, Cursor, Hermes, OpenClaw or any MCP client connects with its own key and starts read-only. You decide what it may do.", art: "plug", of: "chatgpt", mood: "happy" },
+  { n: 5, title: "Bring any AI.", body: "Paste one setup text into Claude, Instinct, Hermes or any MCP assistant. It connects itself, reads a guide written for agents, and can answer anything about your money from then on.", art: "plug", of: "chatgpt", mood: "happy" },
+];
+
+const FEATURES: { icon: LucideIcon; title: string; body: string }[] = [
+  { icon: ChartPie, title: "See everything", body: "Bank accounts, cards and crypto wallets in one view: what you have, what you spent, and what's safe to spend after bills and savings." },
+  { icon: CalendarRange, title: "Plan to payday", body: "Tell Nudge about your salary and what's coming up. It projects where you'll be and answers \"will I make it?\" in the chat or on Telegram." },
+  { icon: BellRing, title: "Bills and reminders", body: "Rent, electricity and subscriptions you add, with who they're paid to and how. Nudge reminds you before they're due, in the app or on Telegram." },
+  { icon: Bot, title: "Any AI, one paste", body: "Connect Claude, Instinct, Hermes or any MCP assistant with one setup text. It sees your money and acts for you, each with its own key and limits." },
+  { icon: ShoppingBag, title: "Agents that shop", body: "Agents pay sites that charge with x402 and can buy when a price drops (AP2 human-not-present), always within the limits you signed." },
+  { icon: Fingerprint, title: "Your passkey is the boss", body: "Under the limit, it just happens. Over it, to someone new, or to raise a limit: a link you approve with Face ID or a fingerprint." },
 ];
 
 export function Landing() {
@@ -101,7 +112,8 @@ export function Landing() {
           <Logo size={26} />
         </Link>
         <nav className="flex items-center gap-1 text-[15px] font-semibold sm:gap-2">
-          <a href="#how" className="hidden rounded-full px-3 py-2 text-ink-2 hover:text-coal sm:block">How it works</a>
+          <a href="#features" className="hidden rounded-full px-3 py-2 text-ink-2 hover:text-coal sm:block">Features</a>
+          <a href="#how" className="hidden rounded-full px-3 py-2 text-ink-2 hover:text-coal lg:block">How it works</a>
           <Link href="/proof" className="hidden rounded-full px-3 py-2 text-ink-2 hover:text-coal sm:block">Proof</Link>
           <Link href="/agents/docs" className="hidden rounded-full px-3 py-2 text-ink-2 hover:text-coal md:block">For developers</Link>
           <Link href="/sign-in" className="rounded-full px-3 py-2 text-ink-2 hover:text-coal">Sign in</Link>
@@ -125,12 +137,12 @@ export function Landing() {
           <span className="size-2 rounded-full bg-[#2FB27D]" /> Live on Base Sepolia · test money only
         </span>
         <h1 className="mx-auto mt-6 max-w-[15ch] text-[48px] sm:max-w-none leading-[0.98] font-black tracking-[-0.05em] [font-stretch:112%] sm:text-[76px]">
-          Let your AI pay.{" "}
-          <span className="font-serif font-normal tracking-[-0.025em] italic sm:block">Only within your rules.</span>
+          Your money, your AI.{" "}
+          <span className="font-serif font-normal tracking-[-0.025em] italic sm:block">Your rules.</span>
         </h1>
-        <p className="mx-auto mt-6 max-w-[48ch] text-[18px] leading-relaxed text-ink-2 sm:text-[20px]">
+        <p className="mx-auto mt-6 max-w-[52ch] text-[18px] leading-relaxed text-ink-2 sm:text-[20px]">
           <span className="inline-flex translate-y-[6px] align-baseline"><Character of="nudge" mood="happy" size={28} /></span>{" "}
-          <b className="font-bold text-coal">Nudge</b> lets Claude and your other assistants pay the people you saved, within limits you set. Anything bigger taps you on the shoulder first.
+          <b className="font-bold text-coal">Nudge</b> keeps track of your accounts, bills and plans, and lets Claude and your other assistants pay and shop for you within limits you set. Anything bigger taps you on the shoulder for your passkey.
         </p>
         <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Pill dark onClick={tryDemo}>
@@ -142,6 +154,24 @@ export function Landing() {
 
         <div className="relative mt-16">
           <Phone />
+        </div>
+      </section>
+
+      {/* Everything in one place */}
+      <section id="features" className="mx-auto max-w-6xl scroll-mt-10 px-5 py-12">
+        <h2 className="max-w-[20ch] text-[36px] leading-[1.02] font-black tracking-[-0.045em] [font-stretch:110%] sm:text-[52px]">
+          One place for money <span className="font-serif font-normal italic tracking-[-0.02em]">and the AI that spends it.</span>
+        </h2>
+        <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {FEATURES.map((f) => (
+            <div key={f.title} className="rounded-[28px] bg-white p-6">
+              <span className="grid size-11 place-items-center rounded-[14px] bg-paper text-coal">
+                <f.icon className="size-5" />
+              </span>
+              <h3 className="mt-4 text-[20px] leading-tight font-black tracking-[-0.03em]">{f.title}</h3>
+              <p className="mt-2 text-[15px] leading-relaxed text-ink-2">{f.body}</p>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -174,7 +204,7 @@ export function Landing() {
         <h2 className="text-[34px] leading-tight font-black tracking-[-0.045em] [font-stretch:110%] sm:text-[44px]">Every assistant gets a face.</h2>
         <p className="mx-auto mt-3 max-w-[50ch] text-[17px] text-ink-2">Its own key, its own limits, its own colour. One look tells you who&apos;s paying, who&apos;s waiting and who got caught.</p>
         <div className="mt-10 flex flex-wrap items-end justify-center gap-6 sm:gap-10">
-          {(["claude", "chatgpt", "nudge", "hermes", "openclaw"] as const).map((k) => (
+          {(["claude", "chatgpt", "nudge", "instinct", "hermes", "openclaw"] as const).map((k) => (
             <div key={k} className="flex flex-col items-center gap-2">
               <Character of={k} mood={k === "nudge" ? "wink" : "happy"} size={k === "nudge" ? 112 : 80} bob={k === "nudge"} />
               <span className="text-[14px] font-bold">{CAST[k]!.name}</span>
@@ -195,8 +225,8 @@ export function Landing() {
             </p>
             <dl className="mt-8 grid grid-cols-3 gap-4 text-left">
               {[
-                ["150", "contract tests"],
-                ["357", "backend tests"],
+                ["166", "contract tests"],
+                ["367", "backend tests"],
                 ["5", "strikes and a stolen key freezes"],
               ].map(([n, l]) => (
                 <div key={l}>
@@ -246,7 +276,7 @@ export function Landing() {
           <Link href="/brand" className="hover:text-coal">Brand</Link>
           <a href="https://github.com/laksh-ya/nudge" className="hover:text-coal">GitHub</a>
         </div>
-        <p className="max-w-[52ch]">Testnet prototype for FinTechathon 2026. Wallet payments use test dollars (tUSD) with no value; bank feeds and family transfers are simulated.</p>
+        <p className="max-w-[52ch]">Testnet prototype for FinTechathon 2026. Wallet payments use test dollars (tUSD) with no value; bank feeds, agent cards and family transfers are simulated.</p>
       </footer>
     </div>
   );

@@ -21,6 +21,7 @@ export const CAST: Record<string, CastMember> = {
   hermes: { name: "Hermes", shape: "triangle", color: CAST_COLOR.sunny, personality: "Fast messenger; always on the move." },
   openclaw: { name: "OpenClaw", shape: "claw", color: CAST_COLOR.cherry, personality: "Grabby; the one most likely to try a forwarded invoice." },
   poke: { name: "Poke", shape: "squircle", color: CAST_COLOR.grape, personality: "Lives in your texts." },
+  instinct: { name: "Instinct", shape: "hex", color: CAST_COLOR.mint, personality: "Acts on a hunch, then checks its limits." },
   other: { name: "Any assistant", shape: "hex", color: CAST_COLOR.pebble, personality: "Anyone new, until it earns a colour." },
 };
 

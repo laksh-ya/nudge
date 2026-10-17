@@ -26,8 +26,8 @@ describe("connecting any assistant", () => {
     expect(codex).not.toBe(instinct);
     const rows = await t.run((ctx) => Promise.all([ctx.db.get(codex), ctx.db.get(instinct)]));
     expect(rows.map((r) => [r!.name, r!.provider, r!.status, r!.scopes])).toEqual([
-      ["Codex", "other", "pending", ["read"]],
-      ["Instinct", "other", "pending", ["read"]],
+      ["Codex", "other", "pending", ["read", "prepare", "request"]],
+      ["Instinct", "other", "pending", ["read", "prepare", "request"]],
     ]);
     const k1 = await o.mutation(api.gateway.issueToken, { agentId: codex });
     const k2 = await o.mutation(api.gateway.issueToken, { agentId: instinct });

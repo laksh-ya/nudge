@@ -38,12 +38,14 @@ export const state = query({
         timezone: user.timezone,
         incomeDay: user.incomeDay,
         priorities: user.priorities ?? [],
-        autonomy: user.autonomy ?? "draft",
+        autonomy: user.autonomy === "draft" || !user.autonomy ? "approve" : user.autonomy,
         reminderChannel: user.reminderChannel ?? "app",
-        quietFrom: user.quietFrom ?? "22:00",
-        quietTo: user.quietTo ?? "08:00",
+        // No quiet hours until the owner asks for them ("" = off).
+        quietFrom: user.quietFrom ?? "",
+        quietTo: user.quietTo ?? "",
         reminderLeadDays: user.reminderLeadDays ?? 2,
         privateReminders: user.privateReminders ?? false,
+        assistantModel: (user.assistantModel ?? "auto") as "auto" | "basic" | "claude-opus-5-5" | "claude-sonnet-5-5" | "claude-haiku-5-5",
         monthlyBudgetMinor: user.monthlyBudgetMinor,
         emergencyMinor: user.emergencyMinor,
         step: user.onboardingStep ?? (user.onboardedAt ? null : "you"),
@@ -67,7 +69,8 @@ export const state = query({
             pending: link.pendingExternalId ? (link.pendingName || "A new chat") : null,
           }
         : null,
-      bot: process.env.TELEGRAM_BOT_USERNAME ?? null,
+      // The bot every account links to; the env var overrides it for another deployment.
+      bot: process.env.TELEGRAM_BOT_USERNAME ?? "heynudge_bot",
     };
   },
 });
@@ -163,12 +166,17 @@ export const saveAssistant = mutation({
     quietTo: v.string(),
     reminderLeadDays: v.number(),
     privateReminders: v.optional(v.boolean()),
+    /** Which model answers in the app and on Telegram; "basic" = rules only. */
+    assistantModel: v.optional(v.union(v.literal("auto"), v.literal("basic"), v.literal("claude-opus-5-5"), v.literal("claude-sonnet-5-5"), v.literal("claude-haiku-5-5"))),
   },
   handler: async (ctx, args) => {
     const user = await requireViewer(ctx);
-    if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(args.quietFrom) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(args.quietTo)) throw new ConvexError("Use HH:MM");
+    const hhmm = (s: string) => s === "" || /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(s);
+    if (!hhmm(args.quietFrom) || !hhmm(args.quietTo)) throw new ConvexError("Use HH:MM, or leave quiet hours off");
+    if ((args.quietFrom === "") !== (args.quietTo === "")) throw new ConvexError("Set both quiet-hours times, or turn quiet hours off");
     if (!Number.isInteger(args.reminderLeadDays) || args.reminderLeadDays < 0 || args.reminderLeadDays > 14) throw new ConvexError("Pick 0 to 14 days");
-    await ctx.db.patch(user._id, args);
+    const { assistantModel, ...rest } = args;
+    await ctx.db.patch(user._id, { ...rest, ...(assistantModel ? { assistantModel: assistantModel === "auto" ? undefined : assistantModel } : {}) });
     const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
     await ownAssistant(ctx, user, args.autonomy, wallet);
   },
@@ -213,7 +221,7 @@ export const setupWallet = mutation({
       });
     }
     const fresh = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
-    await ownAssistant(ctx, user, user.autonomy ?? "draft", fresh);
+    await ownAssistant(ctx, user, user.autonomy ?? "approve", fresh);
     return null;
   },
 });
@@ -271,7 +279,7 @@ const MAX_ASSISTANTS = 12;
 
 export const addAssistant = mutation({
   args: {
-    provider: v.union(v.literal("claude"), v.literal("chatgpt"), v.literal("openclaw"), v.literal("hermes"), v.literal("poke"), v.literal("other")),
+    provider: v.union(v.literal("claude"), v.literal("chatgpt"), v.literal("openclaw"), v.literal("hermes"), v.literal("poke"), v.literal("instinct"), v.literal("other")),
     /** Required for "other": what the owner calls it (Codex, Gemini CLI, Instinct, ...). */
     name: v.optional(v.string()),
   },
@@ -289,17 +297,19 @@ export const addAssistant = mutation({
       if (found) return found._id;
     }
     if (live.length >= MAX_ASSISTANTS) throw new ConvexError(`Up to ${MAX_ASSISTANTS} assistants. Disconnect one first.`);
-    const names = { claude: "Claude", chatgpt: "ChatGPT", openclaw: "OpenClaw", hermes: "Hermes", poke: "Poke", other: label };
+    const names = { claude: "Claude", chatgpt: "ChatGPT", openclaw: "OpenClaw", hermes: "Hermes", poke: "Poke", instinct: "Instinct", other: label };
     return await ctx.db.insert("agents", {
       userId: user._id,
       name: names[provider],
       provider,
       status: "pending",
-      scopes: ["read"],
+      // It can see the money and ask for anything; every payment needs the owner's approval until
+      // the owner gives it limits to pay on its own (Agents → Limits, signed with the passkey).
+      scopes: ["read", "prepare", "request"],
       dailyCapMinor: 0,
       perPaymentMinor: 0,
       spentTodayMinor: 0,
-      hidesBalances: true,
+      hidesBalances: false,
       connectedAt: Date.now(),
       expiresAt: Date.now() + 30 * DAY,
     });

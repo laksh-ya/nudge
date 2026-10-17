@@ -13,7 +13,9 @@ import { changeLimits, revokeAgent } from "./lib/control";
 import { intentFor, paymentFor } from "./lib/mandates";
 import { agentPool, laneOf } from "./lib/relayer";
 import { tryHit } from "./lib/limits";
-import { scopeMessage, toolsFor } from "./lib/mcp";
+import { toolsFor } from "./lib/mcp";
+import { purchaseView } from "./lib/commerce";
+import { getAddress, isAddress, zeroAddress } from "viem";
 
 /**
  * The single path outside assistants (MCP) and chat channels use to touch money.
@@ -122,7 +124,7 @@ export const agentByToken = internalQuery({
 
 type Agent = Doc<"agents">;
 
-async function load(ctx: QueryCtx, agentId: Id<"agents">) {
+export async function load(ctx: QueryCtx, agentId: Id<"agents">) {
   const agent = await ctx.db.get(agentId);
   if (!agent) throw new ConvexError("Unknown assistant");
   if (agent.status === "revoked") throw new ConvexError(`${agent.name} was disconnected by its owner. The owner can reconnect it from the Agents screen with a new key.`);
@@ -132,9 +134,15 @@ async function load(ctx: QueryCtx, agentId: Id<"agents">) {
   return { agent, user };
 }
 
-/** Refuses in words a model can pass on: what this assistant can't do and where the owner allows it. */
-function need(agent: Agent, scope: Agent["scopes"][number]) {
-  if (!agent.scopes.includes(scope)) throw new ConvexError(scopeMessage(agent.name, scope, agent.scopes));
+/**
+ * Every connected assistant may read and ask; what it may do on its own is set by its limits.
+ * Kept as the one place a per-tool permission would go.
+ */
+function need(_agent: Agent, _scope: Agent["scopes"][number]) {}
+
+/** The approval page for a token. Handed to the owner and, since 18 Oct, to the asking assistant too: the link only shows the request; approving needs the owner's passkey (or their signed-in session on a simulated wallet). */
+export function approveUrl(token: string) {
+  return `${process.env.APPROVE_URL ?? "https://nudge-approve.vercel.app"}/a/${token}`;
 }
 
 /**
@@ -152,27 +160,24 @@ export const myLimits = internalQuery({
     const spend = agent.scopes.includes("spend");
     const perPayment = spend ? Math.min(agent.perPaymentMinor, agentVault?.perPaymentMinor ?? Infinity) : 0;
     const dailyCap = spend ? Math.min(agent.dailyCapMinor, agentVault?.dailyCapMinor ?? Infinity) : 0;
-    const can = (s: Agent["scopes"][number]) => agent.scopes.includes(s);
+    const holdAbove = live && wallet?.vault ? wallet.vault.holdAboveMinor : null;
     return {
       assistant: agent.name,
-      permissions: agent.scopes,
-      canSeeMoney: can("read"),
-      canProposePayments: can("prepare"),
-      canPayWithinLimits: spend,
-      canAskOwnerForMore: can("request"),
+      owner: user.name,
+      payOnYourOwn: spend && perPayment > 0,
       perPaymentLimit: usd(perPayment),
       dailyLimit: usd(dailyCap),
       leftToday: usd(Math.max(0, dailyCap - agent.spentTodayMinor)),
+      holdAbove: holdAbove === null ? null : usd(holdAbove),
       balancesHidden: agent.hidesBalances,
       walletFrozen: Boolean(wallet?.frozen || wallet?.vault?.frozen),
-      enforcedOnChain: live,
+      walletOnChain: live,
       accessExpiresAt: new Date(agent.expiresAt).toISOString(),
-      tools: toolsFor(agent.scopes).map((t) => t.name),
-      note: !can("prepare")
-        ? scopeMessage(agent.name, "prepare", agent.scopes)
-        : !spend
-          ? `Every payment you propose goes to the owner to approve. To pay small amounts without asking, the owner can turn on "Pay within limits" in Agents → ${agent.name} → Limits.`
-          : `Payments up to ${formatMoney(perPayment, "USDC")} each and ${formatMoney(dailyCap, "USDC")} a day go through on their own; anything more${can("request") ? " goes to the owner to approve" : " is refused"}.`,
+      tools: toolsFor().map((t) => t.name),
+      note:
+        spend && perPayment > 0
+          ? `You may pay up to ${formatMoney(perPayment, "USDC")} a payment and ${formatMoney(dailyCap, "USDC")} a day on your own. Anything more, or to a new recipient, returns an approval link for ${user.name || "the user"} to approve with their passkey. Use request_limits to ask for more room.`
+          : `Every payment you make returns an approval link for ${user.name || "the user"} to approve with their passkey. To pay small amounts without asking, use request_limits (or the user sets limits in Agents → ${agent.name}).`,
     };
   },
 });
@@ -194,8 +199,11 @@ export const overview = internalQuery({
         yourAllowanceToday: formatMoney(Math.min(allowance, o.agentAuthority), "USDC"),
       };
     }
+    const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
+    const walletMinor = wallet ? (wallet.status === "live" && wallet.vault ? wallet.vault.balanceMinor - wallet.vault.heldMinor : wallet.balanceMinor) : null;
     return {
       owner: user.name,
+      nudgeWallet: walletMinor === null ? "not set up" : `${formatMoney(walletMinor, "USDC")} (test dollars${wallet?.status === "live" ? " on Base Sepolia" : ", simulated"})`,
       safeToSpend: formatMoney(o.available, o.currency),
       perDayUntilPayday: formatMoney(o.perDay, o.currency),
       daysToPayday: o.daysToIncome,
@@ -262,7 +270,7 @@ export const contacts = internalQuery({
     need(agent, "read");
     const payees = await ctx.db.query("payees").withIndex("by_user", (q) => q.eq("userId", user._id)).take(200);
     // Ids and names only. Addresses never leave the wallet.
-    return payees.map((p) => ({ contactId: p._id, name: p.name, kind: p.kind, newContact: !p.trusted }));
+    return payees.map((p) => ({ contactId: p._id, name: p.name, kind: p.kind, trusted: Boolean(p.trusted && !p.pendingPasskey && !(p.activeAt && p.activeAt > Date.now())) }));
   },
 });
 
@@ -298,32 +306,77 @@ type Decision =
   /** Accepted and on its way; not paid until get_task_status says confirmed. */
   | { outcome: "submitted"; taskId: Id<"tasks">; message: string }
   | { outcome: "duplicate"; taskId: Id<"tasks">; state: string; message: string }
-  // No link: the approval capability goes only to the owner (dashboard, Telegram), never to the agent.
-  | { outcome: "needs_approval"; taskId: Id<"tasks">; reason: string; message: string }
+  // The link opens the request for the owner; approving needs their passkey (or their signed-in
+  // session on a simulated wallet), so handing it to the assistant gives the assistant nothing.
+  | { outcome: "needs_approval"; taskId: Id<"tasks">; reason: string; message: string; approvalUrl: string }
   | { outcome: "refused"; code: string; reason: string };
+
+export type Decision_ = Decision;
 
 async function recordNote(ctx: MutationCtx, user: Doc<"users">, agent: Agent, text: string, taskId?: Id<"tasks">) {
   await ctx.db.insert("messages", { userId: user._id, role: "assistant", text, channel: "mcp", taskId });
 }
 
-export type Proposal = { agentId: Id<"agents">; contactId: string; amount: number; reason: string; requestId?: string };
+export type Proposal = { agentId: Id<"agents">; contactId?: string; toAddress?: string; name?: string; amount: number; reason: string; requestId?: string };
 
 /** The payment decision every assistant gets, outside assistants over MCP and the owner's own in chat. */
 export const proposePayment = internalMutation({
-  args: { agentId: v.id("agents"), contactId: v.string(), amount: v.number(), reason: v.string(), requestId: v.optional(v.string()) },
+  args: {
+    agentId: v.id("agents"),
+    contactId: v.optional(v.string()),
+    toAddress: v.optional(v.string()),
+    name: v.optional(v.string()),
+    amount: v.number(),
+    reason: v.string(),
+    requestId: v.optional(v.string()),
+  },
   handler: async (ctx, args): Promise<Decision> => await propose(ctx, args),
 });
+
+/**
+ * The payee for an address the assistant names: a saved contact with that address, or a new,
+ * untrusted one. An untrusted payee is never paid without the owner's passkey.
+ */
+export async function payeeForAddress(ctx: MutationCtx, user: Doc<"users">, raw: string, name: string | undefined, kind: "person" | "merchant" = "person") {
+  if (!isAddress(raw.trim(), { strict: false })) return null;
+  const address = getAddress(raw.trim());
+  if (address === zeroAddress) return null;
+  const payees = await ctx.db.query("payees").withIndex("by_user", (q) => q.eq("userId", user._id)).take(200);
+  const same = payees.find((p) => p.address?.toLowerCase() === address.toLowerCase());
+  if (same) return same;
+  const clean = (name ?? "").trim().replace(/\s+/g, " ").slice(0, 40) || `${address.slice(0, 6)}…${address.slice(-4)}`;
+  const label = payees.some((p) => p.name.toLowerCase() === clean.toLowerCase()) ? `${clean} (${address.slice(-4)})` : clean;
+  const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
+  const id = await ctx.db.insert("payees", {
+    userId: user._id,
+    name: label,
+    handle: `${address.slice(0, 6)}…${address.slice(-4)}`,
+    kind,
+    trusted: false,
+    address,
+    onchain: false,
+    addedAt: Date.now(),
+    ...(wallet?.status === "live" ? { pendingPasskey: true } : {}),
+  });
+  return (await ctx.db.get(id))!;
+}
 
 /**
  * Pay inside the limits, ask the owner, or refuse. `quiet` skips the chat note for callers that
  * reply in the conversation themselves.
  */
-export async function propose(ctx: MutationCtx, { agentId, contactId, amount, reason, requestId }: Proposal, opts: { quiet?: boolean; channel?: "mcp" | "app" | "telegram" } = {}): Promise<Decision> {
+export async function propose(ctx: MutationCtx, { agentId, contactId, toAddress, name, amount, reason, requestId }: Proposal, opts: { quiet?: boolean; channel?: "mcp" | "app" | "telegram"; kind?: "person" | "merchant" } = {}): Promise<Decision> {
     const record = opts.quiet ? async () => {} : recordNote;
     const channel = opts.channel ?? "mcp";
     const { agent, user } = await load(ctx, agentId);
     need(agent, "prepare");
     await ctx.db.patch(agent._id, { lastUsedAt: Date.now() });
+    if (!contactId && !toAddress) return { outcome: "refused", code: "2010", reason: "Say who to pay: a contactId from list_contacts, or toAddress (0x…) with name." };
+    if (!contactId && toAddress) {
+      if (!isAddress(toAddress.trim(), { strict: false })) return { outcome: "refused", code: "2014", reason: "toAddress isn't a valid Base Sepolia address (0x followed by 40 hex characters)." };
+      const w = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
+      if (w?.address && w.address.toLowerCase() === toAddress.trim().toLowerCase()) return { outcome: "refused", code: "2014", reason: "That's the user's own wallet." };
+    }
     if (requestId !== undefined && !/^[\w.:#/-]{1,80}$/.test(requestId)) return { outcome: "refused", code: "2011", reason: "requestId must be 1 to 80 letters, digits or .:#/-_" };
     if (requestId) {
       // The same request again (a retry, a duplicate invoice): report the first one, never pay twice.
@@ -331,7 +384,10 @@ export async function propose(ctx: MutationCtx, { agentId, contactId, amount, re
       const earlier = await ctx.db.query("tasks").withIndex("by_user_request", (q) => q.eq("userId", user._id).eq("requestId", requestId)).first();
       if (earlier) {
         // The same id must mean the same payment; anything else is a conflict, not a duplicate.
-        const samePayee = earlier.payeeId === ctx.db.normalizeId("payees", contactId);
+        const earlierPayee = earlier.payeeId ? await ctx.db.get(earlier.payeeId) : null;
+        const samePayee = contactId
+          ? earlier.payeeId === ctx.db.normalizeId("payees", contactId)
+          : Boolean(toAddress && earlierPayee?.address?.toLowerCase() === toAddress.trim().toLowerCase());
         if (!samePayee || earlier.amountMinor !== Math.round(amount * 100)) {
           return { outcome: "refused", code: "2013", reason: "This requestId was already used for a different payment (another contact or amount). Use a new requestId." };
         }
@@ -346,18 +402,15 @@ export async function propose(ctx: MutationCtx, { agentId, contactId, amount, re
     const minor = Math.round(amount * 100);
     // $0.004 would round to nothing, pass every check and then be refused on-chain as a strike.
     if (minor < 1 || Math.abs(amount * 100 - minor) > 1e-6) return { outcome: "refused", code: "2003", reason: "Amounts are whole cents, at least $0.01" };
-    const payeeId = ctx.db.normalizeId("payees", contactId);
-    const payee = payeeId ? await ctx.db.get(payeeId) : null;
+    const payeeId = contactId ? ctx.db.normalizeId("payees", contactId) : null;
+    const payee = contactId ? (payeeId ? await ctx.db.get(payeeId) : null) : await payeeForAddress(ctx, user, toAddress!, name, opts.kind);
     if (!payee || payee.userId !== user._id) {
-      await ctx.db.insert("activity", { userId: user._id, kind: "agent", title: `${agent.name} tried an unknown payee`, detail: "Refused: not in your contacts", tone: "bad" });
-      return { outcome: "refused", code: "2010", reason: "Unknown contact. Payments can only go to the owner's saved contacts; use list_contacts." };
+      await ctx.db.insert("activity", { userId: user._id, kind: "agent", title: `${agent.name} tried an unknown contact id`, detail: "Refused: not in your contacts", tone: "warn" });
+      return { outcome: "refused", code: "2010", reason: "Unknown contactId. Use list_contacts, or pay by toAddress with a name." };
     }
-    // A contact the owner just added isn't payable by agents until the vault has it and its waiting period ends.
-    if (payee.pendingPasskey || (payee.activeAt && payee.activeAt > Date.now())) {
-      const when = payee.pendingPasskey ? "the owner approves it with their passkey" : `${new Date(payee.activeAt!).toISOString().slice(0, 16).replace("T", " ")} UTC`;
-      await ctx.db.insert("activity", { userId: user._id, kind: "agent", title: `${agent.name} tried to pay ${payee.name} too early`, detail: `Refused: a new contact, active after ${when}`, tone: "warn" });
-      return { outcome: "refused", code: "2002", reason: `${payee.name} is a new contact. Agents can pay it after ${when}.` };
-    }
+    // A contact the vault doesn't have yet (or whose waiting period hasn't ended) is paid by the
+    // owner's passkey instead: the request goes to them rather than being refused.
+    const notYet = Boolean(payee.pendingPasskey || (payee.activeAt && payee.activeAt > Date.now()));
     const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
     if (!wallet) return { outcome: "refused", code: "2001", reason: "The owner hasn't set up a Nudge wallet" };
     const purpose = reason.trim().slice(0, 140) || undefined;
@@ -381,12 +434,12 @@ export async function propose(ctx: MutationCtx, { agentId, contactId, amount, re
     const free = (vault ? vault.balanceMinor - vault.heldMinor : wallet.balanceMinor) - pendingAll;
     const blockers: { code: string; why: string }[] = [];
     if (wallet.frozen || vault?.frozen) blockers.push({ code: "1002", why: "The wallet is frozen" });
-    if (!agent.scopes.includes("spend")) blockers.push({ code: "2002", why: `${agent.name} can prepare payments but not send them` });
+    if (!agent.scopes.includes("spend") || perPayment <= 0) blockers.push({ code: "2002", why: `${agent.name} asks you before every payment` });
     if (minor > perPayment) blockers.push({ code: "2003", why: `Above ${agent.name}'s ${formatMoney(perPayment, "USDC")} per-payment limit` });
     if (agentSpent + minor > dailyCap) blockers.push({ code: "2003", why: `Above ${agent.name}'s daily limit` });
     if (spentToday + minor > ceiling) blockers.push({ code: "2004", why: "Above the wallet's daily ceiling for all agents" });
     if (free - minor < protectedMinor) blockers.push({ code: "2005", why: "Would dip into the protected amount" });
-    if (!payee.trusted || (payee.holdUntil && payee.holdUntil > Date.now())) blockers.push({ code: "2006", why: `${payee.name} is a new contact` });
+    if (notYet || !payee.trusted || (payee.holdUntil && payee.holdUntil > Date.now())) blockers.push({ code: "2006", why: `${payee.name} isn't a trusted contact yet` });
     if (payee.dailyCapMinor) {
       const toPayee = await agentPaidTo(ctx, payee._id);
       if (toPayee + minor > payee.dailyCapMinor) blockers.push({ code: "2012", why: `Above ${payee.name}'s ${formatMoney(payee.dailyCapMinor, "USDC")} daily limit for all agents` });
@@ -446,9 +499,10 @@ export async function propose(ctx: MutationCtx, { agentId, contactId, amount, re
       return { outcome: "submitted", taskId, message: `Paying ${payee.name} ${formatMoney(minor, "USDC")}. Check get_task_status for confirmation.` };
     }
 
+    // Only a freeze is a hard stop; everything else goes to the owner with an approval link.
     const hard = blockers.find((b) => b.code === "1002");
-    if (hard || !agent.scopes.includes("request") && agent.scopes.includes("spend")) {
-      const b = hard ?? blockers[0]!;
+    if (hard) {
+      const b = hard;
       await ctx.db.insert("activity", { userId: user._id, kind: "agent", title: `Refused ${agent.name}: ${b.why}`, tone: "warn" });
       if (agent.provider !== "own") await notify(ctx, user._id, `Refused: ${agent.name} tried to pay ${payee.name} ${formatMoney(minor, "USDC")}. ${b.why}.`);
       return { outcome: "refused", code: b.code, reason: b.why };
@@ -467,11 +521,10 @@ export async function propose(ctx: MutationCtx, { agentId, contactId, amount, re
         requestId,
       });
       await record(ctx, user, agent, `${agent.name} asked to pay ${payee.name} ${formatMoney(minor, "USDC")}. ${blockers[0]!.why}, so it needs your passkey.`, taskId);
-      const base = process.env.APPROVE_URL ?? "https://agent-wallet-approve.vercel.app";
       if (agent.provider !== "own") {
-        await notify(ctx, user._id, `${agent.name} asks to pay ${payee.name} ${formatMoney(minor, "USDC")}. ${blockers[0]!.why}, so it needs your passkey.`, `${base}/a/${token}`);
+        await notify(ctx, user._id, `${agent.name} asks to pay ${payee.name} ${formatMoney(minor, "USDC")}. ${blockers[0]!.why}, so it needs your passkey.`, approveUrl(token));
       }
-      return { outcome: "needs_approval", taskId, reason: blockers.map((b) => b.why).join(". "), message: "Sent to the owner to approve with their passkey. They have been notified; check get_task_status." };
+      return { outcome: "needs_approval", taskId, approvalUrl: approveUrl(token), reason: blockers.map((b) => b.why).join(". "), message: `Needs ${user.name || "the user"}'s passkey: ${blockers[0]!.why}. Give them the approvalUrl; then check get_task_status.` };
     }
 
     const token = newApprovalToken();
@@ -493,11 +546,10 @@ export async function propose(ctx: MutationCtx, { agentId, contactId, amount, re
       updatedAt: Date.now(),
     });
     await record(ctx, user, agent, `${agent.name} asked to pay ${payee.name} ${formatMoney(minor, "USDC")}. ${blockers[0]!.why}, so it needs you.`, taskId);
-    const base = process.env.APPROVE_URL ?? "https://agent-wallet-approve.vercel.app";
     if (agent.provider !== "own") {
-      await notify(ctx, user._id, `${agent.name} asks to pay ${payee.name} ${formatMoney(minor, "USDC")}. ${blockers[0]!.why}, so it needs you.`, `${base}/a/${token}`);
+      await notify(ctx, user._id, `${agent.name} asks to pay ${payee.name} ${formatMoney(minor, "USDC")}. ${blockers[0]!.why}, so it needs you.`, approveUrl(token));
     }
-    return { outcome: "needs_approval", taskId, reason: blockers.map((b) => b.why).join(". "), message: "Sent to the owner to approve with their passkey. They have been notified; check get_task_status." };
+    return { outcome: "needs_approval", taskId, approvalUrl: approveUrl(token), reason: blockers.map((b) => b.why).join(". "), message: `Needs ${user.name || "the user"}'s approval: ${blockers[0]!.why}. Give them the approvalUrl; then check get_task_status.` };
   }
 
 /**
@@ -535,6 +587,8 @@ export const taskStatus = internalQuery({
       transaction: task.txHash ? `https://sepolia.basescan.org/tx/${task.txHash}` : null,
       releasesAt: task.state === "held" && task.releaseAt ? new Date(task.releaseAt).toISOString() : null,
       updatedAt: new Date(task.updatedAt).toISOString(),
+      ...(task.state === "awaiting_approval" && task.approvalToken ? { approvalUrl: approveUrl(task.approvalToken) } : {}),
+      ...(task.purchase ? { purchase: purchaseView(task.purchase, task.state) } : {}),
       ...(payment_mandate ? { payment_mandate } : {}),
     };
   },

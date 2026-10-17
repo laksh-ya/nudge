@@ -2,6 +2,8 @@ import { v, ConvexError } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { merchantKey } from "@agent-wallet/domain";
 import { mutation, query } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
 import { own, requireViewer, viewer } from "./lib/auth";
 
 export const accounts = query({
@@ -117,19 +119,53 @@ export const reviewSuggestion = mutation({
   },
 });
 
+const payWith = v.union(v.literal("wallet"), v.literal("account"), v.literal("manual"));
+
+/** The payee and account a bill names must be the owner's own; a wallet bill is in dollars. */
+async function checkPayment(
+  ctx: MutationCtx,
+  user: Doc<"users">,
+  p: { payWith?: "wallet" | "account" | "manual"; payeeId?: Id<"payees"> | null; accountId?: Id<"accounts"> | null },
+) {
+  if (p.payeeId) await own(user, await ctx.db.get(p.payeeId));
+  if (p.accountId) await own(user, await ctx.db.get(p.accountId));
+  if (p.payWith === "account" && !p.accountId) throw new ConvexError("Pick the account or card it's paid from");
+  if (p.payWith === "wallet" && !p.payeeId) throw new ConvexError("Pick who it's paid to: a contact the wallet can pay");
+}
+
 export const updateObligation = mutation({
   args: {
     id: v.id("obligations"),
     autopayLimitMinor: v.optional(v.union(v.number(), v.null())),
     status: v.optional(v.union(v.literal("active"), v.literal("paused"), v.literal("cancelled"))),
+    name: v.optional(v.string()),
+    amountMinor: v.optional(v.number()),
+    nextDueAt: v.optional(v.number()),
+    cadence: v.optional(v.union(v.literal("weekly"), v.literal("monthly"), v.literal("yearly"))),
+    payWith: v.optional(payWith),
+    payeeId: v.optional(v.union(v.id("payees"), v.null())),
+    accountId: v.optional(v.union(v.id("accounts"), v.null())),
   },
-  handler: async (ctx, { id, autopayLimitMinor, status }) => {
+  handler: async (ctx, { id, autopayLimitMinor, status, name, amountMinor, nextDueAt, cadence, payWith: how, payeeId, accountId }) => {
     const user = await requireViewer(ctx);
     const o = await own(user, await ctx.db.get(id));
     if (typeof autopayLimitMinor === "number" && !minorOk(autopayLimitMinor)) throw new ConvexError("Amount is out of range");
+    if (amountMinor !== undefined && !minorOk(amountMinor)) throw new ConvexError("Amount is out of range");
+    if (nextDueAt !== undefined && !Number.isFinite(nextDueAt)) throw new ConvexError("Pick a date");
+    const next = { payWith: how ?? o.payWith, payeeId: payeeId === undefined ? o.payeeId : payeeId, accountId: accountId === undefined ? o.accountId : accountId };
+    if (how !== undefined || payeeId !== undefined || accountId !== undefined) await checkPayment(ctx, user, next);
+    const clean = name?.trim().slice(0, 60);
     await ctx.db.patch(o._id, {
       ...(autopayLimitMinor !== undefined ? { autopayLimitMinor: autopayLimitMinor ?? undefined } : {}),
       ...(status ? { status } : {}),
+      ...(clean ? { name: clean, merchantKey: merchantKey(clean) } : {}),
+      ...(amountMinor !== undefined ? { amountMinor } : {}),
+      ...(nextDueAt !== undefined ? { nextDueAt } : {}),
+      ...(cadence ? { cadence } : {}),
+      ...(how ? { payWith: how } : {}),
+      ...(payeeId !== undefined ? { payeeId: payeeId ?? undefined } : {}),
+      ...(accountId !== undefined ? { accountId: accountId ?? undefined } : {}),
+      ...(how === "wallet" ? { currency: "USD" as const } : {}),
     });
   },
 });
@@ -141,6 +177,9 @@ export const addObligation = mutation({
     amountMinor: v.number(),
     cadence: v.union(v.literal("weekly"), v.literal("monthly"), v.literal("yearly")),
     nextDueAt: v.number(),
+    payWith: v.optional(payWith),
+    payeeId: v.optional(v.id("payees")),
+    accountId: v.optional(v.id("accounts")),
   },
   handler: async (ctx, args) => {
     const user = await requireViewer(ctx);
@@ -148,17 +187,22 @@ export const addObligation = mutation({
     if (!name) throw new ConvexError("Add a name");
     if (!minorOk(args.amountMinor)) throw new ConvexError("Amount is out of range");
     if (!Number.isFinite(args.nextDueAt)) throw new ConvexError("Pick a date");
+    await checkPayment(ctx, user, args);
     return await ctx.db.insert("obligations", {
       userId: user._id,
       name,
       kind: args.kind,
       amountMinor: args.amountMinor,
-      currency: user.currency,
+      // A bill paid from the Nudge wallet is in its test dollars.
+      currency: args.payWith === "wallet" ? "USD" : user.currency,
       cadence: args.cadence,
       nextDueAt: args.nextDueAt,
       status: "active",
       merchantKey: merchantKey(name),
       source: "manual",
+      payWith: args.payWith ?? "manual",
+      payeeId: args.payeeId,
+      accountId: args.accountId,
     });
   },
 });

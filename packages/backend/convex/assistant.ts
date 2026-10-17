@@ -24,6 +24,8 @@ import { toMinor } from "@agent-wallet/domain";
 const MODEL = "claude-opus-5-5";
 /** Anonymous demo sandboxes get a smaller model; the behaviour rules are the same. */
 const SANDBOX_MODEL = "claude-sonnet-5-5";
+/** Models the owner can pick in Settings → Assistant ("basic" means rules only, no model). */
+export const MODELS = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"] as const;
 const MAX_STEPS = 8;
 
 const SYSTEM = `You are Nudge, the assistant inside a personal-finance app with a wallet AI assistants can pay from. You act for one person, the owner, who is talking to you now.
@@ -125,6 +127,7 @@ export const context = internalQuery({
       currency: user?.currency ?? "INR",
       ownAgentId: own?._id ?? null,
       sandbox: user ? isSandbox(user) : true,
+      model: user?.assistantModel ?? null,
       pending: recent.find((m) => m.role === "assistant")?.pending !== undefined,
       history: recent.reverse().map((m) => ({ role: m.role, text: m.text })),
     };
@@ -144,7 +147,7 @@ export const say = internalMutation({
     await ctx.db.insert("messages", { userId, role: "assistant", text, channel, taskId, mode, fallback });
     if (channel === "telegram") {
       const task = taskId ? await ctx.db.get(taskId) : null;
-      const base = process.env.APPROVE_URL ?? "https://agent-wallet-approve.vercel.app";
+      const base = process.env.APPROVE_URL ?? "https://nudge-approve.vercel.app";
       await ctx.scheduler.runAfter(0, internal.telegram.send, { userId, text, approvalUrl: task?.approvalToken ? `${base}/a/${task.approvalToken}` : undefined });
     }
   },
@@ -273,7 +276,7 @@ export const respond = internalAction({
     useModel: v.optional(v.boolean()),
   },
   handler: async (ctx, { userId, text, channel = "app", useModel = true }): Promise<void> => {
-    const c: { name: string; currency: string; ownAgentId: Id<"agents"> | null; sandbox: boolean; pending: boolean; history: { role: "user" | "assistant"; text: string }[] } = await ctx.runQuery(
+    const c: { name: string; currency: string; ownAgentId: Id<"agents"> | null; sandbox: boolean; model: string | null; pending: boolean; history: { role: "user" | "assistant"; text: string }[] } = await ctx.runQuery(
       internal.assistant.context,
       { userId },
     );
@@ -284,7 +287,7 @@ export const respond = internalAction({
       return;
     }
     // The basic assistant answers when the model can't, and the reply records why, so it is never silent.
-    const basic = !process.env.ANTHROPIC_API_KEY ? "missing_key" : !c.ownAgentId ? "no_own_agent" : !useModel ? "quota" : null;
+    const basic = c.model === "basic" ? "owner_chose_basic" : !process.env.ANTHROPIC_API_KEY ? "missing_key" : !c.ownAgentId ? "no_own_agent" : !useModel ? "quota" : null;
     if (basic || !c.ownAgentId) {
       console.info("assistant: basic mode", { userId, reason: basic });
       await ctx.runMutation(internal.messages.reply, { userId, text, channel, fallback: basic ?? "no_own_agent" });
@@ -310,7 +313,7 @@ export const respond = internalAction({
     try {
       for (let step = 0; step < MAX_STEPS; step++) {
         const response = await client.beta.messages.create({
-          model: c.sandbox ? SANDBOX_MODEL : MODEL,
+          model: c.model && (MODELS as readonly string[]).includes(c.model) ? c.model : c.sandbox ? SANDBOX_MODEL : MODEL,
           max_tokens: 4000,
           betas: ["server-side-fallback-2026-07-01"],
           fallbacks: "default",

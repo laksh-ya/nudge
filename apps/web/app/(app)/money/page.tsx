@@ -276,7 +276,7 @@ function Bills() {
       )}
       {active.length === 0 && suggested.length === 0 && (
         <Card>
-          <p className="py-4 text-center text-body text-mute">No bills yet. Import a few months of history and they'll show up here.</p>
+          <p className="py-4 text-center text-body text-mute">No bills yet. Add rent, electricity or a subscription with Add, and choose who it's paid to and how.</p>
         </Card>
       )}
       <AddBillSheet open={adding} onOpenChange={setAdding} currency={me.currency as Currency} />
@@ -285,9 +285,71 @@ function Bills() {
   );
 }
 
+type PayWith = "manual" | "account" | "wallet";
+
+/** Who a bill is paid to and how: by hand (Nudge reminds), from an account or card, or from the Nudge wallet. */
+function PaymentFields({
+  value,
+  onChange,
+}: {
+  value: { payWith: PayWith; payeeId: string; accountId: string };
+  onChange: (v: { payWith: PayWith; payeeId: string; accountId: string }) => void;
+}) {
+  const wallet = useQuery(api.wallet.get);
+  const accounts = useQuery(api.money.accounts);
+  const payees = wallet?.payees ?? [];
+  const payable = (accounts ?? []).filter((a) => a.kind === "bank" || a.kind === "card" || a.kind === "cash");
+  return (
+    <div className="space-y-3 rounded-btn border border-line p-3">
+      <Field label="Paid from">
+        <Segmented
+          options={[
+            { value: "manual", label: "I pay it" },
+            { value: "account", label: "Account" },
+            { value: "wallet", label: "Nudge wallet" },
+          ]}
+          value={value.payWith}
+          onChange={(payWith) => onChange({ ...value, payWith })}
+        />
+      </Field>
+      {value.payWith === "account" && (
+        <Field label="Account or card">
+          <Select value={value.accountId} onChange={(e) => onChange({ ...value, accountId: e.target.value })}>
+            <option value="">Pick one</option>
+            {payable.map((a) => (
+              <option key={a._id} value={a._id}>
+                {a.name}
+                {a.last4 ? ` ·· ${a.last4}` : ""}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      )}
+      <Field label={value.payWith === "wallet" ? "Paid to (a contact)" : "Paid to (optional)"}>
+        <Select value={value.payeeId} onChange={(e) => onChange({ ...value, payeeId: e.target.value })}>
+          <option value="">{value.payWith === "wallet" ? "Pick a contact" : "Nobody saved"}</option>
+          {payees.map((p) => (
+            <option key={p._id} value={p._id}>
+              {p.name}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <p className="text-label text-mute">
+        {value.payWith === "wallet"
+          ? "In test dollars. When it's due, your assistant can pay it within its limits, or asks you with a passkey link."
+          : value.payWith === "account"
+            ? "Nudge reminds you before it's due and opens the payment for you to finish in your bank's app."
+            : "Nudge reminds you before it's due. Mark it paid when you've paid it."}
+      </p>
+    </div>
+  );
+}
+
 function AddBillSheet({ open, onOpenChange, currency }: { open: boolean; onOpenChange: (o: boolean) => void; currency: Currency }) {
   const add = useMutation(api.money.addObligation);
   const [form, setForm] = useState({ name: "", amount: "", kind: "bill" as "bill" | "subscription", cadence: "monthly" as "weekly" | "monthly" | "yearly", due: new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10) });
+  const [pay, setPay] = useState({ payWith: "manual" as PayWith, payeeId: "", accountId: "" });
   const [error, setError] = useState<string>();
   return (
     <Sheet open={open} onOpenChange={onOpenChange} title="Add a bill">
@@ -297,7 +359,17 @@ function AddBillSheet({ open, onOpenChange, currency }: { open: boolean; onOpenC
           e.preventDefault();
           setError(undefined);
           try {
-            await add({ name: form.name, kind: form.kind, cadence: form.cadence, amountMinor: toMinorUnits(form.amount, currency) ?? 0, nextDueAt: new Date(`${form.due}T06:00:00Z`).getTime() });
+            const billCurrency = pay.payWith === "wallet" ? "USD" : currency;
+            await add({
+              name: form.name,
+              kind: form.kind,
+              cadence: form.cadence,
+              amountMinor: toMinorUnits(form.amount, billCurrency) ?? 0,
+              nextDueAt: new Date(`${form.due}T06:00:00Z`).getTime(),
+              payWith: pay.payWith,
+              payeeId: (pay.payeeId || undefined) as Id<"payees"> | undefined,
+              accountId: (pay.accountId || undefined) as Id<"accounts"> | undefined,
+            });
             onOpenChange(false);
             setForm({ ...form, name: "", amount: "" });
           } catch (err) {
@@ -324,6 +396,7 @@ function AddBillSheet({ open, onOpenChange, currency }: { open: boolean; onOpenC
         <Field label="Next due">
           <Input type="date" value={form.due} onChange={(e) => setForm({ ...form, due: e.target.value })} />
         </Field>
+        <PaymentFields value={pay} onChange={setPay} />
         <ErrorText>{error}</ErrorText>
         <Button type="submit" size="lg" className="w-full" disabled={!form.name || !form.amount}>
           Add
@@ -337,11 +410,26 @@ function EditBillSheet({
   bill,
   onClose,
 }: {
-  bill: { _id: Id<"obligations">; name: string; amountMinor: number; currency: Currency; autopayLimitMinor?: number; nextDueAt: number; cadence: string };
+  bill: {
+    _id: Id<"obligations">;
+    name: string;
+    amountMinor: number;
+    currency: Currency;
+    autopayLimitMinor?: number;
+    nextDueAt: number;
+    cadence: string;
+    payWith?: PayWith;
+    payeeId?: Id<"payees">;
+    accountId?: Id<"accounts">;
+  };
   onClose: () => void;
 }) {
   const update = useMutation(api.money.updateObligation);
   const [limit, setLimit] = useState(bill.autopayLimitMinor ? String(bill.autopayLimitMinor / 100) : "");
+  const [amount, setAmount] = useState(String(bill.amountMinor / 100));
+  const [due, setDue] = useState(new Date(bill.nextDueAt).toISOString().slice(0, 10));
+  const [pay, setPay] = useState({ payWith: bill.payWith ?? ("manual" as PayWith), payeeId: bill.payeeId ?? "", accountId: bill.accountId ?? "" });
+  const [error, setError] = useState<string>();
   return (
     <Sheet open onOpenChange={(o) => !o && onClose()} title={bill.name}>
       <div className="space-y-4 pb-4">
@@ -351,9 +439,19 @@ function EditBillSheet({
             {bill.cadence} · {dueLabel(bill.nextDueAt)}
           </div>
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Amount">
+            <MoneyInput currency={bill.currency} value={amount} onChange={setAmount} />
+          </Field>
+          <Field label="Next due">
+            <Input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
+          </Field>
+        </div>
+        <PaymentFields value={pay} onChange={setPay} />
         <Field label="Pay automatically up to" hint="If the bill comes in higher, you'll be asked first. Leave empty to approve every time.">
           <MoneyInput currency={bill.currency} value={limit} onChange={setLimit} />
         </Field>
+        <ErrorText>{error}</ErrorText>
         <div className="grid grid-cols-2 gap-2">
           <Button
             tone="danger"
@@ -368,8 +466,21 @@ function EditBillSheet({
           <Button
             size="lg"
             onClick={async () => {
-              await update({ id: bill._id, autopayLimitMinor: limit ? toMinorUnits(limit, bill.currency) : null });
-              onClose();
+              setError(undefined);
+              try {
+                await update({
+                  id: bill._id,
+                  autopayLimitMinor: limit ? toMinorUnits(limit, bill.currency) : null,
+                  amountMinor: toMinorUnits(amount, bill.currency) ?? bill.amountMinor,
+                  nextDueAt: new Date(`${due}T06:00:00Z`).getTime(),
+                  payWith: pay.payWith,
+                  payeeId: (pay.payeeId || null) as Id<"payees"> | null,
+                  accountId: (pay.accountId || null) as Id<"accounts"> | null,
+                });
+                onClose();
+              } catch (e) {
+                setError(errorMessage(e));
+              }
             }}
           >
             Save

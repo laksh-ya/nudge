@@ -84,18 +84,50 @@ export const list = query({
     const user = await viewer(ctx);
     if (!user) return null;
     const mine = await linksOf(ctx, user._id);
+    const accounts = await Promise.all(mine.map((g) => (g.guardianId ? ctx.db.get(g.guardianId) : null)));
     const guarding_ = (await ctx.db.query("guardians").withIndex("by_guardian", (q) => q.eq("guardianId", user._id)).take(20)).filter((l) => l.status === "active");
     const owners = await Promise.all(guarding_.map((l) => ctx.db.get(l.userId)));
     const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
     return {
-      guardians: mine.map((g) => ({ _id: g._id, name: g.name, status: g.status, code: g.status === "invited" && (g.codeExpiresAt ?? 0) > Date.now() ? g.code : undefined })),
-      protecting: guarding_.map((l, i) => ({ linkId: l._id, ownerId: l.userId, ownerName: owners[i]?.name ?? "Someone" })),
+      guardians: mine.map((g, i) => ({
+        _id: g._id,
+        name: g.name,
+        status: g.status,
+        code: g.status === "invited" && (g.codeExpiresAt ?? 0) > Date.now() ? g.code : undefined,
+        // Who actually accepted: their own account's name and a masked email, so the owner can tell.
+        account: accounts[i] ? { name: accounts[i]!.name || "Unnamed account", email: maskEmail(accounts[i]!.email) } : null,
+        since: g.acceptedAt ?? null,
+      })),
+      protecting: guarding_.map((l, i) => ({ linkId: l._id, ownerId: l.userId, ownerName: owners[i]?.name ?? "Someone", ownerEmail: maskEmail(owners[i]?.email) })),
       holdMinutes: wallet?.vault ? Math.round(wallet.vault.holdFor / 60) : null,
     };
   },
 });
 
+/** "priya.s@gmail.com" → "p•••s@gmail.com": enough to recognise, not enough to harvest. */
+export function maskEmail(email?: string | null) {
+  if (!email || !email.includes("@")) return null;
+  const [local, domain] = email.split("@");
+  if (!local) return null;
+  return `${local[0]}${"•".repeat(Math.min(3, Math.max(1, local.length - 2)))}${local.length > 2 ? local[local.length - 1] : ""}@${domain}`;
+}
+
 // ---------------------------------------------------------------- the guardian
+
+/** Before accepting: whose invite is this? Signed-in only, and only a masked email. */
+export const invitation = query({
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const user = await viewer(ctx);
+    if (!user) return null;
+    const clean = code.trim().toUpperCase();
+    if (clean.length !== 8) return null;
+    const link = await ctx.db.query("guardians").withIndex("by_code", (q) => q.eq("code", clean)).unique();
+    if (!link || link.status !== "invited" || (link.codeExpiresAt ?? 0) < Date.now()) return { valid: false as const };
+    const owner = await ctx.db.get(link.userId);
+    return { valid: true as const, ownerName: owner?.name || "Someone", ownerEmail: maskEmail(owner?.email), invitedAs: link.name, self: link.userId === user._id };
+  },
+});
 
 export const accept = mutation({
   args: { code: v.string() },

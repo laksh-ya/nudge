@@ -127,7 +127,7 @@ describe("contacts the owner adds and removes (#10)", () => {
     await expect(f.stranger.mutation(api.contacts.remove, { payeeId: f.payee })).rejects.toThrow(/Not found/);
   });
 
-  it("on a live vault, needs the passkey and the vault's waiting period; agents are refused until then", async () => {
+  it("on a live vault, needs the passkey and the vault's waiting period; until then agent payments need the owner's passkey", async () => {
     const f = await live();
     const { payeeId, token } = await f.owner.mutation(api.contacts.add, { name: "Test Shop", address: NEW });
     expect(token).toBeTruthy();
@@ -139,16 +139,17 @@ describe("contacts the owner adds and removes (#10)", () => {
     // The same link again while it's open.
     expect(await f.owner.mutation(api.contacts.approveAdd, { payeeId })).toBe(token);
 
+    // Not in the vault yet: the agent can't pay it alone, but the owner can, with the passkey.
     const early = await pay(f, payeeId);
-    expect(early).toMatchObject({ outcome: "refused", code: "2002" });
-    expect((early as { reason: string }).reason).toContain("passkey");
+    expect(early).toMatchObject({ outcome: "needs_approval" });
+    expect((early as { reason: string }).reason).toContain("trusted contact");
 
     // The vault applied it: the waiting period starts now.
     await f.t.mutation(internal.vault.onOwnerResult, { taskId: task!._id, ok: true, txHash: `0x${"cd".repeat(32)}` });
     const added = (await f.t.run((ctx) => ctx.db.get(payeeId)))!;
     expect(added).toMatchObject({ onchain: true, trusted: true, activeAt: NOW + DAY });
     expect(added.pendingPasskey).toBeUndefined();
-    expect(await pay(f, payeeId)).toMatchObject({ outcome: "refused", code: "2002" });
+    expect(await pay(f, payeeId)).toMatchObject({ outcome: "needs_approval" });
 
     vi.setSystemTime(NOW + DAY + 1000);
     expect((await pay(f, payeeId)).outcome).toBe("submitted");

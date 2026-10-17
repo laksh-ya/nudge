@@ -107,6 +107,25 @@ export const decide = mutation({
       await ctx.db.insert("activity", { userId: task.userId, kind: "payment", title: `Declined ${task.title}`, tone: "neutral" });
       return "cancelled";
     }
+    // A settings request from an assistant on a simulated wallet (new limits, a new trusted contact):
+    // the signed-in owner's yes applies it here, since there is no vault to sign for.
+    if (task.effects && task.amountMinor === undefined) {
+      const g = task.effects.grant;
+      if (g) {
+        const agent = await ctx.db.get(g.agentId);
+        if (agent && agent.userId === user._id && agent.status !== "revoked") {
+          const scopes = (g.scopes ?? agent.scopes).filter((s): s is "read" | "prepare" | "spend" | "request" => ["read", "prepare", "spend", "request"].includes(s));
+          await ctx.db.patch(agent._id, { perPaymentMinor: g.perPaymentMinor, dailyCapMinor: g.dailyCapMinor, expiresAt: g.expiresAt, scopes });
+        }
+      }
+      for (const payeeId of task.effects.payees) {
+        const p = await ctx.db.get(payeeId);
+        if (p && p.userId === user._id) await ctx.db.patch(p._id, { trusted: true, pendingPasskey: undefined, holdUntil: undefined });
+      }
+      await ctx.db.patch(task._id, { state: "confirmed", updatedAt: Date.now() });
+      await ctx.db.insert("activity", { userId: task.userId, kind: "setting", title: `Approved: ${task.title}`, tone: "good" });
+      return "confirmed";
+    }
     await ctx.db.patch(task._id, { state: "submitted", updatedAt: Date.now() });
     await ctx.scheduler.runAfter(1600, internal.tasks.settle, { taskId: task._id });
     return "submitted";

@@ -1,7 +1,7 @@
 import { v, type Infer } from "convex/values";
 import { convert, formatMoney, toMinor, type Currency } from "@agent-wallet/domain";
 import { freezeAgent, freezeAll } from "./lib/control";
-import { propose } from "./gateway";
+import { payeeForAddress, propose } from "./gateway";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -124,7 +124,7 @@ async function say(turn: Turn, reply: string, extra: { taskId?: Id<"tasks">; sug
   });
   if (channel === "telegram") {
     const task = extra.taskId ? await ctx.db.get(extra.taskId) : null;
-    const base = process.env.APPROVE_URL ?? "https://agent-wallet-approve.vercel.app";
+    const base = process.env.APPROVE_URL ?? "https://nudge-approve.vercel.app";
     await ctx.scheduler.runAfter(0, internal.telegram.send, {
       userId: user._id,
       text: reply,
@@ -254,8 +254,10 @@ async function pay(
       return say(turn, `I can't pay that: ${d.reason}.${replaced}`, { draft });
     }
   }
-  if (!payee.trusted) {
-    return say(turn, `${payee.name} is a new contact. Payments to them wait until ${new Date(payee.holdUntil ?? Date.now()).toLocaleString("en-IN", { hour: "numeric", minute: "2-digit", weekday: "short", timeZone: turn.tz })}.${replaced}`);
+  if (!payee.trusted || payee.pendingPasskey) {
+    // Anyone can be paid; someone not yet trusted is paid only with the owner's passkey.
+    const taskId = await createPayment(ctx, user, payee, minor, currency, title, turn.channel);
+    return say(turn, `${payee.name} isn't a trusted contact yet, so sending ${label} needs your approval. Review and approve.${replaced}`, { taskId, draft });
   }
   const taskId = await createPayment(ctx, user, payee, minor, currency, title, turn.channel);
   const how = cur === "USD" ? "Review and approve." : "Approve it and I'll open UPI for you.";
@@ -278,6 +280,14 @@ async function onPay(turn: Turn, intent: Extract<Intent, { kind: "pay" }>) {
   // A contact named after the correction wins: "pay alex chen $5, no I meant alex rivera".
   const after = intent.corrected ? matchContacts(intent.corrected.tail, turn.payees) : [];
   const found = after.length ? { payees: after, bill: null } : await payeesIn(turn, turn.text);
+  // "pay 0x… $5": anyone by address. A new recipient is never paid without the owner's passkey.
+  const address = turn.text.match(/\b0x[a-fA-F0-9]{40}\b/)?.[0];
+  if (address && found.payees.length === 0) {
+    const w = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
+    if (w?.address && w.address.toLowerCase() === address.toLowerCase()) return say(turn, "That's your own wallet.");
+    const payee = await payeeForAddress(ctx, user, address, undefined);
+    if (payee) found.payees = [payee];
+  }
   const { bill } = found;
   if (bill && !intent.amount) {
     const payee = found.payees[0];

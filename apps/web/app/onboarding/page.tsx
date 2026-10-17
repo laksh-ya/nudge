@@ -37,9 +37,9 @@ import { useDemo } from "@/lib/demo";
 import { dueLabel, fmtAmount } from "@/lib/format";
 import { AgentMark, Wordmark } from "@/components/brand";
 import { AccountRow, type AccountView } from "@/components/connect/account-row";
-import { AddSourceSheet, KIND_META } from "@/components/connect/add-source";
+import { AddSourceSheet, CONNECTABLE, KIND_META } from "@/components/connect/add-source";
 import { HistorySheet, type HistoryMode } from "@/components/connect/history-sheet";
-import { Choice, ErrorText, Field, Input, MoneyInput, Select, errorMessage, fromMinorUnits, toMinorUnits } from "@/components/form";
+import { Choice, ErrorText, Field, Input, MoneyInput, Select, Toggle, errorMessage, fromMinorUnits, toMinorUnits } from "@/components/form";
 import { Button, Chip, Divided, IconTile, Skeleton } from "@/components/ui";
 import { PasskeyCard } from "@/components/wallet/vault-cards";
 
@@ -333,7 +333,7 @@ function Sources({ onNext }: { onNext: () => void }) {
     <>
       <p className="-mt-3 mb-4 text-body text-ink-2">Add every account you use. As many as you want, any type. Adding one never lets an agent spend from it.</p>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {(Object.keys(KIND_META) as SourceKind[]).map((k) => {
+        {CONNECTABLE.map((k) => {
           const m = KIND_META[k];
           const count = accounts?.filter((a) => a.kind === k).length ?? 0;
           return (
@@ -537,9 +537,8 @@ function Assistant({ state, onNext }: { state: State; onNext: () => void }) {
     reminderLeadDays: state.user.reminderLeadDays,
   });
   const modes = [
-    { id: "draft" as const, title: "Draft only", text: "It prepares payments. You send them." },
-    { id: "approve" as const, title: "Ask me every time", text: "It can request payments. Each one needs your approval." },
-    { id: "limited" as const, title: "Small things on autopilot", text: "It pays within limits you set next. Anything bigger asks you." },
+    { id: "approve" as const, title: "Ask me every time", text: "Each payment comes to you as a link; you approve with your passkey." },
+    { id: "limited" as const, title: "Small things on its own", text: "It pays within the limits you set next. Anything bigger sends you a link to approve." },
   ];
   return (
     <>
@@ -566,14 +565,27 @@ function Assistant({ state, onNext }: { state: State; onNext: () => void }) {
             </span>
           </div>
         </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Quiet from">
-            <Input type="time" value={form.quietFrom} onChange={(e) => setForm({ ...form, quietFrom: e.target.value })} />
-          </Field>
-          <Field label="Until">
-            <Input type="time" value={form.quietTo} onChange={(e) => setForm({ ...form, quietTo: e.target.value })} />
-          </Field>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-body font-semibold">Quiet hours</div>
+            <div className="text-label text-mute">Optional. Reminders wait until they end.</div>
+          </div>
+          <Toggle
+            checked={Boolean(form.quietFrom)}
+            onChange={(on) => setForm({ ...form, quietFrom: on ? "22:00" : "", quietTo: on ? "08:00" : "" })}
+            label="Quiet hours"
+          />
         </div>
+        {form.quietFrom && (
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Quiet from">
+              <Input type="time" value={form.quietFrom} onChange={(e) => setForm({ ...form, quietFrom: e.target.value })} />
+            </Field>
+            <Field label="Until">
+              <Input type="time" value={form.quietTo} onChange={(e) => setForm({ ...form, quietTo: e.target.value })} />
+            </Field>
+          </div>
+        )}
         <div>
           <Field label="Remind me about bills">
             <Select value={form.reminderLeadDays} onChange={(e) => setForm({ ...form, reminderLeadDays: Number(e.target.value) })}>
@@ -717,7 +729,26 @@ function Wallet({ state, onNext }: { state: State; onNext: () => void }) {
       />
       <ErrorText>{error}</ErrorText>
       <Footer>
-        <Button size="lg" tone="outline" onClick={onNext}>
+        <Button
+          size="lg"
+          tone="outline"
+          onClick={async () => {
+            // Keep the amounts even without a passkey: the simulated wallet uses them.
+            if (!live) {
+              try {
+                await setup({
+                  dailyCeilingMinor: toMinorUnits(form.daily, "USD") ?? 0,
+                  perPaymentMinor: toMinorUnits(form.per, "USD") ?? 0,
+                  protectedMinor: toMinorUnits(form.protect || "0", "USD") ?? 0,
+                });
+                if (!w) await fund();
+              } catch (e) {
+                return setError(errorMessage(e));
+              }
+            }
+            onNext();
+          }}
+        >
           {live ? "Skip" : "Skip, keep it simulated"}
         </Button>
         <Continue
