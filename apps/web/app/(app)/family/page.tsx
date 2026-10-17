@@ -8,7 +8,7 @@ import { approvalLink } from "@/lib/config";
 import { formatMoney } from "@/lib/format";
 import { countdown, useNow } from "@/lib/use-now";
 import { Initial } from "@/components/brand";
-import { Button, Card, Chip, Divided, Money, PageTitle, Row, Skeleton } from "@/components/ui";
+import { Button, ButtonLink, Card, Chip, Divided, Empty, Money, PageTitle, Row, Skeleton } from "@/components/ui";
 import { GuardiansCard } from "@/components/family/guardians-card";
 
 const flag: Record<string, string> = { India: "IN", China: "CN", "United Kingdom": "UK" };
@@ -35,7 +35,20 @@ export default function FamilyPage() {
     <div className="mx-auto max-w-3xl space-y-4">
       <PageTitle>Family</PageTitle>
 
-      <div className="card rise flex gap-5 overflow-x-auto p-4 [scrollbar-width:none]">
+      <p className="rounded-card bg-amber-soft px-4 py-2.5 text-label text-amber">
+        Family transfers are simulated in this prototype: no money moves, and quotes are sample data.
+      </p>
+
+      {data.members.length === 0 && (
+        <Card>
+          <Empty>No family yet. Invite family so they can ask you for money; nothing moves without your approval.</Empty>
+          <ButtonLink href="/onboarding?step=people" tone="outline" className="w-full">
+            Invite family
+          </ButtonLink>
+        </Card>
+      )}
+
+      <div className={data.members.length ? "card rise flex gap-5 overflow-x-auto p-4 [scrollbar-width:none]" : "hidden"}>
         {data.members.map((m) => (
           <div key={m._id} className="flex w-16 shrink-0 flex-col items-center gap-1.5 text-center">
             <div className="relative">
@@ -59,10 +72,13 @@ export default function FamilyPage() {
                 <div className="text-title font-semibold">{r.member} asked for {formatMoney(r.receiveMinor, r.receiveCurrency)}</div>
                 <div className="text-body text-ink-2">{r.note}</div>
               </div>
-              <Chip tone={expired ? "red" : "amber"}>
-                <Clock className="size-3" />
-                <span className="num">{expired ? "Expired" : countdown(r.quoteExpiresAt, now)}</span>
-              </Chip>
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                <Chip tone={expired ? "red" : "amber"}>
+                  <Clock className="size-3" />
+                  <span className="num">{expired ? "Expired" : countdown(r.quoteExpiresAt, now)}</span>
+                </Chip>
+                <Chip>Simulated quote</Chip>
+              </div>
             </div>
             <div className="mt-4 rounded-[12px] bg-page p-3">
               <div className="flex items-center justify-between">

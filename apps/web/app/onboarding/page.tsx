@@ -32,7 +32,7 @@ import {
 } from "@agent-wallet/domain";
 import { api, type Id } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { approvalLink } from "@/lib/config";
+import { APPROVE_URL, approvalLink } from "@/lib/config";
 import { useDemo } from "@/lib/demo";
 import { dueLabel, fmtAmount } from "@/lib/format";
 import { AgentMark, Wordmark } from "@/components/brand";
@@ -41,6 +41,7 @@ import { AddSourceSheet, KIND_META } from "@/components/connect/add-source";
 import { HistorySheet, type HistoryMode } from "@/components/connect/history-sheet";
 import { Choice, ErrorText, Field, Input, MoneyInput, Select, errorMessage, fromMinorUnits, toMinorUnits } from "@/components/form";
 import { Button, Chip, Divided, IconTile, Skeleton } from "@/components/ui";
+import { PasskeyCard } from "@/components/wallet/vault-cards";
 
 const STEPS = [
   { id: "you", title: "About you" },
@@ -143,7 +144,7 @@ export default function Onboarding() {
           {step === "wallet" && <Wallet state={state} onNext={next} />}
           {step === "chat" && <Chat state={state} onNext={next} />}
           {step === "people" && <People state={state} onNext={next} />}
-          {step === "done" && <Done onFinish={finish} />}
+          {step === "done" && <Done state={state} onFinish={finish} />}
         </div>
       </main>
     </div>
@@ -466,7 +467,7 @@ function Review({ state, onNext }: { state: State; onNext: () => void }) {
           </div>
         </div>
         <div className="border-t border-white/10 px-4 py-2.5 text-label text-white/70">
-          {o.accountCount} accounts{o.cryptoValue ? ` · crypto ${formatMoney(o.cryptoValue, cur)}` : ""} · rates from {o.ratesDate}
+          {o.accountCount} {o.accountCount === 1 ? "account" : "accounts"}{o.cryptoValue ? ` · crypto ${formatMoney(o.cryptoValue, cur)}` : ""} · rates from {o.ratesDate}
         </div>
       </section>
 
@@ -555,11 +556,14 @@ function Assistant({ state, onNext }: { state: State; onNext: () => void }) {
       <div className="card mt-4 space-y-4 p-4">
         <Field label="Send reminders to">
           <div className="grid grid-cols-3 gap-2">
-            {(["app", "telegram", "whatsapp"] as const).map((c) => (
+            {(["app", "telegram"] as const).map((c) => (
               <Choice key={c} selected={form.reminderChannel === c} onClick={() => setForm({ ...form, reminderChannel: c })}>
-                {c === "app" ? "App" : c === "telegram" ? "Telegram" : "WhatsApp"}
+                {c === "app" ? "App" : "Telegram"}
               </Choice>
             ))}
+            <span className="flex items-center justify-center rounded-btn border border-dashed border-line px-3 py-2.5 text-label text-mute" title="Not built yet">
+              WhatsApp · later
+            </span>
           </div>
         </Field>
         <div className="grid grid-cols-2 gap-3">
@@ -575,7 +579,7 @@ function Assistant({ state, onNext }: { state: State; onNext: () => void }) {
             <Select value={form.reminderLeadDays} onChange={(e) => setForm({ ...form, reminderLeadDays: Number(e.target.value) })}>
               {[0, 1, 2, 3, 5, 7].map((d) => (
                 <option key={d} value={d}>
-                  {d === 0 ? "On the day" : `${d} days before`}
+                  {d === 0 ? "On the day" : `${d} ${d === 1 ? "day" : "days"} before`}
                 </option>
               ))}
             </Select>
@@ -594,10 +598,70 @@ function Assistant({ state, onNext }: { state: State; onNext: () => void }) {
   );
 }
 
+/**
+ * The payment passkey, right here: the same enrolment as the Wallet screen. The passkey is made on
+ * the approval site (this device or a phone), then confirmed with the code it shows.
+ */
+function PasskeyStep({ hasWallet, busy, createWallet }: { hasWallet: boolean; busy: boolean; createWallet: () => Promise<void> }) {
+  const chain = useQuery(api.vault.status);
+  const startEnrol = useMutation(api.vault.startEnrol);
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState<string>();
+  if (chain === undefined) return <Skeleton className="mt-4 h-28 rounded-card" />;
+  if (!chain?.ready && chain?.wallet?.status !== "live") {
+    return (
+      <div className="card mt-4 flex items-center gap-3 p-4">
+        <IconTile icon={Fingerprint} tone="page" />
+        <div className="flex-1">
+          <div className="text-body font-semibold">Payment passkey</div>
+          <div className="text-label text-mute">On-chain signing isn&apos;t switched on for this deployment, so the wallet stays simulated.</div>
+        </div>
+      </div>
+    );
+  }
+  // Once a wallet exists, the Wallet screen's card handles every state: create, confirm the code, deploying, live.
+  if (hasWallet && chain?.wallet) return <div className="mt-4"><PasskeyCard chain={chain} /></div>;
+  return (
+    <div className="card mt-4 p-4">
+      <div className="flex items-start gap-3">
+        <IconTile icon={Fingerprint} tone="sky" />
+        <div className="flex-1">
+          <div className="text-body font-semibold">Create your payment passkey</div>
+          <div className="text-label text-ink-2">
+            Use this device (Touch ID, Windows Hello) or your phone. Only this passkey can approve payments over your limits, and a vault contract is
+            deployed for it on Base Sepolia.
+          </div>
+        </div>
+      </div>
+      <ErrorText>{error}</ErrorText>
+      <Button
+        icon={Fingerprint}
+        className="mt-3 w-full"
+        disabled={busy || working}
+        onClick={async () => {
+          setWorking(true);
+          setError(undefined);
+          try {
+            await createWallet();
+            const token = await startEnrol({ purpose: "first" });
+            window.location.assign(`${APPROVE_URL}/enrol/${token}`);
+          } catch (e) {
+            setError(errorMessage(e));
+            setWorking(false);
+          }
+        }}
+      >
+        Create payment passkey
+      </Button>
+    </div>
+  );
+}
+
 function Wallet({ state, onNext }: { state: State; onNext: () => void }) {
   const setup = useMutation(api.onboarding.setupWallet);
   const fund = useMutation(api.onboarding.addTestFunds);
   const w = state.wallet;
+  const live = w?.status === "live";
   const [form, setForm] = useState({
     daily: w ? String(w.dailyCeilingMinor / 100) : "20",
     per: w?.perPaymentMinor ? String(w.perPaymentMinor / 100) : "10",
@@ -608,7 +672,7 @@ function Wallet({ state, onNext }: { state: State; onNext: () => void }) {
   return (
     <>
       <p className="-mt-3 mb-4 text-body text-ink-2">
-        The one place agents can actually pay from. It holds test USDC on Base Sepolia. Your bank and card accounts stay read-only.
+        The one place agents can actually pay from. It holds test dollars (tUSD, no value) on Base Sepolia. Your bank and card accounts stay read-only.
       </p>
       <div className="card space-y-4 p-4">
         <Field label="All agents together, per day">
@@ -630,7 +694,7 @@ function Wallet({ state, onNext }: { state: State; onNext: () => void }) {
           <IconTile icon={ShieldCheck} tone={w ? "green" : "page"} />
           <div className="flex-1">
             <div className="text-body font-semibold">Wallet</div>
-            <div className="text-label text-mute">{w ? `${formatMoney(w.balanceMinor, "USDC")} test USDC` : "Created when you continue"}</div>
+            <div className="text-label text-mute">{w ? `${formatMoney(w.balanceMinor, "USDC")} tUSD (test dollars, no value)` : "Created when you continue"}</div>
           </div>
           {w && (
             <Button size="sm" tone="outline" onClick={() => fund().catch((e) => setError(errorMessage(e)))}>
@@ -638,19 +702,23 @@ function Wallet({ state, onNext }: { state: State; onNext: () => void }) {
             </Button>
           )}
         </div>
-        <div className="flex items-center gap-3 py-3">
-          <IconTile icon={Fingerprint} tone="page" />
-          <div className="flex-1">
-            <div className="text-body font-semibold">Payment passkey</div>
-            <div className="text-label text-mute">Approves payments over your limits. Set up once signing is connected.</div>
-          </div>
-          <Chip tone="amber">Next</Chip>
-        </div>
       </div>
+
+      <PasskeyStep
+        hasWallet={Boolean(w)}
+        busy={busy}
+        createWallet={async () => {
+          const daily = toMinorUnits(form.daily, "USD") ?? 0;
+          const per = toMinorUnits(form.per, "USD") ?? 0;
+          const protect = toMinorUnits(form.protect || "0", "USD") ?? 0;
+          await setup({ dailyCeilingMinor: daily, perPaymentMinor: per, protectedMinor: protect });
+          await fund();
+        }}
+      />
       <ErrorText>{error}</ErrorText>
       <Footer>
         <Button size="lg" tone="outline" onClick={onNext}>
-          Skip
+          {live ? "Skip" : "Skip, keep it simulated"}
         </Button>
         <Continue
           busy={busy}
@@ -780,7 +848,10 @@ function People({ state, onNext }: { state: State; onNext: () => void }) {
 
       <div className="card mt-4 p-4">
         <h2 className="text-title font-semibold">Family</h2>
-        <p className="mb-3 text-label text-mute">They keep their own accounts. They can ask you for money; nothing moves without your approval.</p>
+        <p className="mb-3 text-label text-mute">
+          They keep their own accounts. They can ask you for money; nothing moves without your approval. Requests and quotes are simulated in this
+          prototype.
+        </p>
         {state.family.length > 0 && (
           <Divided className="mb-3">
             {state.family.map((f) => (
@@ -828,11 +899,16 @@ function People({ state, onNext }: { state: State; onNext: () => void }) {
   );
 }
 
-function Done({ onFinish }: { onFinish: () => void }) {
+function Done({ state, onFinish }: { state: State; onFinish: () => void }) {
   const home = useQuery(api.home.overview);
   const bills = useQuery(api.money.obligations);
+  const agents = useQuery(api.agents.list);
   const router = useRouter();
   const complete = useMutation(api.onboarding.complete);
+  const open = async (href: string) => {
+    await complete();
+    router.replace(href);
+  };
   if (!home || !bills) return <Skeleton className="h-64 rounded-card" />;
   const o = home.overview;
   const subs = bills.filter((b) => b.status === "active" && b.kind === "subscription");
@@ -853,6 +929,26 @@ function Done({ onFinish }: { onFinish: () => void }) {
             <div className="text-label text-ink-2">{f.sub}</div>
           </div>
         ))}
+      </div>
+      <div className="card mt-4 px-4 pb-1">
+        <h2 className="pt-4 text-title font-semibold">What makes it yours</h2>
+        <Divided>
+          {[
+            { label: "Put the wallet on-chain", sub: "A passkey and a vault contract on Base Sepolia", done: state.wallet?.status === "live", href: "/wallet" },
+            { label: "Connect an assistant", sub: "Claude Code, Cursor or another MCP client", done: (agents ?? []).some((a) => a.provider !== "own" && a.lastUsedAt), href: "/agents" },
+            { label: "Link Telegram", sub: "Approvals and replies in the chat you use", done: Boolean(state.chat?.linked), href: "/onboarding?step=chat" },
+          ].map((r) => (
+            <button key={r.label} onClick={() => (r.href.startsWith("/onboarding") ? window.location.assign(r.href) : open(r.href))} className="press flex w-full items-center gap-3 py-3 text-left">
+              <span className={cn("grid size-6 shrink-0 place-items-center rounded-full", r.done ? "bg-green text-white" : "border-2 border-line")}>
+                {r.done && <Check className="size-3.5" strokeWidth={3} />}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-body font-semibold">{r.label}</span>
+                <span className="block text-label text-mute">{r.done ? "Done" : r.sub}</span>
+              </span>
+            </button>
+          ))}
+        </Divided>
       </div>
       <Footer>
         <Button

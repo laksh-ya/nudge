@@ -233,6 +233,41 @@ export async function contactCapTask(ctx: MutationCtx, user: Doc<"users">, payee
   });
 }
 
+/**
+ * A contact the owner adds in the app. It is never "immediate", so the vault doesn't count it as a
+ * loosening: signing applies it at once and starts the contact's own waiting period, after which
+ * agents can pay it.
+ */
+export async function addContactTask(ctx: MutationCtx, user: Doc<"users">, payee: Doc<"payees">, wallet: Doc<"wallets">) {
+  const delay = wallet.vault?.contactDelay ?? DEFAULT_RULES.contactDelay;
+  return await ownerTask(ctx, user, {
+    title: `Add ${payee.name} to your contacts`,
+    reason: `Agents can pay a contact only once your passkey adds it to the vault, and then only after the vault's ${waitText(delay)} waiting period`,
+    op: Op.AddContact,
+    data: encode.addContact(contactIdOf(payee._id), payeeAddress(payee), false, { version: wallet.version, dailyCap: 0n }),
+    effects: { payees: [payee._id] },
+    minutes: 24 * 60,
+  });
+}
+
+/** A removed contact leaves the vault too, so even a stolen agent key can't pay it. Tightens, so it applies when signed. */
+export async function removeContactTask(ctx: MutationCtx, user: Doc<"users">, payee: Doc<"payees">) {
+  return await ownerTask(ctx, user, {
+    title: `Remove ${payee.name} from the vault`,
+    reason: `${payee.name} is already gone from your contacts, so no agent can ask to pay it. This takes it out of the vault as well.`,
+    op: Op.RemoveContact,
+    data: encode.removeContact(contactIdOf(payee._id)),
+    minutes: 24 * 60,
+  });
+}
+
+export function waitText(seconds: number) {
+  if (seconds <= 0) return "no";
+  if (seconds < 3600) return `${Math.round(seconds / 60)}-minute`;
+  if (seconds < 86_400) return `${+(seconds / 3600).toFixed(1)}-hour`;
+  return `${+(seconds / 86_400).toFixed(1)}-day`;
+}
+
 /** Take an agent's key out of the vault for good. Its history stays. */
 export async function removeAgentTask(ctx: MutationCtx, user: Doc<"users">, agent: Doc<"agents">) {
   return await ownerTask(ctx, user, {

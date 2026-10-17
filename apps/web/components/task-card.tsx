@@ -1,12 +1,14 @@
 "use client";
 
 import { useMutation } from "convex/react";
+import { useState } from "react";
 import { ExternalLink, Landmark, LoaderCircle, MessageCircle, Plug, Send, Users } from "lucide-react";
 import type { Currency, PaymentState } from "@agent-wallet/domain";
 import { api, type Id } from "@/lib/api";
 import { approvalLink } from "@/lib/config";
 import { cn } from "@/lib/cn";
-import { Button, ButtonLink, Money, StateChip } from "./ui";
+import { formatMoney } from "@/lib/format";
+import { Button, ButtonLink, Money, Sheet, StateChip } from "./ui";
 
 export type TaskView = {
   _id: Id<"tasks">;
@@ -17,6 +19,7 @@ export type TaskView = {
   payee?: string;
   agent?: string;
   reason?: string;
+  purpose?: string;
   rail: "simulator" | "base-sepolia" | "handoff";
   channel: "app" | "telegram" | "whatsapp" | "mcp" | "family";
   approvalToken?: string;
@@ -32,6 +35,8 @@ export function TaskCard({ task, className }: { task: TaskView; className?: stri
   const decide = useMutation(api.approvals.decide);
   const ChannelIcon = channelIcon[task.channel];
   const waiting = task.state === "awaiting_approval";
+  const [confirming, setConfirming] = useState(false);
+  const amount = task.amountMinor !== undefined ? formatMoney(task.amountMinor, task.currency ?? "USDC") : "";
   return (
     <div className={cn("rounded-[14px] border border-line bg-white p-3.5", className)}>
       <div className="flex items-start justify-between gap-3">
@@ -69,23 +74,50 @@ export function TaskCard({ task, className }: { task: TaskView; className?: stri
             ) : task.rail === "handoff" ? (
               <>
                 <ButtonLink size="sm" tone="ghost" href={approvalLink(task.approvalToken)} external>
-                  Open UPI
+                  Review
                 </ButtonLink>
                 <Button size="sm" onClick={() => decide({ token: task.approvalToken!, approve: true })}>
                   I paid
                 </Button>
               </>
             ) : (
-              <Button size="sm" onClick={() => decide({ token: task.approvalToken!, approve: true })}>
+              <Button size="sm" onClick={() => setConfirming(true)}>
                 Approve
               </Button>
             )}
           </div>
         )}
       </div>
-      {task.reason && (task.state === "failed" || task.state === "unknown") && (
-        <p className="mt-2 text-label text-ink-2">{task.reason}</p>
+      {task.reason && (task.state === "failed" || task.state === "unknown" || waiting) && (
+        <p className="mt-2 text-label text-ink-2">{waiting ? `Why you're asked: ${task.reason}` : task.reason}</p>
       )}
+      {waiting && task.purpose && task.agent && (
+        // The assistant wrote this; nothing checks it.
+        <p className="mt-1.5 line-clamp-2 rounded-md bg-page px-2 py-1 text-label break-words text-ink-2">
+          <span className="font-semibold text-mute">Note from {task.agent} · not verified: </span>
+          {task.purpose}
+        </p>
+      )}
+      <Sheet open={confirming} onOpenChange={setConfirming} title={`Approve ${amount} to ${task.payee ?? task.title}?`}>
+        <p className="text-body text-ink-2">
+          Simulated approval: this wallet has no passkey yet, so nothing on-chain checks it. Put the wallet on-chain (Wallet screen) to approve with your
+          passkey instead.
+        </p>
+        <div className="mt-5 mb-4 grid grid-cols-2 gap-2">
+          <Button tone="outline" size="lg" onClick={() => setConfirming(false)}>
+            Not now
+          </Button>
+          <Button
+            size="lg"
+            onClick={async () => {
+              setConfirming(false);
+              await decide({ token: task.approvalToken!, approve: true });
+            }}
+          >
+            Approve
+          </Button>
+        </div>
+      </Sheet>
       {task.txHash && (
         <a href={`https://sepolia.basescan.org/tx/${task.txHash}`} target="_blank" rel="noopener" className="mt-2 inline-flex items-center gap-1 text-label font-semibold text-cyan-ink">
           {task.state === "failed" ? "Refusal on-chain" : "View transaction"} <ExternalLink className="size-3" />

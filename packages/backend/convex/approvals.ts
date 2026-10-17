@@ -111,6 +111,26 @@ export const decide = mutation({
   },
 });
 
+/**
+ * Decline from the approval page itself. The link's token is enough: declining only stops a
+ * request (nothing is paid or loosened), so it needs neither sign-in nor the passkey.
+ */
+export const decline = mutation({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    if (token.length < 16) throw new Error("This link is no longer valid");
+    const task = await ctx.db
+      .query("tasks")
+      .withIndex("by_approval_token", (q) => q.eq("approvalToken", token))
+      .unique();
+    if (!task) throw new Error("This link is no longer valid");
+    if (task.state !== "awaiting_approval") return task.state;
+    await ctx.db.patch(task._id, { state: "cancelled", reason: "Declined on the approval page", updatedAt: Date.now() });
+    await ctx.db.insert("activity", { userId: task.userId, kind: task.amountMinor ? "payment" : "setting", title: `Declined ${task.title}`, detail: "Nothing was paid or changed", tone: "neutral" });
+    return "cancelled";
+  },
+});
+
 /** The passkey signed the exact action. The relayer submits it; the vault checks the signature itself. */
 export const submit = mutation({
   args: {
