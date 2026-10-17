@@ -46,5 +46,10 @@ export function mcpSnippets(url: string, key: string, name = "agent-wallet"): Sn
   ];
 }
 
-/** Clients that only connect through OAuth: not one-click until MCP OAuth ships (issue #14). */
+/**
+ * Clients that only connect through OAuth. MCP OAuth (#14) is built behind a flag that is off by
+ * default (Convex MCP_OAUTH=on plus NEXT_PUBLIC_MCP_OAUTH=on); until both are on, these are "coming soon".
+ */
+export const OAUTH_ON = process.env.NEXT_PUBLIC_MCP_OAUTH === "on";
+
 export const OAUTH_ONLY_CLIENTS = ["ChatGPT", "claude.ai", "Claude Desktop"] as const;

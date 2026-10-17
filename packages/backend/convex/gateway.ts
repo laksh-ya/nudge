@@ -23,7 +23,7 @@ import { scopeMessage, toolsFor } from "./lib/mcp";
 const DAY = 86_400_000;
 
 
-function randomToken() {
+export function randomToken() {
   const bytes = crypto.getRandomValues(new Uint8Array(24));
   return "aw_" + btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }

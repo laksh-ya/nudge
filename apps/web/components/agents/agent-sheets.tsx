@@ -130,7 +130,7 @@ export function ConnectSheet({ agent, onClose }: { agent: AgentView; onClose: ()
   );
 }
 
-const SCOPES = [
+export const SCOPES = [
   { id: "read" as const, label: "See money", hint: "Overview, bills and spending" },
   { id: "prepare" as const, label: "Prepare payments", hint: "Drafts that come to you" },
   { id: "spend" as const, label: "Pay within limits", hint: "From the agent wallet only" },

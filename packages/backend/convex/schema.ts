@@ -514,4 +514,26 @@ export default defineSchema({
     checkedAt: v.number(),
     alertedAt: v.optional(v.number()),
   }).index("by_key", ["key"]),
+
+  /**
+   * MCP OAuth 2.1 (issue #14, off unless MCP_OAUTH=on): clients registered dynamically (RFC 7591).
+   * Public clients only; a client is just a name and the exact redirect URIs it may use.
+   */
+  oauthClients: defineTable({
+    clientId: v.string(),
+    name: v.string(),
+    redirectUris: v.array(v.string()),
+    createdAt: v.number(),
+  }).index("by_client_id", ["clientId"]),
+
+  /** One-use authorization codes (hashed), bound to client, redirect URI and PKCE challenge. */
+  oauthCodes: defineTable({
+    codeHash: v.string(),
+    clientId: v.string(),
+    userId: v.id("users"),
+    agentId: v.id("agents"),
+    redirectUri: v.string(),
+    codeChallenge: v.string(),
+    expiresAt: v.number(),
+  }).index("by_code_hash", ["codeHash"]),
 });
