@@ -193,7 +193,7 @@ describe("contacts the owner adds and removes (#10)", () => {
     expect((await f.t.run((ctx) => ctx.db.get(cap!._id)))!.state).toBe("cancelled");
   });
 
-  it.each(["reserved", "submitted", "queued"] as const)("keeps a contact until its signed %s change settles", async (state) => {
+  it.each(["reserved", "submitted", "queued", "unknown"] as const)("keeps a contact until its signed %s change settles", async (state) => {
     const f = await live();
     const { payeeId, token } = await f.owner.mutation(api.contacts.add, { name: "Test Shop", address: NEW });
     const task = await f.t.run((ctx) => ctx.db.query("tasks").withIndex("by_approval_token", (q) => q.eq("approvalToken", token!)).unique());
@@ -214,6 +214,25 @@ describe("contacts the owner adds and removes (#10)", () => {
 });
 
 describe("declining from the approval page", () => {
+  it.each(["reserved", "submitted", "queued", "held", "unknown", "confirmed", "failed"] as const)("does not cancel a signed or settled %s task", async (state) => {
+    const f = await fixture();
+    const asked = await f.t.mutation(internal.gateway.proposePayment, { agentId: f.claude, contactId: f.payee, amount: 30, reason: "too big" });
+    const task = (await f.t.run((ctx) => ctx.db.get((asked as { taskId: Id<"tasks"> }).taskId)))!;
+    await f.t.run((ctx) => ctx.db.patch(task._id, { state }));
+    expect(await f.t.mutation(api.approvals.decline, { token: task.approvalToken! })).toBe(state);
+    expect((await f.t.run((ctx) => ctx.db.get(task._id)))!.state).toBe(state);
+  });
+
+  it("declines only the request bound to the supplied token", async () => {
+    const f = await fixture();
+    const first = await f.t.mutation(internal.gateway.proposePayment, { agentId: f.claude, contactId: f.payee, amount: 30, reason: "first" });
+    const second = await f.t.mutation(internal.gateway.proposePayment, { agentId: f.chatgpt, contactId: f.payee, amount: 40, reason: "second" });
+    const a = (await f.t.run((ctx) => ctx.db.get((first as { taskId: Id<"tasks"> }).taskId)))!;
+    const b = (await f.t.run((ctx) => ctx.db.get((second as { taskId: Id<"tasks"> }).taskId)))!;
+    await f.t.mutation(api.approvals.decline, { token: a.approvalToken! });
+    expect((await f.t.run((ctx) => ctx.db.get(a._id)))!.state).toBe("cancelled");
+    expect((await f.t.run((ctx) => ctx.db.get(b._id)))!.state).toBe("awaiting_approval");
+  });
   it("cancels with the link alone and is idempotent", async () => {
     const f = await fixture();
     const asked = await f.t.mutation(internal.gateway.proposePayment, { agentId: f.claude, contactId: f.payee, amount: 30, reason: "too big" });

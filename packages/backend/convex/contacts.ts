@@ -26,7 +26,7 @@ function changesContact(task: Doc<"tasks">, payeeId: Id<"payees">) {
 }
 
 async function changingOnChain(ctx: MutationCtx, userId: Id<"users">, payeeId: Id<"payees">) {
-  for (const state of ["reserved", "submitted", "queued"] as const) {
+  for (const state of ["reserved", "submitted", "queued", "unknown"] as const) {
     const tasks = await ctx.db.query("tasks").withIndex("by_user_state", (q) => q.eq("userId", userId).eq("state", state)).collect();
     if (tasks.some((t) => changesContact(t, payeeId))) return true;
   }
