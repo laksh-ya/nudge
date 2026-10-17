@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { country as countryInfo, decimalsOf, detectAddress } from "@agent-wallet/domain";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -69,17 +69,17 @@ export const add = mutation({
   handler: async (ctx, args) => {
     const user = await requireViewer(ctx);
     const existing = await ctx.db.query("accounts").withIndex("by_user", (q) => q.eq("userId", user._id)).take(MAX_ACCOUNTS);
-    if (existing.length >= MAX_ACCOUNTS) throw new Error("You can add up to 100 accounts");
+    if (existing.length >= MAX_ACCOUNTS) throw new ConvexError("You can add up to 100 accounts");
     const name = args.name.trim().slice(0, 60) || args.institution;
-    if (args.last4 !== undefined && !/^\d{4}$/.test(args.last4)) throw new Error("Use the last 4 digits only");
-    if (args.expiry !== undefined && !/^(0[1-9]|1[0-2])\/\d{2}$/.test(args.expiry)) throw new Error("Expiry looks like MM/YY");
+    if (args.last4 !== undefined && !/^\d{4}$/.test(args.last4)) throw new ConvexError("Use the last 4 digits only");
+    if (args.expiry !== undefined && !/^(0[1-9]|1[0-2])\/\d{2}$/.test(args.expiry)) throw new ConvexError("Expiry looks like MM/YY");
     const opening = args.openingBalanceMinor ?? 0;
-    if (!Number.isSafeInteger(opening) || Math.abs(opening) > 1e14) throw new Error("Balance is out of range");
+    if (!Number.isSafeInteger(opening) || Math.abs(opening) > 1e14) throw new ConvexError("Balance is out of range");
     if (args.kind === "crypto" && args.address) {
       const address = args.address.trim();
       const family = detectAddress(address);
-      if (!family || (args.chain && family !== args.chain)) throw new Error("That doesn't look like a wallet address");
-      if (existing.some((a) => a.address?.toLowerCase() === address.toLowerCase())) throw new Error("This address is already added");
+      if (!family || (args.chain && family !== args.chain)) throw new ConvexError("That doesn't look like a wallet address");
+      if (existing.some((a) => a.address?.toLowerCase() === address.toLowerCase())) throw new ConvexError("This address is already added");
     }
     // A connection never grants spending authority. Only the agent wallet can execute.
     const can = args.can.filter((c) => c !== "execute");
@@ -131,7 +131,7 @@ export const update = mutation({
   handler: async (ctx, { accountId, name, uses, balanceMinor }) => {
     const user = await requireViewer(ctx);
     const account = await own(user, await ctx.db.get(accountId));
-    if (balanceMinor !== undefined && (!Number.isSafeInteger(balanceMinor) || Math.abs(balanceMinor) > 1e14)) throw new Error("Balance is out of range");
+    if (balanceMinor !== undefined && (!Number.isSafeInteger(balanceMinor) || Math.abs(balanceMinor) > 1e14)) throw new ConvexError("Balance is out of range");
     await ctx.db.patch(account._id, {
       name: name?.trim().slice(0, 60) || account.name,
       uses: uses?.slice(0, 6) ?? account.uses,

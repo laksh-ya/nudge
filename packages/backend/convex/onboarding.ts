@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { changeLimits, revokeAgent } from "./lib/control";
 import { policyTask } from "./lib/actions";
 import { country as countryInfo, isVaultVersion } from "@agent-wallet/domain";
@@ -76,7 +76,7 @@ export const setStep = mutation({
   args: { step: v.string() },
   handler: async (ctx, { step }) => {
     const user = await requireViewer(ctx);
-    if (!(STEPS as readonly string[]).includes(step)) throw new Error("Unknown step");
+    if (!(STEPS as readonly string[]).includes(step)) throw new ConvexError("Unknown step");
     await ctx.db.patch(user._id, { onboardingStep: step });
   },
 });
@@ -94,17 +94,17 @@ export const savePreferences = mutation({
   handler: async (ctx, args) => {
     const user = await requireViewer(ctx);
     const name = args.name.trim().slice(0, 40);
-    if (!name) throw new Error("Add your name");
+    if (!name) throw new ConvexError("Add your name");
     const c = countryInfo(args.country);
     let nextIncomeAt = user.nextIncomeAt;
     if (args.incomeDay !== undefined) {
-      if (!Number.isInteger(args.incomeDay) || args.incomeDay < 1 || args.incomeDay > 31) throw new Error("Pick a day from 1 to 31");
+      if (!Number.isInteger(args.incomeDay) || args.incomeDay < 1 || args.incomeDay > 31) throw new ConvexError("Pick a day from 1 to 31");
       const now = new Date();
       const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), args.incomeDay, 6));
       if (next.getTime() <= now.getTime()) next.setUTCMonth(next.getUTCMonth() + 1);
       nextIncomeAt = next.getTime();
     }
-    for (const n of [args.monthlyBudgetMinor, args.emergencyMinor]) if (n !== undefined && !minorOk(n)) throw new Error("Amount is out of range");
+    for (const n of [args.monthlyBudgetMinor, args.emergencyMinor]) if (n !== undefined && !minorOk(n)) throw new ConvexError("Amount is out of range");
     await ctx.db.patch(user._id, {
       name,
       country: c.code,
@@ -166,8 +166,8 @@ export const saveAssistant = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireViewer(ctx);
-    if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(args.quietFrom) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(args.quietTo)) throw new Error("Use HH:MM");
-    if (!Number.isInteger(args.reminderLeadDays) || args.reminderLeadDays < 0 || args.reminderLeadDays > 14) throw new Error("Pick 0 to 14 days");
+    if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(args.quietFrom) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(args.quietTo)) throw new ConvexError("Use HH:MM");
+    if (!Number.isInteger(args.reminderLeadDays) || args.reminderLeadDays < 0 || args.reminderLeadDays > 14) throw new ConvexError("Pick 0 to 14 days");
     await ctx.db.patch(user._id, args);
     const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
     await ownAssistant(ctx, user, args.autonomy, wallet);
@@ -178,8 +178,8 @@ export const setupWallet = mutation({
   args: { dailyCeilingMinor: v.number(), protectedMinor: v.number(), perPaymentMinor: v.number() },
   handler: async (ctx, args) => {
     const user = await requireViewer(ctx);
-    for (const n of Object.values(args)) if (!minorOk(n)) throw new Error("Amount is out of range");
-    if (args.perPaymentMinor > args.dailyCeilingMinor) throw new Error("A single payment can't exceed the daily ceiling");
+    for (const n of Object.values(args)) if (!minorOk(n)) throw new ConvexError("Amount is out of range");
+    if (args.perPaymentMinor > args.dailyCeilingMinor) throw new ConvexError("A single payment can't exceed the daily ceiling");
     const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
     if (wallet?.status === "live" && isVaultVersion(wallet.version)) {
       // The vault enforces these. Our gateway takes whichever is stricter right away; the vault
@@ -223,9 +223,9 @@ export const addTestFunds = mutation({
   handler: async (ctx) => {
     const user = await requireViewer(ctx);
     const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
-    if (!wallet) throw new Error("Set up the wallet first");
-    if (wallet.status === "live") throw new Error("Your vault holds real test tokens on-chain; it was funded when it was created");
-    if (wallet.balanceMinor >= 100_000) throw new Error("Test balance is capped at $1,000");
+    if (!wallet) throw new ConvexError("Set up the wallet first");
+    if (wallet.status === "live") throw new ConvexError("Your vault holds real test tokens on-chain; it was funded when it was created");
+    if (wallet.balanceMinor >= 100_000) throw new ConvexError("Test balance is capped at $1,000");
     await ctx.db.patch(wallet._id, { balanceMinor: wallet.balanceMinor + 10_000 });
     await ctx.db.insert("activity", { userId: user._id, kind: "payment", title: "Added $100.00 tUSD (test dollars, no value)", detail: "Simulated funds", tone: "neutral" });
   },
@@ -281,14 +281,14 @@ export const addAssistant = mutation({
     const live = agents.filter((a) => a.status !== "revoked" && a.provider !== "own");
     const label = (name ?? "").replace(/\s+/g, " ").trim().slice(0, 30);
     if (provider === "other") {
-      if (!/^[\p{L}\p{N}][\p{L}\p{N} ._-]*$/u.test(label)) throw new Error("Name the assistant (letters, numbers, spaces, . _ -)");
+      if (!/^[\p{L}\p{N}][\p{L}\p{N} ._-]*$/u.test(label)) throw new ConvexError("Name the assistant (letters, numbers, spaces, . _ -)");
       const same = live.find((a) => a.name.toLowerCase() === label.toLowerCase());
       if (same) return same._id;
     } else {
       const found = live.find((a) => a.provider === provider);
       if (found) return found._id;
     }
-    if (live.length >= MAX_ASSISTANTS) throw new Error(`Up to ${MAX_ASSISTANTS} assistants. Disconnect one first.`);
+    if (live.length >= MAX_ASSISTANTS) throw new ConvexError(`Up to ${MAX_ASSISTANTS} assistants. Disconnect one first.`);
     const names = { claude: "Claude", chatgpt: "ChatGPT", openclaw: "OpenClaw", hermes: "Hermes", poke: "Poke", other: label };
     return await ctx.db.insert("agents", {
       userId: user._id,
@@ -311,7 +311,7 @@ export const removeAssistant = mutation({
   handler: async (ctx, { agentId }) => {
     const user = await requireViewer(ctx);
     const agent = await ctx.db.get(agentId);
-    if (!agent || agent.userId !== user._id || agent.provider === "own") throw new Error("Not found");
+    if (!agent || agent.userId !== user._id || agent.provider === "own") throw new ConvexError("Not found");
     // A key that ever reached the vault is disconnected and frozen, never silently deleted.
     if (agent.chainAddress) return await revokeAgent(ctx, user, agent);
     await ctx.db.delete(agentId);
@@ -324,7 +324,7 @@ export const inviteFamily = mutation({
   handler: async (ctx, args) => {
     const user = await requireViewer(ctx);
     const name = args.name.trim().slice(0, 40);
-    if (!name) throw new Error("Add their name");
+    if (!name) throw new ConvexError("Add their name");
     const c = countryInfo(args.country);
     return await ctx.db.insert("family", {
       userId: user._id,
@@ -358,7 +358,7 @@ export const restart = mutation({
   args: { fresh: v.boolean() },
   handler: async (ctx, { fresh }) => {
     const user = await requireViewer(ctx);
-    if (fresh && user.tokenIdentifier === JUDGE) throw new Error("The judge account keeps its vault; it can't be wiped from the app");
+    if (fresh && user.tokenIdentifier === JUDGE) throw new ConvexError("The judge account keeps its vault; it can't be wiped from the app");
     if (fresh) {
       await wipeUser(ctx, user._id);
       await ctx.db.patch(user._id, { onboardedAt: undefined, priorities: [], autonomy: undefined, incomeDay: undefined, nextIncomeAt: Date.now() + 30 * DAY });

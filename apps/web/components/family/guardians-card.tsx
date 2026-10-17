@@ -7,9 +7,10 @@ import { ShieldCheck, UserPlus, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { approvalLink } from "@/lib/config";
 import { Initial } from "@/components/brand";
+import { errorMessage } from "@/components/form";
 import { Button, Card, Chip, Divided, Row } from "@/components/ui";
 
-const message = (e: unknown) => (e instanceof Error ? e.message.replace(/^.*Uncaught Error: /, "").split("\n")[0] : "Something went wrong");
+const message = errorMessage;
 
 /**
  * The owner's side: invite someone they trust to watch held payments and stop them, remove them at

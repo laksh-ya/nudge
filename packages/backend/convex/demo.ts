@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { internalMutation, mutation } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
@@ -21,7 +21,7 @@ export const restore = mutation({
   args: {},
   handler: async (ctx) => {
     const user = await viewer(ctx);
-    if (!user || !isSandbox(user)) throw new Error("Only a demo sandbox can be restored");
+    if (!user || !isSandbox(user)) throw new ConvexError("Only a demo sandbox can be restored");
     return await resetDemo(ctx, user._id);
   },
 });

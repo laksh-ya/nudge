@@ -12,6 +12,7 @@ import { AgentMark } from "@/components/brand";
 import { FreezeAll } from "@/components/shell";
 import { ConnectSheet, PermissionsSheet, type AgentView } from "@/components/agents/agent-sheets";
 import { Button, Card, Chip, Meter, PageTitle, Sheet, Skeleton } from "@/components/ui";
+import { errorMessage } from "@/components/form";
 
 const DAY = 86_400_000;
 
@@ -146,7 +147,7 @@ export default function AgentsPage() {
               setOtherName("");
               setSheet({ id, kind: "connect" });
             } catch (err) {
-              setAddError(err instanceof Error ? err.message.replace(/^.*Uncaught Error: /, "").split("\n")[0] : "Couldn't add it");
+              setAddError(errorMessage(err));
             }
           }}
         >

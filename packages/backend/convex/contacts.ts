@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { isVaultVersion } from "@agent-wallet/domain";
 import { getAddress, isAddress, zeroAddress } from "viem";
 import { mutation } from "./_generated/server";
@@ -48,24 +48,24 @@ export const add = mutation({
     const user = await requireViewer(ctx);
     await hit(ctx, `contact-add:${user._id}`, 10, 60_000);
     const name = args.name.trim().replace(/\s+/g, " ");
-    if (!name || name.length > 40) throw new Error("Give the contact a name, up to 40 characters");
+    if (!name || name.length > 40) throw new ConvexError("Give the contact a name, up to 40 characters");
     const raw = args.address.trim();
-    if (!isAddress(raw, { strict: false })) throw new Error("That isn't a wallet address. It starts with 0x followed by 40 letters and digits.");
+    if (!isAddress(raw, { strict: false })) throw new ConvexError("That isn't a wallet address. It starts with 0x followed by 40 letters and digits.");
     // Mixed case carries a checksum; a typo in it means the address was copied wrong.
     if (raw !== raw.toLowerCase() && raw.slice(2) !== raw.slice(2).toUpperCase() && !isAddress(raw)) {
-      throw new Error("That address's capital letters don't match its checksum. Copy it again.");
+      throw new ConvexError("That address's capital letters don't match its checksum. Copy it again.");
     }
     const address = getAddress(raw);
-    if (address === zeroAddress) throw new Error("That address can't receive payments");
+    if (address === zeroAddress) throw new ConvexError("That address can't receive payments");
 
     const w = await walletOf(ctx, user._id);
-    if (w?.address && w.address.toLowerCase() === address.toLowerCase()) throw new Error("That's your own wallet");
-    if (isLive(w) && !isVaultVersion(w.version)) throw new Error("Move to the current vault first (Wallet screen)");
+    if (w?.address && w.address.toLowerCase() === address.toLowerCase()) throw new ConvexError("That's your own wallet");
+    if (isLive(w) && !isVaultVersion(w.version)) throw new ConvexError("Move to the current vault first (Wallet screen)");
     const payees = await ctx.db.query("payees").withIndex("by_user", (q) => q.eq("userId", user._id)).take(200);
-    if (payees.length >= 200) throw new Error("You have 200 contacts already. Remove one first.");
+    if (payees.length >= 200) throw new ConvexError("You have 200 contacts already. Remove one first.");
     const sameAddress = payees.find((p) => p.address?.toLowerCase() === address.toLowerCase());
-    if (sameAddress) throw new Error(`That address is already saved as ${sameAddress.name}`);
-    if (payees.some((p) => p.name.toLowerCase() === name.toLowerCase())) throw new Error(`You already have a contact called ${name}`);
+    if (sameAddress) throw new ConvexError(`That address is already saved as ${sameAddress.name}`);
+    if (payees.some((p) => p.name.toLowerCase() === name.toLowerCase())) throw new ConvexError(`You already have a contact called ${name}`);
 
     const live = isLive(w);
     const payeeId = await ctx.db.insert("payees", {
@@ -100,10 +100,10 @@ export const approveAdd = mutation({
   handler: async (ctx, { payeeId }) => {
     const user = await requireViewer(ctx);
     const payee = await own(user, await ctx.db.get(payeeId));
-    if (!payee.pendingPasskey) throw new Error(`${payee.name} is already in your vault`);
+    if (!payee.pendingPasskey) throw new ConvexError(`${payee.name} is already in your vault`);
     const w = await walletOf(ctx, user._id);
-    if (!isLive(w) || !isVaultVersion(w.version)) throw new Error("Your wallet isn't on-chain");
-    if (await changingOnChain(ctx, user._id, payeeId)) throw new Error("This contact's approval is already being applied. Wait for it to finish.");
+    if (!isLive(w) || !isVaultVersion(w.version)) throw new ConvexError("Your wallet isn't on-chain");
+    if (await changingOnChain(ctx, user._id, payeeId)) throw new ConvexError("This contact's approval is already being applied. Wait for it to finish.");
     const open = (await pendingAdd(ctx, user, payeeId)).find((t) => (t.expiresAt ?? 0) > Date.now() && t.approvalToken);
     if (open) return open.approvalToken!;
     await hit(ctx, `contact-add:${user._id}`, 10, 60_000);
@@ -119,7 +119,7 @@ export const remove = mutation({
     const w = await walletOf(ctx, user._id);
     // Once signed, an add/cap change may still land in the vault. Keep the record until it
     // settles, so removal can include the correct on-chain RemoveContact approval.
-    if (await changingOnChain(ctx, user._id, payeeId)) throw new Error("A signed change to this contact is still being applied. Wait for it to finish, then remove the contact.");
+    if (await changingOnChain(ctx, user._id, payeeId)) throw new ConvexError("A signed change to this contact is still being applied. Wait for it to finish, then remove the contact.");
     // Requests still asking for approval to pay it, or to add/change it, stop now.
     const waiting = await ctx.db
       .query("tasks")

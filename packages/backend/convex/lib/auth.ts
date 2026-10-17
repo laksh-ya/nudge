@@ -1,3 +1,4 @@
+import { ConvexError } from "convex/values";
 import type { Doc } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 
@@ -38,9 +39,9 @@ export async function judgeReadOnly(ctx: QueryCtx | MutationCtx, user: Pick<Doc<
 
 export async function requireViewer(ctx: QueryCtx | MutationCtx): Promise<Doc<"users">> {
   const user = await viewer(ctx);
-  if (!user) throw new Error("Not signed in");
+  if (!user) throw new ConvexError("Not signed in");
   // Every public mutation starts here, so this one check keeps visitors from changing the judge account.
-  if ("insert" in ctx.db && (await judgeReadOnly(ctx, user))) throw new Error(JUDGE_READ_ONLY);
+  if ("insert" in ctx.db && (await judgeReadOnly(ctx, user))) throw new ConvexError(JUDGE_READ_ONLY);
   return user;
 }
 
@@ -48,6 +49,6 @@ export async function own<T extends { userId: Doc<"users">["_id"] }>(
   user: Doc<"users">,
   doc: T | null,
 ): Promise<T> {
-  if (!doc || doc.userId !== user._id) throw new Error("Not found");
+  if (!doc || doc.userId !== user._id) throw new ConvexError("Not found");
   return doc;
 }

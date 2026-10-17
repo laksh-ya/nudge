@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { isVaultVersion } from "@agent-wallet/domain";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { unfreezeTask } from "./lib/actions";
@@ -20,7 +20,7 @@ export const setStatus = mutation({
   handler: async (ctx, { agentId, status }) => {
     const user = await requireViewer(ctx);
     const agent = await own(user, await ctx.db.get(agentId));
-    if (agent.status === "revoked") throw new Error("Agent was revoked");
+    if (agent.status === "revoked") throw new ConvexError("Agent was revoked");
     if (status === "frozen") {
       await freezeAgent(ctx, user, agent);
       await ctx.db.insert("activity", { userId: user._id, kind: "agent", title: `${agent.name} frozen`, tone: "warn" });

@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { own, requireViewer, viewer } from "./lib/auth";
 import { newApprovalToken } from "./lib/seed";
@@ -26,7 +26,7 @@ export const respond = mutation({
   handler: async (ctx, { requestId, approve }) => {
     const user = await requireViewer(ctx);
     const request = await own(user, await ctx.db.get(requestId));
-    if (request.state !== "requested") throw new Error("Already handled");
+    if (request.state !== "requested") throw new ConvexError("Already handled");
     if (!approve) {
       await ctx.db.patch(requestId, { state: "declined" });
       return null;

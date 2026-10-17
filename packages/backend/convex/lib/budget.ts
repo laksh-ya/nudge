@@ -1,3 +1,4 @@
+import { ConvexError } from "convex/values";
 import type { Doc } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { isSandbox } from "./auth";
@@ -30,7 +31,7 @@ export async function spendDeploy(ctx: MutationCtx, user: Doc<"users">) {
   await hit(ctx, "deploys", DEPLOYS_PER_HOUR, HOUR, "Too many wallets are being created right now. Try again in a few minutes.");
   if (!isSandbox(user)) return;
   const runway = await ctx.db.query("ops").withIndex("by_key", (q) => q.eq("key", "relayer")).unique();
-  if (runway && runway.runway < RUNWAY_RESERVE) throw new Error("The demo's test ETH is being topped up. Try again in a little while.");
+  if (runway && runway.runway < RUNWAY_RESERVE) throw new ConvexError("The demo's test ETH is being topped up. Try again in a little while.");
   await hit(ctx, `deploys:visitor:${await visitorOf(ctx, user)}`, VISITOR_DEPLOYS_PER_DAY, DAY, `You've made ${VISITOR_DEPLOYS_PER_DAY} demo vaults today. Keep using one of them, or come back tomorrow.`);
   await hit(ctx, "deploys:sandbox", SANDBOX_DEPLOYS_PER_DAY, DAY, "Demo vaults are used up for today. Sign up, or try again tomorrow.");
 }

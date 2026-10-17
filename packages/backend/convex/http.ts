@@ -1,3 +1,5 @@
+import { ConvexError } from "convex/values";
+import { errorText } from "./lib/errors";
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -89,13 +91,12 @@ async function callTool(ctx: ActionCtx, agentId: Id<"agents">, name: string, arg
     case "cancel_task":
       return await ctx.runMutation(internal.gateway.cancelTask, { agentId, taskId: str("taskId") });
     default:
-      throw new Error(`Unknown tool ${name}`);
+      throw new ConvexError(`Unknown tool ${name}`);
   }
 }
 
 function cleanError(e: unknown) {
-  const m = e instanceof Error ? e.message : String(e);
-  return (m.match(/Uncaught Error: ([^\n]+)/)?.[1] ?? m).slice(0, 200);
+  return errorText(e);
 }
 
 async function handle(ctx: ActionCtx, agent: Caller, value: unknown) {

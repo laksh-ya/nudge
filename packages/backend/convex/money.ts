@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { merchantKey } from "@agent-wallet/domain";
 import { mutation, query } from "./_generated/server";
@@ -126,7 +126,7 @@ export const updateObligation = mutation({
   handler: async (ctx, { id, autopayLimitMinor, status }) => {
     const user = await requireViewer(ctx);
     const o = await own(user, await ctx.db.get(id));
-    if (typeof autopayLimitMinor === "number" && !minorOk(autopayLimitMinor)) throw new Error("Amount is out of range");
+    if (typeof autopayLimitMinor === "number" && !minorOk(autopayLimitMinor)) throw new ConvexError("Amount is out of range");
     await ctx.db.patch(o._id, {
       ...(autopayLimitMinor !== undefined ? { autopayLimitMinor: autopayLimitMinor ?? undefined } : {}),
       ...(status ? { status } : {}),
@@ -145,9 +145,9 @@ export const addObligation = mutation({
   handler: async (ctx, args) => {
     const user = await requireViewer(ctx);
     const name = args.name.trim().slice(0, 60);
-    if (!name) throw new Error("Add a name");
-    if (!minorOk(args.amountMinor)) throw new Error("Amount is out of range");
-    if (!Number.isFinite(args.nextDueAt)) throw new Error("Pick a date");
+    if (!name) throw new ConvexError("Add a name");
+    if (!minorOk(args.amountMinor)) throw new ConvexError("Amount is out of range");
+    if (!Number.isFinite(args.nextDueAt)) throw new ConvexError("Pick a date");
     return await ctx.db.insert("obligations", {
       userId: user._id,
       name,
@@ -168,8 +168,8 @@ export const addGoal = mutation({
   handler: async (ctx, { name, targetMinor, icon }) => {
     const user = await requireViewer(ctx);
     const n = name.trim().slice(0, 40);
-    if (!n) throw new Error("Name your goal");
-    if (!minorOk(targetMinor)) throw new Error("Amount is out of range");
+    if (!n) throw new ConvexError("Name your goal");
+    if (!minorOk(targetMinor)) throw new ConvexError("Amount is out of range");
     return await ctx.db.insert("goals", { userId: user._id, name: n, icon: icon.slice(0, 20), targetMinor, savedMinor: 0, currency: user.currency });
   },
 });
@@ -179,7 +179,7 @@ export const contribute = mutation({
   handler: async (ctx, { goalId, amountMinor }) => {
     const user = await requireViewer(ctx);
     const g = await own(user, await ctx.db.get(goalId));
-    if (!Number.isSafeInteger(amountMinor) || amountMinor === 0 || Math.abs(amountMinor) > 1e13) throw new Error("Amount is out of range");
+    if (!Number.isSafeInteger(amountMinor) || amountMinor === 0 || Math.abs(amountMinor) > 1e13) throw new ConvexError("Amount is out of range");
     await ctx.db.patch(g._id, { savedMinor: Math.max(0, g.savedMinor + amountMinor) });
   },
 });
@@ -188,7 +188,7 @@ export const setBudget = mutation({
   args: { monthlyBudgetMinor: v.number(), emergencyMinor: v.number() },
   handler: async (ctx, args) => {
     const user = await requireViewer(ctx);
-    for (const n of Object.values(args)) if (!Number.isSafeInteger(n) || n < 0 || n > 1e13) throw new Error("Amount is out of range");
+    for (const n of Object.values(args)) if (!Number.isSafeInteger(n) || n < 0 || n > 1e13) throw new ConvexError("Amount is out of range");
     await ctx.db.patch(user._id, args);
   },
 });

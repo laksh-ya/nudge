@@ -1,6 +1,7 @@
 import { classify } from "./lib/intent";
+import { errorText } from "./lib/errors";
 import { ungroundedNumbers } from "./lib/grounding";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import Anthropic from "@anthropic-ai/sdk";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import type { ActionCtx } from "./_generated/server";
@@ -153,7 +154,7 @@ export const freeze = internalMutation({
   args: { userId: v.id("users"), reason: v.string() },
   handler: async (ctx, { userId, reason }) => {
     const user = await ctx.db.get(userId);
-    if (!user) throw new Error("No such user");
+    if (!user) throw new ConvexError("No such user");
     const n = await freezeAll(ctx, user, `Asked in chat: ${reason.slice(0, 80)}`);
     return { frozen: n };
   },
@@ -163,7 +164,7 @@ export const spendingFor = internalQuery({
   args: { userId: v.id("users"), category: v.optional(v.string()), period: v.optional(v.string()) },
   handler: async (ctx, { userId, category, period }) => {
     const user = await ctx.db.get(userId);
-    if (!user) throw new Error("No such user");
+    if (!user) throw new ConvexError("No such user");
     const s = await spendingSummary(ctx, user, `${category ?? ""} ${period ?? "this month"}`);
     return { summary: spendingSentence(s), period: s.period.label, category: s.category, merchant: s.merchant, total: s.totalMinor, currency: s.currency, payments: s.count };
   },
@@ -173,7 +174,7 @@ export const goals = internalQuery({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
     const user = await ctx.db.get(userId);
-    if (!user) throw new Error("No such user");
+    if (!user) throw new ConvexError("No such user");
     const { goals } = await findGoal(ctx, userId, null);
     return goals.map((g) => goalLine(g, safeTz(user.timezone)));
   },
@@ -183,8 +184,8 @@ export const goalSave = internalMutation({
   args: { userId: v.id("users"), name: v.string(), target: v.number(), by: v.optional(v.string()) },
   handler: async (ctx, { userId, name, target, by }) => {
     const user = await ctx.db.get(userId);
-    if (!user) throw new Error("No such user");
-    if (!Number.isFinite(target) || target <= 0) throw new Error("Target must be a positive amount");
+    if (!user) throw new ConvexError("No such user");
+    if (!Number.isFinite(target) || target <= 0) throw new ConvexError("Target must be a positive amount");
     const dueAt = by ? (parseDeadline(by.startsWith("by") || by.startsWith("in") ? by : `by ${by}`, Date.now(), user.timezone) ?? undefined) : undefined;
     const { match } = await findGoal(ctx, userId, name);
     const r = await saveGoal(ctx, user, { goalId: match?._id, name: match?.name ?? name, targetMinor: toMinor(target, user.currency), currency: user.currency, dueAt });
@@ -197,9 +198,9 @@ export const reminderSet = internalMutation({
   args: { userId: v.id("users"), what: v.string(), when: v.string() },
   handler: async (ctx, { userId, what, when }) => {
     const user = await ctx.db.get(userId);
-    if (!user) throw new Error("No such user");
+    if (!user) throw new ConvexError("No such user");
     const at = parseWhen(when, Date.now(), user.timezone);
-    if (!at) throw new Error(`I couldn't read a time from "${when}". Use something like "tomorrow at 9am" or "on the 1st".`);
+    if (!at) throw new ConvexError(`I couldn't read a time from "${when}". Use something like "tomorrow at 9am" or "on the 1st".`);
     const bills = (await ctx.db.query("obligations").withIndex("by_user_due", (q) => q.eq("userId", userId)).take(100)).filter((o) => o.status === "active");
     const bill = matchBill(what, bills)[0];
     await createReminder(ctx, user, { text: what.slice(0, 140), dueAt: at, repeat: parseRepeat(when.toLowerCase()), obligationId: bill?._id });
@@ -259,7 +260,7 @@ async function runTool(ctx: ActionCtx, userId: Id<"users">, agentId: Id<"agents"
     case "list_reminders":
       return await ctx.runQuery(internal.assistant.reminderList, { userId });
     default:
-      throw new Error(`Unknown tool ${name}`);
+      throw new ConvexError(`Unknown tool ${name}`);
   }
 }
 
@@ -334,14 +335,14 @@ export const respond = internalAction({
         const results: Anthropic.Beta.BetaToolResultBlockParam[] = [];
         for (const u of uses) {
           try {
-            if (!readTools.has(u.name)) throw new Error("Use the owner’s explicit instruction in chat; this model can only read.");
+            if (!readTools.has(u.name)) throw new ConvexError("Use the owner’s explicit instruction in chat; this model can only read.");
             if (["propose_payment", "cancel_task", "freeze_all_agents", "save_goal", "set_reminder"].includes(u.name)) acted = true;
             const out = (await runTool(ctx, userId, c.ownAgentId, u.name, u.input as Record<string, unknown>)) as Record<string, unknown> | null;
             if (out && typeof out === "object" && typeof out.taskId === "string") taskId = out.taskId as Id<"tasks">;
             provenance.push(JSON.stringify(out));
             results.push({ type: "tool_result", tool_use_id: u.id, content: JSON.stringify(out) });
           } catch (e) {
-            const msg = e instanceof Error ? (e.message.match(/Uncaught Error: ([^\n]+)/)?.[1] ?? e.message) : String(e);
+            const msg = errorText(e, 1000);
             results.push({ type: "tool_result", tool_use_id: u.id, content: msg.slice(0, 300), is_error: true });
           }
         }

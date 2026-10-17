@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { base64url, EXPLORER, formatMoney, isVaultVersion, keyIdOf, Op, REFUSAL, testPayeeAddress, VAULT_VERSION, type IntentMandate } from "@agent-wallet/domain";
 import type { Address, Hex } from "viem";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
@@ -126,8 +126,8 @@ export const startEnrol = mutation({
     const user = await requireViewer(ctx);
     let w = await walletOf(ctx, user._id);
     if (purpose === "backup") {
-      if (w?.status !== "live" || !isVaultVersion(w.version)) throw new Error("Put the wallet on-chain first");
-      if ((w.passkeys ?? []).filter((p) => p.status !== "removed").length >= 3) throw new Error("You already have three passkeys");
+      if (w?.status !== "live" || !isVaultVersion(w.version)) throw new ConvexError("Put the wallet on-chain first");
+      if ((w.passkeys ?? []).filter((p) => p.status !== "removed").length >= 3) throw new ConvexError("You already have three passkeys");
     } else {
       if (!w) {
         const id = await ctx.db.insert("wallets", {
@@ -143,8 +143,8 @@ export const startEnrol = mutation({
         });
         w = (await ctx.db.get(id))!;
       }
-      if (w.status === "live" || w.status === "deploying") throw new Error("Your wallet already has a passkey");
-      if (isSandbox(user) && w.deployRequestedAt) throw new Error("Each demo account can create one vault");
+      if (w.status === "live" || w.status === "deploying") throw new ConvexError("Your wallet already has a passkey");
+      if (isSandbox(user) && w.deployRequestedAt) throw new ConvexError("Each demo account can create one vault");
     }
     const token = newApprovalToken();
     const challenge = base64url(crypto.getRandomValues(new Uint8Array(32)));
@@ -182,7 +182,7 @@ export const enrolInfo = query({
 
 function hexToBytes(hex: string) {
   const h = hex.startsWith("0x") ? hex.slice(2) : hex;
-  if (!/^[0-9a-fA-F]*$/.test(h) || h.length % 2) throw new Error("Bad hex");
+  if (!/^[0-9a-fA-F]*$/.test(h) || h.length % 2) throw new ConvexError("Bad hex");
   return Uint8Array.from(h.match(/../g) ?? [], (b) => parseInt(b, 16));
 }
 
@@ -202,25 +202,25 @@ async function verifyRegistration(args: { clientDataJSON: string; authenticatorD
   try {
     client = JSON.parse(args.clientDataJSON);
   } catch {
-    throw new Error("Bad registration");
+    throw new ConvexError("Bad registration");
   }
-  if (client.type !== "webauthn.create" || client.challenge !== challenge) throw new Error("This passkey wasn't made for this setup link");
+  if (client.type !== "webauthn.create" || client.challenge !== challenge) throw new ConvexError("This passkey wasn't made for this setup link");
   const origin = client.origin ?? "";
   const originOk = origin === `https://${args.rpId}` || (args.rpId === "localhost" && /^http:\/\/localhost:\d+$/.test(origin));
-  if (!originOk) throw new Error("Passkeys can only be made on the approval site");
+  if (!originOk) throw new ConvexError("Passkeys can only be made on the approval site");
   const auth = hexToBytes(args.authenticatorData);
-  if (auth.length < 55) throw new Error("Bad registration");
+  if (auth.length < 55) throw new ConvexError("Bad registration");
   const rpIdHash = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(args.rpId)));
-  if (!rpIdHash.every((b, i) => b === auth[i])) throw new Error("Passkeys can only be made on the approval site");
+  if (!rpIdHash.every((b, i) => b === auth[i])) throw new ConvexError("Passkeys can only be made on the approval site");
   const flags = auth[32]!;
-  if (!(flags & 0x01) || !(flags & 0x04) || !(flags & 0x40)) throw new Error("This passkey must use Face ID, a fingerprint or your device PIN");
+  if (!(flags & 0x01) || !(flags & 0x04) || !(flags & 0x40)) throw new ConvexError("This passkey must use Face ID, a fingerprint or your device PIN");
   const credLen = (auth[53]! << 8) | auth[54]!;
   const cose = 55 + credLen;
   const xi = find(auth, [0x21, 0x58, 0x20], cose);
   const yi = find(auth, [0x22, 0x58, 0x20], cose);
-  if (xi < 0 || yi < 0) throw new Error("That isn't a P-256 passkey");
+  if (xi < 0 || yi < 0) throw new ConvexError("That isn't a P-256 passkey");
   if (toHex(auth.slice(xi + 3, xi + 35)).toLowerCase() !== args.x.toLowerCase() || toHex(auth.slice(yi + 3, yi + 35)).toLowerCase() !== args.y.toLowerCase()) {
-    throw new Error("The passkey's public key doesn't match");
+    throw new ConvexError("The passkey's public key doesn't match");
   }
 }
 
@@ -238,11 +238,11 @@ export const completeEnrol = mutation({
   },
   handler: async (ctx, args) => {
     const w = await ctx.db.query("wallets").withIndex("by_enrol_token", (q) => q.eq("enrolToken", args.token)).unique();
-    if (!w || !w.enrolChallenge || (w.enrolExpiresAt ?? 0) < Date.now()) throw new Error("This setup link expired. Start again from the app.");
-    if (!HEX32.test(args.x) || !HEX32.test(args.y)) throw new Error("That isn't a P-256 passkey");
-    if (!/^[A-Za-z0-9_-]{16,400}$/.test(args.credentialId)) throw new Error("Bad credential");
-    if (!allowedRpIds().includes(args.rpId)) throw new Error("Passkeys can only be made on the approval site");
-    if (args.clientDataJSON.length > 2000 || args.authenticatorData.length > 4000) throw new Error("Registration too large");
+    if (!w || !w.enrolChallenge || (w.enrolExpiresAt ?? 0) < Date.now()) throw new ConvexError("This setup link expired. Start again from the app.");
+    if (!HEX32.test(args.x) || !HEX32.test(args.y)) throw new ConvexError("That isn't a P-256 passkey");
+    if (!/^[A-Za-z0-9_-]{16,400}$/.test(args.credentialId)) throw new ConvexError("Bad credential");
+    if (!allowedRpIds().includes(args.rpId)) throw new ConvexError("Passkeys can only be made on the approval site");
+    if (args.clientDataJSON.length > 2000 || args.authenticatorData.length > 4000) throw new ConvexError("Registration too large");
     await verifyRegistration(args, w.enrolChallenge);
     const digits = crypto.getRandomValues(new Uint32Array(1))[0]! % 1_000_000;
     const code = String(digits).padStart(6, "0");
@@ -274,7 +274,7 @@ export const confirmEnrol = mutation({
     const user = await requireViewer(ctx);
     const w = await walletOf(ctx, user._id);
     const c = w?.candidate;
-    if (!w || !c || (w.enrolExpiresAt ?? 0) < Date.now()) throw new Error("No passkey is waiting. Start again.");
+    if (!w || !c || (w.enrolExpiresAt ?? 0) < Date.now()) throw new ConvexError("No passkey is waiting. Start again.");
     // Wrong codes are returned, not thrown: a throw would roll back the attempt counter with it.
     if (!(await tryHit(ctx, `enrol-confirm:${w._id}`, 5, 15 * 60_000))) return { approvalToken: null, error: "Too many wrong codes. Wait 15 minutes, or start again." };
     if (code.replace(/\s/g, "") !== c.code) return { approvalToken: null, error: "That code doesn't match. Check the phone that made the passkey." };
@@ -288,7 +288,7 @@ export const confirmEnrol = mutation({
       return { approvalToken: task.token };
     }
 
-    if (!chainReady()) throw new Error("The wallet network isn't configured yet");
+    if (!chainReady()) throw new ConvexError("The wallet network isn't configured yet");
     // Each vault costs the relayer test ETH: per visitor, per day for all sandboxes, and a reserve.
     await spendDeploy(ctx, user);
     await ctx.db.patch(w._id, {
@@ -328,7 +328,7 @@ export const upgradeVault = mutation({
   handler: async (ctx) => {
     const user = await requireViewer(ctx);
     const w = await walletOf(ctx, user._id);
-    if (!w || w.status !== "live" || (w.version ?? 1) >= VAULT_VERSION || !w.keyX) throw new Error("Nothing to upgrade");
+    if (!w || w.status !== "live" || (w.version ?? 1) >= VAULT_VERSION || !w.keyX) throw new ConvexError("Nothing to upgrade");
     await spendDeploy(ctx, user);
     const agents = await ctx.db.query("agents").withIndex("by_user", (q) => q.eq("userId", user._id)).take(50);
     for (const a of agents) {
@@ -362,12 +362,12 @@ export const setContactCap = mutation({
   args: { payeeId: v.id("payees"), dailyCapMinor: v.number() },
   handler: async (ctx, { payeeId, dailyCapMinor }) => {
     const user = await requireViewer(ctx);
-    if (!Number.isInteger(dailyCapMinor) || dailyCapMinor < 0 || dailyCapMinor > 100_000_000) throw new Error("Amount is out of range");
+    if (!Number.isInteger(dailyCapMinor) || dailyCapMinor < 0 || dailyCapMinor > 100_000_000) throw new ConvexError("Amount is out of range");
     const payee = await ctx.db.get(payeeId);
-    if (!payee || payee.userId !== user._id) throw new Error("Not found");
+    if (!payee || payee.userId !== user._id) throw new ConvexError("Not found");
     const w = await walletOf(ctx, user._id);
-    if (w?.status !== "live" || (w.version ?? 0) < 3) throw new Error("Contact limits need the current vault. Move to it first.");
-    if (!payee.onchain) throw new Error("Approve this contact in the vault first");
+    if (w?.status !== "live" || (w.version ?? 0) < 3) throw new ConvexError("Contact limits need the current vault. Move to it first.");
+    if (!payee.onchain) throw new ConvexError("Approve this contact in the vault first");
     await hit(ctx, `contact-cap:${user._id}`, 10, 60_000);
     const old = payee.dailyCapMinor ?? 0;
     const tighter = dailyCapMinor > 0 && (old === 0 || dailyCapMinor < old);
@@ -395,10 +395,10 @@ export const cancelWaiting = mutation({
   handler: async (ctx, { taskId }) => {
     const user = await requireViewer(ctx);
     const t = await ctx.db.get(taskId);
-    if (!t || t.userId !== user._id) throw new Error("Not found");
+    if (!t || t.userId !== user._id) throw new ConvexError("Not found");
     if (t.state === "held") await relayer.enqueueAction(ctx, internal.chain.cancelHeld, { taskId });
     else if (t.state === "queued") await relayer.enqueueAction(ctx, internal.chain.cancelChange, { taskId });
-    else throw new Error("This can't be cancelled any more");
+    else throw new ConvexError("This can't be cancelled any more");
     await ctx.db.patch(taskId, { reason: "Cancelling…", updatedAt: Date.now() });
   },
 });
