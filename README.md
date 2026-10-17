@@ -72,15 +72,14 @@ flowchart LR
 
 The model never decides what's allowed: the gateway is ordinary code, and the vault re-checks everything on-chain, so even a request that skips our server is held to the same rules. Details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-### The layers
+### A payment's journey
 
-| | Layer | What it does |
-|---|---|---|
-| ① | **Surfaces** | Web app, approval site (passkeys), Telegram, and any outside AI over MCP |
-| ② | **Gateway** | Plain code decides pay, ask or refuse: per-agent limits, contacts, holds, freeze. The model never decides |
-| ③ | **Relayer** | Queues and sends transactions one at a time per key, reconciles lost receipts, never pays twice |
-| ④ | **PolicyVault** | The contract on Base Sepolia re-checks every rule, so a stolen key gets the same answer as our server |
-| ⑤ | **Proof** | AP2 mandates and receipts anyone can verify against the chain; the proof page reads them live |
+1. **An assistant asks.** Claude, Hermes or any MCP client, or you in chat or Telegram, each with its own key.
+2. **Plain code decides.** The gateway checks that assistant's limits, its contacts, holds and freezes, then pays, asks you, or refuses. A model never makes this call.
+3. **You decide the big ones.** Anything over a limit, to someone new, or loosening a rule opens the approval site, where your passkey signs the exact amount and payee.
+4. **It's sent once.** The relayer sends one transaction at a time per key and settles lost receipts from the chain, so nothing is paid twice.
+5. **The vault has the last word.** PolicyVault on Base Sepolia re-checks every rule, so a key used behind our back gets the same answer.
+6. **Anyone can check.** Receipts and AP2 mandates verify against the chain; the proof page reads them live.
 
 ## Features
 
