@@ -1,6 +1,6 @@
 # Technical document
 
-Agent Wallet, FinTechathon 2026, Topic F (Agent Wallet). Draft laid out for the official template; sections map one to one. Every number here comes from a test, an eval run or a Base Sepolia transaction in this repository.
+Nudge, FinTechathon 2026, Topic F (Nudge). Draft laid out for the official template; sections map one to one. Every number here comes from a test, an eval run or a Base Sepolia transaction in this repository.
 
 ## 1. Problem
 
@@ -11,7 +11,7 @@ Our answer: let any assistant pay, but only through a contract that enforces the
 ## 2. What the product does
 
 - One personal finance view: accounts, statements, bills, safe-to-spend.
-- An **agent wallet**: a `PolicyVault` contract per person on Base Sepolia holding a test stablecoin (tUSD, no value).
+- An **Nudge wallet**: a `PolicyVault` contract per person on Base Sepolia holding a test stablecoin (tUSD, no value).
 - Assistants connect: our own chat assistant (app and Telegram) and outside assistants such as Claude Code over MCP, each with its own key and limits.
 - Inside its limits an assistant pays at once; above $5 the vault holds the payment for 2 minutes so the owner can cancel; above its limits the owner approves with a passkey on a phone.
 - The owner can freeze any assistant, or the whole wallet, from chat, Telegram or the app. Tightening applies at once; loosening waits.

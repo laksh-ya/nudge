@@ -1,5 +1,5 @@
 {
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . ../../packages/domain ../../packages/backend ../../pnpm-lock.yaml ../../package.json",
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . ../../packages/domain ../../packages/backend ../../pnpm-lock.yaml ../../package.json ':!../../packages/domain/test' ':!../../packages/**/*.test.ts' ':!../../packages/brand/assets'",
   "rewrites": [
     {
       "source": "/(.*)",

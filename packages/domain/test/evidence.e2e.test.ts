@@ -2,7 +2,7 @@
  * Checks every Base Sepolia transaction the docs cite against the chain itself, so a judge (or we)
  * can confirm the execution evidence without trusting a screenshot or our backend.
  *
- * For each table row in README.md, docs/SECURITY.md and evals/README.md that links a transaction,
+ * For each table row in README.md, docs/EVIDENCE.md, docs/SECURITY.md and evals/README.md that links a transaction,
  * the row's wording is turned into the events it must contain ("refused, code 2003" means a
  * PaymentRefused with code 2003, "held" a PaymentHeld, "approves $12" an OwnerPaid of 12 tUSD, ...)
  * and the receipt is decoded with the contract ABIs. It also compares the example vault the README
@@ -23,7 +23,7 @@ import { policyVaultAbi, testUsdAbi, vaultFactoryAbi } from "../src/abi";
 const rpc = process.env.EVIDENCE_RPC ?? "";
 const run = rpc ? describe : describe.skip;
 const root = resolve(__dirname, "../../..");
-const DOCS = ["README.md", "docs/SECURITY.md", "evals/README.md", ...submissionDocs()];
+const DOCS = ["README.md", "docs/EVIDENCE.md", "docs/SECURITY.md", "evals/README.md", ...submissionDocs()];
 /** The submission documents, once they exist. */
 function submissionDocs() {
   const dir = resolve(root, "docs/submission");
@@ -34,7 +34,7 @@ const TOKEN = "0xB0ee01235A8e7903519B029c1530332f5847D932";
 const EXAMPLE_V2_VAULT = "0xa395739975fd3f66b83cbcf6ad535029e5a94e73";
 /** The newest example vault the README lists: the build in this repo should match it. */
 function exampleVault(): { version: string; address: Address } {
-  const readme = readFileSync(resolve(root, "README.md"), "utf8");
+  const readme = readFileSync(resolve(root, "docs/EVIDENCE.md"), "utf8");
   for (const version of ["v3", "v2"]) {
     const row = readme.split("\n").find((l) => l.includes(`Example ${version} vault`));
     const address = row?.match(/0x[0-9a-fA-F]{40}/)?.[0];

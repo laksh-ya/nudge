@@ -1,18 +1,26 @@
 {
   "schemaVersion": 1,
-  "project": "Agent Wallet",
+  "project": "Nudge",
   "topic": "F",
   "deadline": "2026-10-20T23:59:00+08:00",
   "sourceSnapshot": "6533942",
   "registeredTeamNameConfirmed": false,
   "registrationFormCompletedPrivately": false,
   "technicalDocumentReviewedForFinalRelease": false,
-  "deck": { "path": null, "durationSeconds": null, "english": false },
-  "video": { "path": null, "durationSeconds": null, "englishSubtitles": false },
+  "deck": {
+    "path": null,
+    "durationSeconds": null,
+    "english": false
+  },
+  "video": {
+    "path": null,
+    "durationSeconds": null,
+    "englishSubtitles": false
+  },
   "finalCommit": null,
   "finalAcceptanceLog": null,
-  "freshEvidenceLog": null,
-  "judgeAccessCheckedAt": null,
+  "freshEvidenceLog": "docs/submission/evidence-check-2026-10-17.txt",
+  "judgeAccessCheckedAt": "2026-10-17T10:23Z",
   "physicalPhoneFlowCheckedAt": null,
   "secretsAndSharingReviewComplete": false,
   "submissionAcknowledgementStoredPrivately": false

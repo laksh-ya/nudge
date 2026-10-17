@@ -16,7 +16,7 @@ for (const item of JSON.parse(readFileSync(resolve(dir, "templates/sources.json"
   check(existsSync(path) && createHash("sha256").update(readFileSync(path)).digest("hex") === item.sha256,
     `Official original matches its downloaded SHA-256: ${item.file}`);
 }
-for (const path of ["docs/submission/ready/Agent-Wallet-technical-document-en.docx", "docs/submission/ready/Agent-Wallet-security-self-assessment-en.docx", "docs/submission/ready/Agent-Wallet-execution-evidence-en.docx", "docs/submission/EXECUTION-EVIDENCE.md", "evals/TASKS.md", "README.md"]) check(file(path), path);
+for (const path of ["docs/submission/ready/Nudge-technical-document-en.docx", "docs/submission/ready/Nudge-security-self-assessment-en.docx", "docs/submission/ready/Nudge-execution-evidence-en.docx", "docs/submission/EXECUTION-EVIDENCE.md", "evals/TASKS.md", "README.md"]) check(file(path), path);
 check(state.registeredTeamNameConfirmed === true && state.registrationFormCompletedPrivately === true, "Owner confirmed registered team and completed actual registration form privately");
 check(state.technicalDocumentReviewedForFinalRelease === true, "Technical document reflects the final release and registered team name");
 check(file(state.deck?.path) && /\.pptx$/i.test(state.deck.path) && Number.isFinite(state.deck.durationSeconds) && state.deck.durationSeconds > 0 && state.deck.durationSeconds <= 600 && state.deck.english === true, "Finished English PPTX exists and rehearsal is at most 10 minutes");

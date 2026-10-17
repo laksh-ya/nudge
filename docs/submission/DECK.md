@@ -3,16 +3,16 @@
 Slide by slide with speaker notes. About one minute per slide; the live loop gets two. Judges include bankers, AI and federated-learning researchers and a finance econometrician: lead with the guarantee and the evidence, keep the cryptography to one slide.
 
 ## 1. Title (0:00)
-**Agent Wallet: let any AI pay, within rules it can't break.** Team, Topic F, WeBank FinTechathon 2026.
+**Nudge: let any AI pay, within rules it can't break.** Team, Topic F, WeBank FinTechathon 2026.
 
 ## 2. The problem (0:30)
 - Assistants now read our email, bills and messages, and are being given the power to pay.
 - Today an assistant that can pay holds a full key (hot wallet) or sits behind server-side limits a stolen key or a hacked server ignores.
 - Prompt injection: any text it reads can carry an order. No model refuses every one.
-- **User-value number:** with a stolen agent key and our server bypassed, a hot wallet lost **$242** of $250 in our tests; Agent Wallet sent **$0** to the attacker. (`evals/README.md`, same attacks against all three designs.)
+- **User-value number:** with a stolen agent key and our server bypassed, a hot wallet lost **$242** of $250 in our tests; Nudge sent **$0** to the attacker. (`evals/README.md`, same attacks against all three designs.)
 
 ## 3. The product (1:30)
-- A personal finance app (accounts, bills, safe-to-spend) with an **agent wallet**.
+- A personal finance app (accounts, bills, safe-to-spend) with an **Nudge wallet**.
 - Any assistant connects: our own chat and Telegram, and outside assistants such as Claude over MCP, each with its own key and limits.
 - Three tiers: small payments go at once; above $5 they're held 2 minutes so you can cancel; above the assistant's limits you approve with your phone's passkey.
 
