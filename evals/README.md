@@ -16,6 +16,18 @@ All 68 P0 attacks from our attack corpus, each mapped to the tests, eval cases a
 
 [`TASKS.md`](TASKS.md): all 54 eval tasks as "owner said → right outcome → what the assistant did → money settled", from the Claude Opus run over MCP (53 of 54 correct). Regenerate with `(cd packages/domain && npx tsx src/eval/task-table.ts)`.
 
+## AP2 mandates, checked on-chain (17 Oct)
+
+Google's Agent Payments Protocol (AP2) describes three signed mandates. PolicyVault produces each, and anyone can check them against Base Sepolia with `packages/domain/src/verify-mandate.ts`, without trusting our server:
+
+| AP2 | What it is here | Example (multi-agent vault) |
+|---|---|---|
+| IntentMandate | the owner's passkey-signed grant: contacts, per-payment and 24-hour limits, expiry | [`results/mandates/hermes-intent.json`](results/mandates/hermes-intent.json): signed in `0xcd850ae2…`, applied after the 2-minute delay in `0xec08718c…` |
+| PaymentMandate | an agent payment the vault settled, under that intent | [`results/mandates/hermes-payment.json`](results/mandates/hermes-payment.json): $7 held, then released |
+| CartMandate | a payment the owner approved exactly with their passkey | produced for owner payments |
+
+`mandates.e2e.test.ts` (read-only, Base Sepolia): the real mandates verify, and six forgeries are caught: a raised limit even with its hash recomputed, a merchant the owner never saved, another agent claiming the grant, a later expiry, edited text, and a bigger payment or the wrong intent. Assistants get theirs over MCP (`get_mandate`), so a merchant's agent can check an assistant's authority itself.
+
 ## Any AI, one wallet (17 Oct)
 
 Two assistants from different vendors on one vault, each with its own key and limits, through the same MCP door: Claude Code (Anthropic, Sonnet) and Hermes Agent (Nous Research, running Zhipu AI's GLM-5.3 on NVIDIA NIM). Each was asked to pay the saved contact Blue Tokai; both payments were above $5, so the vault held them for 2 minutes and then released them, and both count toward the one $40 daily ceiling for all agents ($13 used). Vault [`0x31F68A8d…`](https://sepolia.basescan.org/address/0x31F68A8d36e4392725d2F09261D42a529e6aDc32); details in [`results/multi-agent.md`](results/multi-agent.md); test `packages/domain/src/multi-agent.e2e.test.ts`.

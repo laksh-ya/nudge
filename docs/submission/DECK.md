@@ -47,8 +47,13 @@ Of the public Topic F entries we read: most have one built-in agent, test with s
 - Testnet and a worthless test token; no stablecoin delivered to anyone (consistent with 银发〔2026〕42号).
 - Mirrors the CPCA agent-payment convention (Aug 2026): know-your-agent per key, signed authorisation boundaries, instant revocation, tiered limits, fallback and emergency freeze, published self-assessment. Production: a licensed partner holds accounts and the guardian role. (`docs/submission/COMPLIANCE.md`)
 
-## 10. Roadmap (9:00)
+## 10. What's new (8:45)
+- **Mandates anyone can check:** each assistant's authority is an AP2 IntentMandate, and every payment a PaymentMandate. A merchant's agent verifies them on Base Sepolia itself; the contract that enforces the mandate is the proof, not a network or our server.
+- **A family guardian:** a daughter can stop her father's held payment from her own phone. She can only stop things, never move money.
+- **Any AI, one guardrail:** Claude Code and Hermes (GLM-5.3) paid from one vault under one ceiling.
+
+## 11. Roadmap (9:10)
 Separate signer service; MCP OAuth with a consent page; family co-signing for elderly users and minors; bills as capped permissions; a licensed rail (bank account or e-CNY) under the same vault rules.
 
-## 11. Close (9:40)
+## 12. Close (9:40)
 "Let any AI pay, inside rules it can't break, with every step on-chain for anyone to check." Links: live app, repo, evidence script.
