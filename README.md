@@ -12,7 +12,7 @@ Nudge is a wallet where Claude and your other assistants pay your saved contacts
 ![Chain](https://img.shields.io/badge/chain-Base%20Sepolia-0052FF)
 ![Money](https://img.shields.io/badge/money-test%20dollars%20only-orange)
 
-[**Live app**](https://nudge-wallet.vercel.app) · [**Proof on-chain**](https://nudge-wallet.vercel.app/proof) · [**Connect your agent (MCP)**](https://nudge-wallet.vercel.app/agents/docs) · [Docs](docs/README.md) · [Brand](docs/BRAND.md)
+[**Live app**](https://nudge-wallet.vercel.app) · [**Proof on-chain**](https://nudge-wallet.vercel.app/proof) · [**Connect your agent (MCP)**](https://nudge-wallet.vercel.app/agents/docs) · [**Telegram**](https://t.me/heynudge_bot) · [Docs](docs/README.md) · [Brand](docs/BRAND.md)
 
 <img src="docs/images/hero.jpg" alt="Nudge homepage: Let your AI pay. Only within your rules." width="820">
 
@@ -64,7 +64,7 @@ The model never decides what's allowed: the gateway is ordinary code, and the va
 | Outside assistants over MCP | **Live**: per-assistant bearer keys, permission-filtered tools, [public docs](https://nudge-wallet.vercel.app/agents/docs) |
 | Family guardian | **Live**: sees held payments, can stop them or freeze; never pays or loosens |
 | AP2 mandates (Intent, Cart, Payment) | **Live**: produced from the vault and verifiable by anyone against Base Sepolia |
-| Built-in assistant and Telegram | **Live**: rule-based on the deployment; reminders in chat and on Telegram, outside quiet hours |
+| Built-in assistant and Telegram | **Live**: rule-based on the deployment; approvals and reminders in chat and on Telegram ([@heynudge_bot](https://t.me/heynudge_bot)), outside quiet hours |
 | Bank feeds, family transfers | Simulated (statement import from CSV, Excel and PDF is real) |
 | MCP OAuth, WhatsApp | Not yet |
 
