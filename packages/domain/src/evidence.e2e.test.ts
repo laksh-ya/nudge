@@ -78,6 +78,7 @@ function expectations(row: Row): Expect[] {
   if (/queued, not applied/.test(step)) out.push({ event: "ChangeQueued", why: "loosening queued" });
   if (/applied after/.test(step)) out.push({ event: "ChangeApplied", why: "queued change applied" });
   if (/unfreeze/.test(step) && /applied|owner unfreezes/.test(step) && !/not applied/.test(step)) out.push({ event: "Unfrozen", why: "unfreeze applied" });
+  if (/guardian stops|cancelled/.test(step)) out.push({ event: "PaymentCancelled", why: "held payment stopped" });
   if (/removed from the vault/.test(step)) out.push({ event: "AgentRemoved", why: "agent key removed" });
   if (/released/.test(step)) out.push({ event: "PaymentReleased", check: dollars[0] ? (a) => a.amount === usd(dollars[0]!) : undefined, why: `release of $${dollars[0]}` });
   else if (/vault holds it|held for/.test(step)) out.push({ event: "PaymentHeld", check: dollars[0] ? (a) => a.amount === usd(dollars[0]!) : undefined, why: `hold of $${dollars[0]}` });

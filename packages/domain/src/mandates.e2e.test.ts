@@ -47,6 +47,12 @@ run("AP2 mandates enforced by PolicyVault, checked on Base Sepolia", () => {
     }, 120_000);
   }
 
+  it("the mandate prod's get_mandate served verifies", async () => {
+    const v = await verifyIntent(load<IntentMandate>("claude-prod-intent.json"), pub);
+    expect(failed(v).filter((w) => !w.startsWith("no longer in force"))).toEqual([]);
+    expect(v.valid).toBe(true);
+  }, 120_000);
+
   it("a raised limit is caught, even with the hash recomputed", async () => {
     const m = clone(load<IntentMandate>("hermes-intent.json"));
     m["x-policyvault"].per_payment_max.value = "100.00";

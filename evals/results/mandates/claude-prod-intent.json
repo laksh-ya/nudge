@@ -1,0 +1,76 @@
+{
+  "ap2.mandates.IntentMandate": {
+    "intent_expiry": "2026-11-07T08:14:22.000Z",
+    "merchants": [
+      "Ramesh Iyer",
+      "BESCOM",
+      "Exa",
+      "Blue Tokai",
+      "Ananya Mehta"
+    ],
+    "natural_language_description": "Claude may pay Ramesh Iyer, BESCOM, Exa, Blue Tokai, Ananya Mehta, at most 10.00 USD a payment and 15.00 USD in any 24 hours, until 2026-11-07. Payments above 5.00 USD wait 2 minutes so I can cancel. All assistants together stay under 40.00 USD a day and never touch the 50.00 USD I keep protected. Anything else needs my passkey.",
+    "requires_refundability": false,
+    "skus": null,
+    "user_cart_confirmation_required": false
+  },
+  "mandate_id": "0xb22297a060f94dad02b373fde8e7435c0509896abd0e0c50575b2417a43ea757",
+  "x-policyvault": {
+    "agent": "0x5D0419bc75B78Ee927B6c3a0fA1fc1D43A267d9e",
+    "agent_name": "Claude",
+    "chain_id": 84532,
+    "contacts": [
+      {
+        "address": "0x25c0a9C9E552dDC40f8964ADA9B19e889E7870Cd",
+        "contact_id": "0x2c5ce37f691acd626cdb21c41f376e196f5e2168dbfc816f0e6185ebfe9379b3",
+        "name": "Ramesh Iyer"
+      },
+      {
+        "address": "0x14590D251053dda381070c857dCf2929EAEb2Bb1",
+        "contact_id": "0x8e810453c8cab41b8306427cfac40243389f54f8ec9f59306d6542a5ada3c3a5",
+        "name": "BESCOM"
+      },
+      {
+        "address": "0x7Ef4B87D512aB6c34564a25188eF702f0bACBDce",
+        "contact_id": "0x5336e440b949d1619c1b0955a29fe749c18d3420942aace38cf87dd9623532dd",
+        "name": "Exa"
+      },
+      {
+        "address": "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6",
+        "contact_id": "0x84547a0eb6a8f5b615c48fa7a837746404e77c989ff5312f09af70dedd42d744",
+        "name": "Blue Tokai"
+      },
+      {
+        "address": "0x3B9409698E7990bfab8e0d1ae687C0E6e2Dc0d89",
+        "contact_id": "0x7758ad6598d55342b7c9128bb4271a5cd6ff9a3c424e0818d0133e4b745b80ca",
+        "name": "Ananya Mehta"
+      }
+    ],
+    "daily_max": {
+      "currency": "USD",
+      "value": "15.00"
+    },
+    "hold_above": {
+      "currency": "USD",
+      "value": "5.00"
+    },
+    "hold_seconds": 120,
+    "per_payment_max": {
+      "currency": "USD",
+      "value": "10.00"
+    },
+    "protected_amount": {
+      "currency": "USD",
+      "value": "50.00"
+    },
+    "user_authorization": {
+      "applied_tx": "0x4de5a7b8204f7184c6fc40acca62dbe935277a28b766810017bd845d51551cd3",
+      "method": "webauthn-p256-verified-by-contract",
+      "signed_tx": "0x4de5a7b8204f7184c6fc40acca62dbe935277a28b766810017bd845d51551cd3"
+    },
+    "vault": "0x1bAc392A06A058A72A8B0fb1dF4b3F8686CA3747",
+    "wallet_daily_ceiling": {
+      "currency": "USD",
+      "value": "40.00"
+    }
+  }
+}
