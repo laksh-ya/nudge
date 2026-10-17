@@ -23,7 +23,7 @@ import { COUNTRIES, FIAT_CODES, country as countryInfo, formatMoney, type Curren
 import { api } from "@/lib/api";
 import { useDemo } from "@/lib/demo";
 import { Initial } from "@/components/brand";
-import { Choice, ErrorText, Field, Input, MoneyInput, Select, errorMessage, fromMinorUnits, toMinorUnits } from "@/components/form";
+import { Choice, ErrorText, Field, Input, MoneyInput, Select, Toggle, errorMessage, fromMinorUnits, toMinorUnits } from "@/components/form";
 import { Button, Card, Chip, Divided, IconTile, PageTitle, Row, Sheet, Skeleton } from "@/components/ui";
 
 type Editing = "profile" | "money" | "assistant" | "fresh" | null;
@@ -302,6 +302,7 @@ function MoneySheet({ state, onClose }: { state: State; onClose: () => void }) {
 
 function AssistantSheet({ state, onClose }: { state: State; onClose: () => void }) {
   const save = useMutation(api.onboarding.saveAssistant);
+  const sendTest = useMutation(api.reminders.sendTest);
   const u = state.user;
   const [form, setForm] = useState({
     autonomy: u.autonomy,
@@ -309,7 +310,33 @@ function AssistantSheet({ state, onClose }: { state: State; onClose: () => void 
     quietFrom: u.quietFrom,
     quietTo: u.quietTo,
     reminderLeadDays: u.reminderLeadDays,
+    privateReminders: u.privateReminders,
   });
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string>();
+  const [error, setError] = useState<string>();
+
+  // Saves first, so the test goes where the form says.
+  async function test() {
+    setBusy(true);
+    setError(undefined);
+    setNote(undefined);
+    try {
+      await save(form);
+      const r = await sendTest({});
+      setNote(
+        r.telegram
+          ? "Sent to your Assistant chat and to Telegram. Check both."
+          : form.reminderChannel === "telegram" && !r.telegramLinked
+            ? "Sent to your Assistant chat. Telegram isn't linked yet: link it under Security to get reminders there."
+            : "Sent. It's in your Assistant chat.",
+      );
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <Sheet open onOpenChange={(o) => !o && onClose()} title="Assistant">
       <div className="space-y-3 pb-4">
@@ -335,16 +362,44 @@ function AssistantSheet({ state, onClose }: { state: State; onClose: () => void 
             </option>
           </Select>
         </Field>
-        <Button
-          size="lg"
-          className="w-full"
-          onClick={async () => {
-            await save(form);
-            onClose();
-          }}
-        >
-          Save
-        </Button>
+        <Field label="Remind me about bills and renewals" hint="Reminders wait until your quiet hours end.">
+          <Select value={form.reminderLeadDays} onChange={(e) => setForm({ ...form, reminderLeadDays: Number(e.target.value) })}>
+            {[0, 1, 2, 3, 5, 7, 14].map((d) => (
+              <option key={d} value={d}>
+                {d === 0 ? "On the day" : `${d} ${d === 1 ? "day" : "days"} before`}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <div className="flex items-center justify-between gap-3 rounded-btn bg-page p-3">
+          <div>
+            <div className="text-body font-semibold">Private reminders</div>
+            <div className="text-label text-ink-2">No amounts or names in reminders, in case someone sees your lock screen.</div>
+          </div>
+          <Toggle checked={form.privateReminders} onChange={(privateReminders) => setForm({ ...form, privateReminders })} label="Private reminders" />
+        </div>
+        {note && <p className="rounded-btn bg-green-soft p-3 text-label text-green" role="status">{note}</p>}
+        <ErrorText>{error}</ErrorText>
+        <div className="grid grid-cols-2 gap-2">
+          <Button tone="outline" size="lg" disabled={busy} onClick={() => void test()}>
+            Send a test
+          </Button>
+          <Button
+            size="lg"
+            disabled={busy}
+            onClick={async () => {
+              setError(undefined);
+              try {
+                await save(form);
+                onClose();
+              } catch (e) {
+                setError(errorMessage(e));
+              }
+            }}
+          >
+            Save
+          </Button>
+        </div>
       </div>
     </Sheet>
   );
