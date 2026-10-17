@@ -1,4 +1,4 @@
-Contact: https://github.com/laksh-ya/agent-wallet/security/advisories/new
-Policy: https://github.com/laksh-ya/agent-wallet/blob/main/docs/SECURITY.md#reporting-a-vulnerability
+Contact: https://github.com/laksh-ya/nudge/security/advisories/new
+Policy: https://github.com/laksh-ya/nudge/blob/main/docs/SECURITY.md#reporting-a-vulnerability
 Preferred-Languages: en, zh
 Expires: 2027-10-16T00:00:00.000Z

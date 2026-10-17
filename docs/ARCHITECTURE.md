@@ -10,7 +10,7 @@
 | `packages/domain` | Shared TypeScript | Money, statement parsing, vault encoding, the signed digest, WebAuthn helpers, ABIs |
 | `contracts` | Base Sepolia | `PolicyVault` (one per person), `VaultFactory`, `TestUSD` |
 
-Live: dashboard https://agent-wallet-nu.vercel.app, approval site https://agent-wallet-approve.vercel.app, Convex `ceaseless-raven-960`.
+Live: dashboard https://nudge-wallet.vercel.app, approval site https://agent-wallet-approve.vercel.app, Convex `ceaseless-raven-960`.
 
 ## The vault
 

@@ -8,11 +8,11 @@
 
 Nudge is a wallet where Claude and your other assistants pay your saved contacts within limits you set, enforced by a contract on Base Sepolia even if an assistant's key is stolen. Anything bigger, and any rule you loosen, waits for your passkey.
 
-[![CI](https://github.com/laksh-ya/agent-wallet/actions/workflows/ci.yml/badge.svg)](https://github.com/laksh-ya/agent-wallet/actions/workflows/ci.yml)
+[![CI](https://github.com/laksh-ya/nudge/actions/workflows/ci.yml/badge.svg)](https://github.com/laksh-ya/nudge/actions/workflows/ci.yml)
 ![Chain](https://img.shields.io/badge/chain-Base%20Sepolia-0052FF)
 ![Money](https://img.shields.io/badge/money-test%20dollars%20only-orange)
 
-[**Live app**](https://agent-wallet-nu.vercel.app) · [**Proof on-chain**](https://agent-wallet-nu.vercel.app/proof) · [**Connect your agent (MCP)**](https://agent-wallet-nu.vercel.app/agents/docs) · [Docs](docs/README.md) · [Brand](docs/BRAND.md)
+[**Live app**](https://nudge-wallet.vercel.app) · [**Proof on-chain**](https://nudge-wallet.vercel.app/proof) · [**Connect your agent (MCP)**](https://nudge-wallet.vercel.app/agents/docs) · [Docs](docs/README.md) · [Brand](docs/BRAND.md)
 
 <img src="docs/images/hero.jpg" alt="Nudge homepage: Let your AI pay. Only within your rules." width="820">
 
@@ -30,12 +30,12 @@ Giving an AI assistant your card is all or nothing. A prompt injection, a confus
 
 ## Try it in two minutes
 
-1. Open the [live app](https://agent-wallet-nu.vercel.app) and choose **Try the demo**. You get a private sandbox with sample accounts, bills and connected assistants.
+1. Open the [live app](https://nudge-wallet.vercel.app) and choose **Try the demo**. You get a private sandbox with sample accounts, bills and connected assistants.
 2. **Wallet → Put this wallet on-chain.** Create a passkey on your phone (scan the QR) or laptop, then type the six-digit code it shows. Your own vault deploys in about a minute.
 3. Ask the assistant to pay Blue Tokai $3 (it goes through), then more than Claude's limit (it waits for your passkey). Open the approval link to see exactly what you'd sign.
 4. Try to break it: freeze an assistant, raise a limit, remove a contact, withdraw, or connect your own assistant over MCP.
 
-The team's account, with a phone-passkey vault and recorded history, opens read-only at [`/judge`](https://agent-wallet-nu.vercel.app/judge) with the judge key.
+The team's account, with a phone-passkey vault and recorded history, opens read-only at [`/judge`](https://nudge-wallet.vercel.app/judge) with the judge key.
 
 ## How it works
 
@@ -61,7 +61,7 @@ The model never decides what's allowed: the gateway is ordinary code, and the va
 | Passkey approval and enrolment | **Live**: WebAuthn on a separate approval site, verified by the contract |
 | Pay a contact and withdraw from the Wallet screen | **Live**, signed by the passkey; withdrawals wait the vault's delay |
 | Freeze, unfreeze, disconnect, limits, contacts | **Live**: each acts on the vault and is read back |
-| Outside assistants over MCP | **Live**: per-assistant bearer keys, permission-filtered tools, [public docs](https://agent-wallet-nu.vercel.app/agents/docs) |
+| Outside assistants over MCP | **Live**: per-assistant bearer keys, permission-filtered tools, [public docs](https://nudge-wallet.vercel.app/agents/docs) |
 | Family guardian | **Live**: sees held payments, can stop them or freeze; never pays or loosens |
 | AP2 mandates (Intent, Cart, Payment) | **Live**: produced from the vault and verifiable by anyone against Base Sepolia |
 | Built-in assistant and Telegram | **Live**: rule-based on the deployment; reminders in chat and on Telegram, outside quiet hours |
@@ -76,7 +76,7 @@ Agents → **Connect an assistant** → copy the key (shown once). For Claude Co
 claude mcp add --transport http nudge https://ceaseless-raven-960.convex.site/mcp --header "Authorization: Bearer aw_…"
 ```
 
-A new assistant starts read-only; turn on *Prepare payments* or *Pay within limits* on its card. Tools, outcomes and refusal codes: [Connect your AI agent](https://agent-wallet-nu.vercel.app/agents/docs).
+A new assistant starts read-only; turn on *Prepare payments* or *Pay within limits* on its card. Tools, outcomes and refusal codes: [Connect your AI agent](https://nudge-wallet.vercel.app/agents/docs).
 
 ## Tests and evidence
 
@@ -107,7 +107,7 @@ The claim, who can do what, the controls with their evidence, and the known risk
 
 ## Brand
 
-Nudge is the friend who taps you on the shoulder before your AI spends something it shouldn't. Every assistant gets a face, and the face says what's happening: paid, held, waiting for your passkey, refused, frozen. The logo, the cast of characters, colour, type, voice and motion are one package, [`packages/brand`](packages/brand), used by both apps; the rules are in [docs/BRAND.md](docs/BRAND.md) and the living sheet is at [`/brand`](https://agent-wallet-nu.vercel.app/brand).
+Nudge is the friend who taps you on the shoulder before your AI spends something it shouldn't. Every assistant gets a face, and the face says what's happening: paid, held, waiting for your passkey, refused, frozen. The logo, the cast of characters, colour, type, voice and motion are one package, [`packages/brand`](packages/brand), used by both apps; the rules are in [docs/BRAND.md](docs/BRAND.md) and the living sheet is at [`/brand`](https://nudge-wallet.vercel.app/brand).
 
 <img src="packages/brand/assets/cast.svg" alt="The cast: Nudge, Claude, ChatGPT, Hermes, OpenClaw, Poke and any other assistant" width="720">
 

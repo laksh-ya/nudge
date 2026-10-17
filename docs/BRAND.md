@@ -1,6 +1,6 @@
 # Nudge brand
 
-The rules for how Nudge looks, sounds and moves. The source of truth is code, not this page: [`packages/brand`](../packages/brand) holds the tokens, the characters, the logo and the dot illustrations, and both apps import them. The living sheet is at [`/brand`](https://agent-wallet-nu.vercel.app/brand). Change the package, then this page; never copy a colour or a face into an app.
+The rules for how Nudge looks, sounds and moves. The source of truth is code, not this page: [`packages/brand`](../packages/brand) holds the tokens, the characters, the logo and the dot illustrations, and both apps import them. The living sheet is at [`/brand`](https://nudge-wallet.vercel.app/brand). Change the package, then this page; never copy a colour or a face into an app.
 
 Inspiration, for anyone extending it: the characters and their cheek come from Cue (by Manus); the inline mascot and calm white space from Meta's Muse; the conversation-first homepage and numbered sections from Poke and Orchid; the casual, confident voice from HeyClicky; the dot-matrix feature art from OpenAI. We borrow the feeling, never the artwork.
 

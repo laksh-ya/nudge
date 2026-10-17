@@ -7,7 +7,7 @@ import { CHAIN_ID, actionDigest, checkApproval, formatMoney, isVaultVersion, pol
 import { createPublicClient, http, type Address, type Hex } from "viem";
 import { createPasskey, inAppBrowser, passkeysSupported, signWithPasskey } from "./passkey";
 
-const WEB_URL = import.meta.env.VITE_WEB_URL ?? "http://localhost:3000";
+const WEB_URL = import.meta.env.VITE_WEB_URL ?? "https://nudge-wallet.vercel.app";
 
 /** Reads the vault from a public Base Sepolia node, so what the page calls a saved contact doesn't depend on our server. */
 const baseSepolia = createPublicClient({

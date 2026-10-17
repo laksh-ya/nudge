@@ -71,6 +71,6 @@ We do not claim resistance to prompt injection as such. A tricked agent can stil
 
 ## Reporting a vulnerability
 
-Please report security issues privately through [GitHub security advisories](https://github.com/laksh-ya/agent-wallet/security/advisories/new), not in public issues. Include what you did, what happened, and the vault or transaction if one is involved. We reply within 48 hours during the competition. Testnet only: there are no real funds to take, so please don't attack other people's sandboxes or the judge account. `/.well-known/security.txt` on the dashboard points here.
+Please report security issues privately through [GitHub security advisories](https://github.com/laksh-ya/nudge/security/advisories/new), not in public issues. Include what you did, what happened, and the vault or transaction if one is involved. We reply within 48 hours during the competition. Testnet only: there are no real funds to take, so please don't attack other people's sandboxes or the judge account. `/.well-known/security.txt` on the dashboard points here.
 
 Every change runs the full test suite and Slither in CI (`.github/workflows/ci.yml`).
