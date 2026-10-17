@@ -21,6 +21,13 @@ export type Intent =
   | { kind: "status" }
   | { kind: "cancel" }
   | { kind: "dont_pay" }
+  | { kind: "dont_freeze" }
+  /** A payment demand with the usual scam signs (overdue, lose access, verify your…): warned, never carded. */
+  | { kind: "scam" }
+  /** "pay" inside quoted or pasted text: someone else's words, not an order. */
+  | { kind: "quoted" }
+  /** "Should I pay X $9 or wait?": advice, not an order. */
+  | { kind: "pay_question"; amount: Amount | null }
   | { kind: "correction"; amount: Amount | null; rest: string }
   | {
       kind: "pay";
@@ -218,6 +225,10 @@ const SPEND_Q = /\b(how much|what did i|what have i|total|show|breakdown|where)\
 const SAFE_Q = /\b(afford|safe to spend|can i spend|could i spend|left to spend|how much (?:can|could|do) i (?:have|spend)|money (?:do i have )?left|available|budget|how much money|what can i spend|spendable)\b/;
 
 /** Classify one message. Payee and category lookups happen in messages.ts, against the owner's data. */
+/** The usual signs of a payment scam: urgency, a threat to cut you off, a request to verify or claim. */
+const SCAM =
+  /\b(legit|scam|phish\w*|fraud\w*|overdue|lose access|suspend\w*|deactivat\w*|verify your|urgent\w*|immediately|final notice|gift ?cards?|lottery|prize|you(?:'ve| have) won|kyc|otp|click (?:the|this) link)\b/;
+
 export function classify(text: string): Intent {
   const t = normalize(text);
   if (!t || /^\/?(help|start)$|^what can you do|^what do you do|^how do(es)? (this|it) work|^commands$/.test(t)) return { kind: "help" };
@@ -229,7 +240,12 @@ export function classify(text: string): Intent {
     if (/^(what|which|show|list|any)\b|\bmy reminders\b|\breminders\??$/.test(t) && !/\bremind me\b/.test(t)) return { kind: "reminders" };
     return { kind: "remind" };
   }
-  const controlOrder = /^(?:please\s+)?(?:freeze|unfreeze|unlock|unpause|resume|reactivate|re-?enable|turn back on|panic|emergency stop|stop|lock|pause|halt|block|kill|disable)\b/.test(t) && !/[?\n"“”‘’`]/.test(text) && !/\b(don'?t|do not|not|never|if|maybe|should|whether)\b/.test(t);
+  // "Can you freeze everything now?" is an order too: freezing only tightens, so a polite question counts.
+  const polite = /^(?:can|could|would|will) you (?:please\s+)?/.exec(t);
+  const order = polite ? t.slice(polite[0].length) : t;
+  const raw = polite ? text.trim().replace(/\?+$/, "") : text;
+  const controlOrder = /^(?:please\s+)?(?:freeze|unfreeze|unlock|unpause|resume|reactivate|re-?enable|turn back on|panic|emergency stop|stop|lock|pause|halt|block|kill|disable)\b/.test(order) && !/[?\n"“”‘’`]/.test(raw) && !/\b(don'?t|do not|not|never|if|maybe|should|whether)\b/.test(t);
+  if (/^(?:no[,.!\s]+)?(?:please\s+)?(?:don'?t|do not|never)\s+(?:freeze|lock|pause|stop|block|disable)\b/.test(t) && !/\b(pay|paying|send|sending|transfer)\b/.test(t)) return { kind: "dont_freeze" };
   if (controlOrder && /\b(unfreeze|unlock|unpause|resume|reactivate|re-?enable|turn back on)\b/.test(t) && /\b(agents?|assistants?|claude|chatgpt|openclaw|hermes|wallet|payments|spending|everything|all|it|them)\b|^(unfreeze|unlock)\b/.test(t)) return { kind: "unfreeze" };
   // Freeze only on a clear order: "freeze", "panic", or stop/lock/pause naming agents or payments.
   // "stop my Netflix subscription" or "lock in rent" must never freeze anything.
@@ -237,7 +253,8 @@ export function classify(text: string): Intent {
   if (controlOrder && /\b(stop|lock|pause|halt|block|kill|disable)\b\s+(?:all\s+|every\s+|my\s+|the\s+)*(agents?|assistants?|payments|spending|everything|the wallet|wallet|ai)\b/.test(t)) return { kind: "freeze" };
 
   const verb = /\b(pay|send|transfer)\b/.test(t);
-  if (/^(?:no[,.!\s]+)?(?:don'?t|do not|never)\s+(?:pay|send|transfer)\b/.test(t)) return { kind: "dont_pay" };
+  if (/^(?:no[,.!\s]+)?(?:don'?t|do not|never)\s+(?:pay|send|transfer)\b|^(?:please\s+)?stop\s+(?:paying|sending)\b/.test(t)) return { kind: "dont_pay" };
+  if (verb && SCAM.test(t)) return { kind: "scam" };
   if (HEDGE.test(t) && !amount) return { kind: "hedge" };
   if (YES.test(t)) return { kind: "yes" };
   if (NO.test(t)) return { kind: "no" };
@@ -262,6 +279,9 @@ export function classify(text: string): Intent {
   if (/\bwhen\b.*\b(due|pay|renew)/.test(t)) return /subscri|renew/.test(t) ? { kind: "subscriptions" } : { kind: "bills" };
 
   if (verb) {
+    // Someone else's words, or a question, is never an order.
+    if (/[\n"“”‘’`]|'\s|\s'|^'|'$/.test(text.trim())) return { kind: "quoted" };
+    if (!polite && /\?|^(?:should|shall|is|are|was|do|does|did|what|why|when|how|which|whether)\b|\b(?:should i|or wait|whether)\b/.test(t)) return { kind: "pay_question", amount };
     // "actually, pay Blue Tokai $6": a fresh order that replaces the open one.
     if (START_MARK.test(t)) {
       const order = t.replace(START_MARK_ALL, "").trim();
