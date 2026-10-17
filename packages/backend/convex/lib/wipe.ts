@@ -19,6 +19,9 @@ export async function wipeUser(ctx: MutationCtx, userId: Id<"users">) {
     ctx.db.query("familyRequests").withIndex("by_user", (q) => q.eq("userId", userId)).take(500),
     ctx.db.query("activity").withIndex("by_user", (q) => q.eq("userId", userId)).take(2000),
     ctx.db.query("chatLinks").withIndex("by_user", (q) => q.eq("userId", userId)).take(20),
+    ctx.db.query("guardians").withIndex("by_user", (q) => q.eq("userId", userId)).take(20),
+    // Links where this user looks after someone else go too, so a deleted account guards no one.
+    ctx.db.query("guardians").withIndex("by_guardian", (q) => q.eq("guardianId", userId)).take(20),
   ]);
   const holdings = [];
   for (const a of batches[0]) holdings.push(...(await ctx.db.query("holdings").withIndex("by_account", (q) => q.eq("accountId", a._id)).take(500)));

@@ -12,6 +12,7 @@ import { laneOf, lanePool, relayer } from "./lib/relayer";
 import { hit, tryHit } from "./lib/limits";
 import { spendDeploy } from "./lib/budget";
 import { chainReady } from "./chain";
+import { alertGuardians } from "./guardians";
 
 const HEX32 = /^0x[0-9a-fA-F]{64}$/;
 
@@ -673,6 +674,8 @@ export const onHeld = internalMutation({
       detail: `Leaves at ${new Date(releaseAt).toISOString().slice(11, 16)} UTC unless you cancel`,
       tone: "warn",
     });
+    // Guardians hear about every held payment, so someone else can stop it in time.
+    await alertGuardians(ctx, { ...t, releaseAt }, `${agent?.name ?? "An assistant"} is paying ${payee?.name ?? "a contact"} ${formatMoney(t.amountMinor ?? 0, "USDC")}; it's held until ${new Date(releaseAt).toISOString().slice(11, 16)} UTC.`);
     if (process.env.TELEGRAM_BOT_TOKEN && agent?.provider !== "own") {
       const minutes = Math.max(1, Math.round((releaseAt - Date.now()) / 60_000));
       await ctx.scheduler.runAfter(0, internal.telegram.send, {
