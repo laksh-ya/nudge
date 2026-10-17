@@ -6,7 +6,6 @@ import type { Id } from "./_generated/dataModel";
 import { sha256 } from "./lib/hash";
 import { telegramWebhook } from "./telegram";
 import { MCP_INSTRUCTIONS, findTool, invalidArgs, toolDenied, toolsFor } from "./lib/mcp";
-import { CHALLENGE_RE, OAUTH_SCOPES, oauthEnabled, parseScope, webUrl } from "./lib/oauth";
 
 /** JSON-RPC batches are capped; MCP itself dropped batching in 2025-06-18. */
 const MAX_BATCH = 5;
@@ -186,145 +185,19 @@ http.route({
 
 /**
  * RFC 9728 protected-resource metadata, linked from every 401. Bearer keys from the Agents screen
- * always work; an authorization server is listed only when MCP OAuth is on (MCP_OAUTH=on, #14).
+ * only: no authorization server is listed until MCP OAuth ships (issue #14).
  */
-const protectedResource = httpAction(async (_ctx, req) => {
-  const origin = new URL(req.url).origin;
-  return json({
-    resource: `${origin}/mcp`,
-    ...(oauthEnabled() ? { authorization_servers: [origin] } : {}),
+const protectedResource = httpAction(async (_ctx, req) =>
+  json({
+    resource: `${new URL(req.url).origin}/mcp`,
     bearer_methods_supported: ["header"],
     resource_name: "Agent Wallet MCP",
-    resource_documentation: `${webUrl()}/agents/docs`,
-    scopes_supported: [...OAUTH_SCOPES],
-  });
-});
+    resource_documentation: `${process.env.WEB_URL ?? "https://agent-wallet-nu.vercel.app"}/agents/docs`,
+    scopes_supported: ["read", "prepare", "spend", "request"],
+  }),
+);
 http.route({ path: "/.well-known/oauth-protected-resource", method: "GET", handler: protectedResource });
 http.route({ path: "/.well-known/oauth-protected-resource/mcp", method: "GET", handler: protectedResource });
-
-// ---- MCP OAuth 2.1 (authorization code + PKCE, dynamic registration). Off unless MCP_OAUTH=on. ----
-
-const oauthOff = () => json({ error: "not_found", error_description: "OAuth isn't available on this server. Use an access key from the Agents screen." }, 404);
-const oauthError = (error: string, description: string, status = 400) => json({ error, error_description: description }, status);
-const preflight = httpAction(async () => new Response(null, { status: 204, headers: CORS }));
-
-/** RFC 8414 authorization server metadata. */
-http.route({
-  path: "/.well-known/oauth-authorization-server",
-  method: "GET",
-  handler: httpAction(async (_ctx, req) => {
-    if (!oauthEnabled()) return oauthOff();
-    const origin = new URL(req.url).origin;
-    return json({
-      issuer: origin,
-      authorization_endpoint: `${origin}/oauth/authorize`,
-      token_endpoint: `${origin}/oauth/token`,
-      registration_endpoint: `${origin}/oauth/register`,
-      response_types_supported: ["code"],
-      grant_types_supported: ["authorization_code"],
-      code_challenge_methods_supported: ["S256"],
-      token_endpoint_auth_methods_supported: ["none"],
-      scopes_supported: [...OAUTH_SCOPES],
-      authorization_response_iss_parameter_supported: true,
-      service_documentation: `${webUrl()}/agents/docs`,
-    });
-  }),
-});
-
-/** RFC 7591 dynamic client registration (public clients). */
-http.route({
-  path: "/oauth/register",
-  method: "POST",
-  handler: httpAction(async (ctx, req) => {
-    if (!oauthEnabled()) return oauthOff();
-    let body: { client_name?: unknown; redirect_uris?: unknown; token_endpoint_auth_method?: unknown };
-    try {
-      body = (await req.json()) as typeof body;
-    } catch {
-      return oauthError("invalid_client_metadata", "Send JSON client metadata");
-    }
-    if (body.token_endpoint_auth_method !== undefined && body.token_endpoint_auth_method !== "none") {
-      return oauthError("invalid_client_metadata", "Only public clients (token_endpoint_auth_method none, with PKCE) are supported");
-    }
-    const uris = Array.isArray(body.redirect_uris) ? body.redirect_uris.filter((u): u is string => typeof u === "string") : [];
-    const out = await ctx.runMutation(internal.oauth.register, { name: String(body.client_name ?? ""), redirectUris: uris });
-    if ("error" in out) return oauthError(out.error, out.description, out.error === "temporarily_unavailable" ? 429 : 400);
-    return json(
-      {
-        client_id: out.clientId,
-        client_id_issued_at: Math.floor(Date.now() / 1000),
-        client_name: out.name,
-        redirect_uris: out.redirectUris,
-        token_endpoint_auth_method: "none",
-        grant_types: ["authorization_code"],
-        response_types: ["code"],
-      },
-      201,
-    );
-  }),
-});
-http.route({ path: "/oauth/register", method: "OPTIONS", handler: preflight });
-
-/**
- * The owner's browser arrives here from the client. A bad client or redirect URI gets an error page
- * and is never redirected; otherwise the owner goes to the dashboard to sign in and consent.
- */
-http.route({
-  path: "/oauth/authorize",
-  method: "GET",
-  handler: httpAction(async (ctx, req) => {
-    if (!oauthEnabled()) return oauthOff();
-    const p = new URL(req.url).searchParams;
-    const clientId = p.get("client_id") ?? "";
-    const redirectUri = p.get("redirect_uri") ?? "";
-    if (!(await ctx.runQuery(internal.oauth.checkClient, { clientId, redirectUri }))) {
-      return new Response("This connection request isn't valid: unknown client or redirect URI. Start again from your assistant.", {
-        status: 400,
-        headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
-      });
-    }
-    const back = (error: string, description: string) => {
-      const u = new URL(redirectUri);
-      u.searchParams.set("error", error);
-      u.searchParams.set("error_description", description);
-      const state = p.get("state");
-      if (state) u.searchParams.set("state", state);
-      return new Response(null, { status: 302, headers: { location: u.toString(), "cache-control": "no-store" } });
-    };
-    if (p.get("response_type") !== "code") return back("unsupported_response_type", "Only response_type=code is supported");
-    if (p.get("code_challenge_method") !== "S256" || !CHALLENGE_RE.test(p.get("code_challenge") ?? "")) return back("invalid_request", "PKCE with S256 is required");
-    const consent = new URL(`${webUrl()}/agents/authorize`);
-    consent.searchParams.set("client_id", clientId);
-    consent.searchParams.set("redirect_uri", redirectUri);
-    consent.searchParams.set("code_challenge", p.get("code_challenge")!);
-    consent.searchParams.set("scope", parseScope(p.get("scope")).join(" "));
-    const state = p.get("state");
-    if (state) consent.searchParams.set("state", state);
-    return new Response(null, { status: 302, headers: { location: consent.toString(), "cache-control": "no-store" } });
-  }),
-});
-
-/** Code + PKCE verifier for an access token (a per-assistant key, like the Agents screen issues). */
-http.route({
-  path: "/oauth/token",
-  method: "POST",
-  handler: httpAction(async (ctx, req) => {
-    if (!oauthEnabled()) return oauthOff();
-    let form: URLSearchParams;
-    try {
-      form = new URLSearchParams(await req.text());
-    } catch {
-      return oauthError("invalid_request", "Send application/x-www-form-urlencoded");
-    }
-    if (form.get("grant_type") !== "authorization_code") return oauthError("unsupported_grant_type", "Only authorization_code is supported");
-    const args = { code: form.get("code") ?? "", clientId: form.get("client_id") ?? "", redirectUri: form.get("redirect_uri") ?? "", codeVerifier: form.get("code_verifier") ?? "" };
-    if (!args.code || !args.clientId || !args.redirectUri) return oauthError("invalid_request", "code, client_id, redirect_uri and code_verifier are required");
-    const out = await ctx.runMutation(internal.oauth.exchange, args);
-    if ("error" in out) return oauthError(out.error, out.description);
-    return json({ access_token: out.token, token_type: "Bearer", expires_in: out.expiresIn, scope: out.scope });
-  }),
-});
-http.route({ path: "/oauth/token", method: "OPTIONS", handler: preflight });
 
 http.route({ path: "/telegram", method: "POST", handler: telegramWebhook });
 

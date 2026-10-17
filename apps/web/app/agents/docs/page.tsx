@@ -5,7 +5,7 @@ import { MCP_TOOLS, OUTCOMES, REASON_CODES, SCOPE_LABELS } from "@agent-wallet/b
 import { Wordmark } from "@/components/brand";
 import { CodeBlock } from "@/components/agents/code-block";
 import { MCP_URL } from "@/lib/config";
-import { OAUTH_ON, OAUTH_ONLY_CLIENTS, mcpSnippets } from "@/lib/mcp-snippets";
+import { OAUTH_ONLY_CLIENTS, mcpSnippets } from "@/lib/mcp-snippets";
 
 /**
  * Public, no-login docs for people wiring an outside assistant to the wallet. Tools, outcomes and
@@ -122,19 +122,12 @@ export default function AgentDocsPage() {
         </div>
         <div className="mt-4 rounded-tile border border-line bg-white p-4">
           <div className="flex items-center gap-2 text-body font-semibold text-ink">
-            <Clock className="size-4 text-amber" /> {OAUTH_ON ? "Custom connectors" : "Coming soon"}: {OAUTH_ONLY_CLIENTS.join(", ")}
+            <Clock className="size-4 text-amber" /> Coming soon: {OAUTH_ONLY_CLIENTS.join(", ")}
           </div>
-          {OAUTH_ON ? (
-            <p className="mt-1 text-body text-ink-2">
-              Add the server URL as a custom connector. The connector registers itself, sends the owner to the dashboard to choose its permissions, limits and
-              expiry, and receives its own key (OAuth 2.1, authorization code with PKCE).
-            </p>
-          ) : (
-            <p className="mt-1 text-body text-ink-2">
-              Their connectors sign in with OAuth and can't send a custom header. OAuth isn't switched on yet, so these can't connect today. A 401 already
-              points clients at <C>/.well-known/oauth-protected-resource</C>, which lists bearer keys only.
-            </p>
-          )}
+          <p className="mt-1 text-body text-ink-2">
+            Their connectors sign in with OAuth and can't send a custom header. The gateway doesn't offer OAuth yet, so these can't connect today. A 401 already
+            points clients at <C>/.well-known/oauth-protected-resource</C>, which lists bearer keys only.
+          </p>
         </div>
 
         <H2 id="tools">Tools</H2>

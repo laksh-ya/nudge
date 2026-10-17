@@ -5,8 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { BookOpen, Clock, EyeOff, KeyRound, Plus, SlidersHorizontal, Snowflake } from "lucide-react";
 import { api } from "@/lib/api";
-import { MCP_URL, approvalLink } from "@/lib/config";
-import { OAUTH_ON } from "@/lib/mcp-snippets";
+import { approvalLink } from "@/lib/config";
 import { cn } from "@/lib/cn";
 import { ago, formatMoney } from "@/lib/format";
 import { AgentMark } from "@/components/brand";
@@ -117,12 +116,12 @@ export default function AgentsPage() {
         </div>
         <div className="border-t border-line pt-4 pb-4">
           <div className="mb-2 flex items-center gap-1.5 text-label font-semibold text-ink-2">
-            <Clock className="size-3.5" /> {OAUTH_ON ? "Custom connectors (OAuth)" : "Coming soon"}
+            <Clock className="size-3.5" /> Coming soon
           </div>
           <div className="grid grid-cols-3 gap-2">
             {OAUTH_ONLY.map((p) => (
-              <div key={p.label} aria-disabled={!OAUTH_ON} className={cn("flex flex-col items-center gap-1.5 rounded-[14px] border border-dashed border-line p-3 text-center", !OAUTH_ON && "opacity-70")}>
-                <span className={cn(!OAUTH_ON && "grayscale")}>
+              <div key={p.label} aria-disabled className="flex flex-col items-center gap-1.5 rounded-[14px] border border-dashed border-line p-3 text-center opacity-70">
+                <span className="grayscale">
                   <AgentMark provider={p.id} size={28} />
                 </span>
                 <span className="text-label font-semibold text-ink-2">{p.label}</span>
@@ -130,9 +129,7 @@ export default function AgentsPage() {
             ))}
           </div>
           <p className="mt-2 text-label text-mute">
-            {OAUTH_ON
-              ? `Add ${MCP_URL} as a custom connector there; you'll choose its permissions and limits here.`
-              : "Their connectors sign in with OAuth, which isn't available yet, so they can't connect today."}{" "}
+            Their connectors sign in with OAuth, which isn't available yet, so they can't connect today.{" "}
             <Link href="/agents/docs#connect" className="font-semibold text-cyan-ink">
               What works now
             </Link>
