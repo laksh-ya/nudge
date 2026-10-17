@@ -41,7 +41,7 @@ We do not claim resistance to prompt injection as such. A tricked agent can stil
 | Agent keys sealed (AES-256-GCM, bound to the agent id) | `lib/secrets.ts` | End-to-end checks stored keys start `enc:v1:` |
 | Demo isolation: per-visitor sandboxes; judge account only with its key | `api/demo/token`, `auth.config.ts` | Manual check; two-browser test still to do |
 | Rate limits: MCP 60/min per assistant; vault deployments 60/hour overall, 3/day per demo visitor, 150/day for all sandboxes; enrolment code entry 5 per 15 min; assistant turns 30/day per sandbox | `lib/limits.ts`, `lib/budget.ts` | Code; limiter tests in `limiters.test.ts` |
-| Telegram: one-use 10-minute linking codes, re-link needs the owner's yes, each update handled once | `telegram.inbound` | Live as @Agent_eallet_bot; a Telegram-delivered approval is in the README's evidence |
+| Telegram: one-use 10-minute linking codes, re-link needs the owner's yes, each update handled once | `telegram.inbound` | Live as @heynudge_bot; a Telegram-delivered approval is in the README's evidence |
 
 ## Known risks
 
