@@ -268,6 +268,21 @@ export function waitText(seconds: number) {
   return `${+(seconds / 86_400).toFixed(1)}-day`;
 }
 
+/**
+ * The owner taking test dollars out of the vault to any address. The vault counts this as a
+ * loosening (it is the one way below the protected amount), so it waits out the change delay
+ * after the passkey signs, and can be cancelled until then.
+ */
+export async function withdrawTask(ctx: MutationCtx, user: Doc<"users">, wallet: Doc<"wallets">, to: Address, amountMinor: number) {
+  const delay = wallet.vault?.changeDelay ?? DEFAULT_RULES.changeDelay;
+  return await ownerTask(ctx, user, {
+    title: `Withdraw ${formatMoney(amountMinor, "USDC")} to ${to.slice(0, 6)}…${to.slice(-4)}`,
+    reason: `Takes test dollars out of the vault to an address you chose. After your passkey it waits the vault's ${waitText(delay)} change delay, so you can still cancel it.`,
+    op: Op.Withdraw,
+    data: encode.withdraw(to, toTokenUnits(amountMinor)),
+  });
+}
+
 /** Take an agent's key out of the vault for good. Its history stays. */
 export async function removeAgentTask(ctx: MutationCtx, user: Doc<"users">, agent: Doc<"agents">) {
   return await ownerTask(ctx, user, {
