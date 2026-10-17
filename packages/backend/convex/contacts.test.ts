@@ -166,6 +166,43 @@ describe("contacts the owner adds and removes (#10)", () => {
     expect(await pay(f, f.payee)).toMatchObject({ outcome: "refused", code: "2010" });
   });
 
+  it("cancels matching approvals beyond the first 100 waiting requests", async () => {
+    const f = await live();
+    await f.t.run(async (ctx) => {
+      for (let i = 0; i < 101; i++) await ctx.db.insert("tasks", {
+        userId: f.alice, title: `Unrelated ${i}`, state: "awaiting_approval", channel: "app", rail: "simulator", updatedAt: NOW,
+      });
+    });
+    const { payeeId, token } = await f.owner.mutation(api.contacts.add, { name: "Test Shop", address: NEW });
+    const task = await f.t.run((ctx) => ctx.db.query("tasks").withIndex("by_approval_token", (q) => q.eq("approvalToken", token!)).unique());
+    await f.owner.mutation(api.contacts.remove, { payeeId });
+    expect((await f.t.run((ctx) => ctx.db.get(task!._id)))!.state).toBe("cancelled");
+  });
+
+  it("cancels a shared setup and a cap approval so neither can re-add a removed contact", async () => {
+    const f = await live();
+    const { payeeId, token } = await f.owner.mutation(api.contacts.add, { name: "Test Shop", address: NEW });
+    const task = await f.t.run((ctx) => ctx.db.query("tasks").withIndex("by_approval_token", (q) => q.eq("approvalToken", token!)).unique());
+    await f.t.run((ctx) => ctx.db.patch(task!._id, { effects: { payees: [payeeId], agents: [f.claude] } }));
+    await f.owner.mutation(api.contacts.remove, { payeeId });
+    expect((await f.t.run((ctx) => ctx.db.get(task!._id)))!.state).toBe("cancelled");
+
+    await f.owner.mutation(api.vault.setContactCap, { payeeId: f.payee, dailyCapMinor: 1000 });
+    const cap = await f.t.run((ctx) => ctx.db.query("tasks").withIndex("by_user_state", (q) => q.eq("userId", f.alice).eq("state", "awaiting_approval")).first());
+    await f.owner.mutation(api.contacts.remove, { payeeId: f.payee });
+    expect((await f.t.run((ctx) => ctx.db.get(cap!._id)))!.state).toBe("cancelled");
+  });
+
+  it.each(["reserved", "submitted", "queued"] as const)("keeps a contact until its signed %s change settles", async (state) => {
+    const f = await live();
+    const { payeeId, token } = await f.owner.mutation(api.contacts.add, { name: "Test Shop", address: NEW });
+    const task = await f.t.run((ctx) => ctx.db.query("tasks").withIndex("by_approval_token", (q) => q.eq("approvalToken", token!)).unique());
+    await f.t.run((ctx) => ctx.db.patch(task!._id, { state }));
+    await expect(f.owner.mutation(api.contacts.remove, { payeeId })).rejects.toThrow(/still being applied/);
+    await expect(f.owner.mutation(api.contacts.approveAdd, { payeeId })).rejects.toThrow(/already being applied/);
+    expect(await f.t.run((ctx) => ctx.db.get(payeeId))).not.toBeNull();
+  });
+
   it("a pending contact removed before approval is never marked as added", async () => {
     const f = await live();
     const { payeeId, token } = await f.owner.mutation(api.contacts.add, { name: "Test Shop", address: NEW });

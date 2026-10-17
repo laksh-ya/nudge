@@ -20,12 +20,25 @@ async function walletOf(ctx: MutationCtx, userId: Id<"users">) {
 
 const isLive = (w: Doc<"wallets"> | null): w is Doc<"wallets"> => w?.status === "live";
 
+/** Any change that can add or change this contact must stop before the app forgets it. */
+function changesContact(task: Doc<"tasks">, payeeId: Id<"payees">) {
+  return Boolean(task.effects?.payees.includes(payeeId) || task.effects?.contactCap?.payeeId === payeeId);
+}
+
+async function changingOnChain(ctx: MutationCtx, userId: Id<"users">, payeeId: Id<"payees">) {
+  for (const state of ["reserved", "submitted", "queued"] as const) {
+    const tasks = await ctx.db.query("tasks").withIndex("by_user_state", (q) => q.eq("userId", userId).eq("state", state)).collect();
+    if (tasks.some((t) => changesContact(t, payeeId))) return true;
+  }
+  return false;
+}
+
 /** The open passkey approval that adds this one contact, if there is one. */
 async function pendingAdd(ctx: MutationCtx, user: Doc<"users">, payeeId: Id<"payees">) {
   const waiting = await ctx.db
     .query("tasks")
     .withIndex("by_user_state", (q) => q.eq("userId", user._id).eq("state", "awaiting_approval"))
-    .take(100);
+    .collect();
   return waiting.filter((t) => t.effects?.payees.includes(payeeId) && t.effects.agents.length === 0);
 }
 
@@ -90,6 +103,7 @@ export const approveAdd = mutation({
     if (!payee.pendingPasskey) throw new Error(`${payee.name} is already in your vault`);
     const w = await walletOf(ctx, user._id);
     if (!isLive(w) || !isVaultVersion(w.version)) throw new Error("Your wallet isn't on-chain");
+    if (await changingOnChain(ctx, user._id, payeeId)) throw new Error("This contact's approval is already being applied. Wait for it to finish.");
     const open = (await pendingAdd(ctx, user, payeeId)).find((t) => (t.expiresAt ?? 0) > Date.now() && t.approvalToken);
     if (open) return open.approvalToken!;
     await hit(ctx, `contact-add:${user._id}`, 10, 60_000);
@@ -103,14 +117,16 @@ export const remove = mutation({
     const user = await requireViewer(ctx);
     const payee = await own(user, await ctx.db.get(payeeId));
     const w = await walletOf(ctx, user._id);
-    // Requests still asking for approval to pay it, or to add it, stop now.
+    // Once signed, an add/cap change may still land in the vault. Keep the record until it
+    // settles, so removal can include the correct on-chain RemoveContact approval.
+    if (await changingOnChain(ctx, user._id, payeeId)) throw new Error("A signed change to this contact is still being applied. Wait for it to finish, then remove the contact.");
+    // Requests still asking for approval to pay it, or to add/change it, stop now.
     const waiting = await ctx.db
       .query("tasks")
       .withIndex("by_user_state", (q) => q.eq("userId", user._id).eq("state", "awaiting_approval"))
-      .take(100);
+      .collect();
     for (const t of waiting) {
-      const addsOnlyThis = t.effects?.payees.length === 1 && t.effects.payees[0] === payeeId && t.effects.agents.length === 0;
-      if (t.payeeId === payeeId || addsOnlyThis) {
+      if (t.payeeId === payeeId || changesContact(t, payeeId)) {
         await ctx.db.patch(t._id, { state: "cancelled", approvalToken: undefined, reason: `${payee.name} was removed from your contacts`, updatedAt: Date.now() });
       }
     }
