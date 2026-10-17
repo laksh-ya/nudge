@@ -7,9 +7,10 @@ import { Clock, Snowflake } from "lucide-react";
 import { api, type Id } from "@/lib/api";
 import { countdown, useNow } from "@/lib/use-now";
 import { Initial } from "@/components/brand";
+import { errorMessage } from "@/components/form";
 import { Button, Card, Chip, Divided, PageTitle, Row, Skeleton } from "@/components/ui";
 
-const message = (e: unknown) => (e instanceof Error ? e.message.replace(/^.*Uncaught Error: /, "").split("\n")[0] : "Something went wrong");
+const message = errorMessage;
 
 /**
  * The guardian's side: for each person they look after, payments on hold (with a stop button),

@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { formatMoney, isVaultVersion } from "@agent-wallet/domain";
 import { mutation, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -44,9 +44,9 @@ export const invite = mutation({
   handler: async (ctx, { name }) => {
     const user = await requireViewer(ctx);
     const label = name.replace(/\s+/g, " ").trim().slice(0, 40);
-    if (!label) throw new Error("Add their name");
+    if (!label) throw new ConvexError("Add their name");
     await hit(ctx, `guardian-invite:${user._id}`, 10, 3600_000);
-    if ((await linksOf(ctx, user._id)).length >= MAX_GUARDIANS) throw new Error(`Up to ${MAX_GUARDIANS} guardians. Remove one first.`);
+    if ((await linksOf(ctx, user._id)).length >= MAX_GUARDIANS) throw new ConvexError(`Up to ${MAX_GUARDIANS} guardians. Remove one first.`);
     const code = inviteCode();
     await ctx.db.insert("guardians", { userId: user._id, name: label, status: "invited", code, codeExpiresAt: Date.now() + CODE_HOURS * 3600_000, createdAt: Date.now() });
     await ctx.db.insert("activity", { userId: user._id, kind: "security", title: `Invited ${label} as a guardian`, detail: `Code works once, for ${CODE_HOURS} hours`, tone: "neutral" });
@@ -60,7 +60,7 @@ export const remove = mutation({
   handler: async (ctx, { linkId }) => {
     const user = await requireViewer(ctx);
     const link = await ctx.db.get(linkId);
-    if (!link || link.userId !== user._id) throw new Error("Not found");
+    if (!link || link.userId !== user._id) throw new ConvexError("Not found");
     await ctx.db.patch(linkId, { status: "removed", code: undefined, codeExpiresAt: undefined });
     await ctx.db.insert("activity", { userId: user._id, kind: "security", title: `Removed ${link.name} as a guardian`, tone: "neutral" });
   },
@@ -72,7 +72,7 @@ export const protectMore = mutation({
   handler: async (ctx, { holdMinutes }) => {
     const user = await requireViewer(ctx);
     const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
-    if (!wallet || wallet.status !== "live" || !isVaultVersion(wallet.version)) throw new Error("Put your wallet on-chain first: extra protection is enforced by the vault");
+    if (!wallet || wallet.status !== "live" || !isVaultVersion(wallet.version)) throw new ConvexError("Put your wallet on-chain first: extra protection is enforced by the vault");
     const { token } = await protectMoreTask(ctx, user, wallet, holdMinutes * 60);
     return token;
   },
@@ -104,8 +104,8 @@ export const accept = mutation({
     await hit(ctx, `guardian-accept:${user._id}`, 10, 15 * 60_000, "Too many tries. Wait 15 minutes.");
     const clean = code.trim().toUpperCase();
     const link = clean.length === 8 ? await ctx.db.query("guardians").withIndex("by_code", (q) => q.eq("code", clean)).unique() : null;
-    if (!link || link.status !== "invited" || (link.codeExpiresAt ?? 0) < Date.now()) throw new Error("That code isn't valid any more. Ask for a new one.");
-    if (link.userId === user._id) throw new Error("You can't be your own guardian");
+    if (!link || link.status !== "invited" || (link.codeExpiresAt ?? 0) < Date.now()) throw new ConvexError("That code isn't valid any more. Ask for a new one.");
+    if (link.userId === user._id) throw new ConvexError("You can't be your own guardian");
     // One use: the code is gone the moment it's claimed.
     await ctx.db.patch(link._id, { status: "active", guardianId: user._id, code: undefined, codeExpiresAt: undefined, acceptedAt: Date.now() });
     await ctx.db.insert("activity", { userId: link.userId, kind: "security", title: `${link.name} is now your guardian`, detail: "They can cancel held payments and freeze your assistants; they can't pay or change limits", tone: "good" });
@@ -159,8 +159,8 @@ export const cancelHeld = mutation({
     const user = await requireViewer(ctx);
     const task = await ctx.db.get(taskId);
     const link = task ? await guarding(ctx, user, task.userId) : null;
-    if (!task || !link) throw new Error("Not found");
-    if (task.state !== "held") throw new Error("Only a held payment can be stopped");
+    if (!task || !link) throw new ConvexError("Not found");
+    if (task.state !== "held") throw new ConvexError("Only a held payment can be stopped");
     await relayer.enqueueAction(ctx, internal.chain.cancelHeld, { taskId });
     await ctx.db.patch(taskId, { reason: `Cancelling… (by ${link.name}, your guardian)`, updatedAt: Date.now() });
     await ctx.db.insert("activity", { userId: task.userId, kind: "security", title: `${link.name} stopped a held payment`, detail: task.title, tone: "warn" });
@@ -173,7 +173,7 @@ export const freeze = mutation({
   handler: async (ctx, { ownerId }) => {
     const user = await requireViewer(ctx);
     const link = await guarding(ctx, user, ownerId);
-    if (!link) throw new Error("Not found");
+    if (!link) throw new ConvexError("Not found");
     const owner = (await ctx.db.get(ownerId))!;
     return await freezeAll(ctx, owner, `By ${link.name}, your guardian`);
   },

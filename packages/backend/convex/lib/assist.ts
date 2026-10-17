@@ -1,3 +1,4 @@
+import { ConvexError } from "convex/values";
 import { convert, decimalsOf, formatMoney, type Currency } from "@agent-wallet/domain";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
@@ -133,7 +134,7 @@ export function titleCase(s: string) {
 
 /** Create a goal, or move an existing one's target and date. Planning only: no money moves. */
 export async function saveGoal(ctx: MutationCtx, user: Doc<"users">, g: { goalId?: Id<"goals">; name: string; targetMinor: number; currency: Currency; dueAt?: number }) {
-  if (!Number.isSafeInteger(g.targetMinor) || g.targetMinor <= 0 || g.targetMinor > 1e13) throw new Error("Amount is out of range");
+  if (!Number.isSafeInteger(g.targetMinor) || g.targetMinor <= 0 || g.targetMinor > 1e13) throw new ConvexError("Amount is out of range");
   if (g.goalId) {
     const goal = await ctx.db.get(g.goalId);
     if (goal && goal.userId === user._id) {
@@ -172,7 +173,7 @@ export async function createReminder(
   r: { text: string; dueAt: number; repeat?: "monthly" | "weekly"; obligationId?: Id<"obligations"> },
 ) {
   const open = await ctx.db.query("reminders").withIndex("by_user", (q) => q.eq("userId", user._id).eq("status", "scheduled")).take(101);
-  if (open.length >= 100) throw new Error("You have 100 reminders waiting. Cancel some first.");
+  if (open.length >= 100) throw new ConvexError("You have 100 reminders waiting. Cancel some first.");
   return await ctx.db.insert("reminders", { userId: user._id, text: r.text.slice(0, 140), dueAt: r.dueAt, repeat: r.repeat, repeatDay: r.repeat === "monthly" ? local(r.dueAt, safeTz(user.timezone)).day : undefined, obligationId: r.obligationId, status: "scheduled" });
 }
 

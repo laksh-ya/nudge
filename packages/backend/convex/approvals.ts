@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { CHAIN_ID, EXPLORER, Op, actionDigest, assertionProblem } from "@agent-wallet/domain";
@@ -93,13 +93,13 @@ export const decide = mutation({
       .query("tasks")
       .withIndex("by_approval_token", (q) => q.eq("approvalToken", token))
       .unique();
-    if (!task || task.userId !== user._id) throw new Error("This link is no longer valid");
+    if (!task || task.userId !== user._id) throw new ConvexError("This link is no longer valid");
     if (task.state !== "awaiting_approval") return task.state;
     if (task.expiresAt && task.expiresAt < Date.now()) {
       await ctx.db.patch(task._id, { state: "expired", updatedAt: Date.now() });
       return "expired";
     }
-    if (approve && task.action) throw new Error("Approve this with your passkey");
+    if (approve && task.action) throw new ConvexError("Approve this with your passkey");
     if (!approve) {
       await ctx.db.patch(task._id, { state: "cancelled", updatedAt: Date.now() });
       await ctx.db.insert("activity", { userId: task.userId, kind: "payment", title: `Declined ${task.title}`, tone: "neutral" });
@@ -118,12 +118,12 @@ export const decide = mutation({
 export const decline = mutation({
   args: { token: v.string() },
   handler: async (ctx, { token }) => {
-    if (token.length < 16) throw new Error("This link is no longer valid");
+    if (token.length < 16) throw new ConvexError("This link is no longer valid");
     const task = await ctx.db
       .query("tasks")
       .withIndex("by_approval_token", (q) => q.eq("approvalToken", token))
       .unique();
-    if (!task) throw new Error("This link is no longer valid");
+    if (!task) throw new ConvexError("This link is no longer valid");
     if (task.state !== "awaiting_approval") return task.state;
     await ctx.db.patch(task._id, { state: "cancelled", reason: "Declined on the approval page", updatedAt: Date.now() });
     await ctx.db.insert("activity", { userId: task.userId, kind: task.amountMinor ? "payment" : "setting", title: `Declined ${task.title}`, detail: "Nothing was paid or changed", tone: "neutral" });
@@ -151,22 +151,22 @@ export const submit = mutation({
       .query("tasks")
       .withIndex("by_approval_token", (q) => q.eq("approvalToken", token))
       .unique();
-    if (!task?.action) throw new Error("This link is no longer valid");
+    if (!task?.action) throw new ConvexError("This link is no longer valid");
     if (task.state !== "awaiting_approval") return task.state;
     if (task.action.deadline * 1000 < Date.now()) {
       await ctx.db.patch(task._id, { state: "expired", updatedAt: Date.now() });
       return "expired";
     }
-    if (auth.clientDataJSON.length > 2000 || auth.authenticatorData.length > 1000) throw new Error("Signature too large");
+    if (auth.clientDataJSON.length > 2000 || auth.authenticatorData.length > 1000) throw new ConvexError("Signature too large");
     const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", task.userId)).unique();
-    if (!wallet?.address) throw new Error("This wallet has no vault");
+    if (!wallet?.address) throw new ConvexError("This wallet has no vault");
     const keys = (wallet.passkeys ?? []).filter((k) => k.status === "active");
     const key = credentialId ? keys.find((k) => k.credentialId === credentialId) : keys[0];
     const x = key?.x ?? wallet.keyX;
     const y = key?.y ?? wallet.keyY;
     const rpId = key?.rpId ?? wallet.rpId;
     const keyId = key?.keyId ?? wallet.keyId;
-    if (!keyId || !x || !y || !rpId) throw new Error("This wallet has no passkey");
+    if (!keyId || !x || !y || !rpId) throw new ConvexError("This wallet has no passkey");
 
     // Attempts are counted without throwing, so the count survives (a throw would roll it back).
     const limitKey = `approval-sign:${task._id}`;

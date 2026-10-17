@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ExternalLink, Fingerprint, ShieldX, X, Zap } from "lucide-react";
-import { EXPLORER, PROOF_TX, REFERENCE_VAULT, STOLEN_KEY_VAULT } from "@/lib/config";
+import { EXPLORER, JUDGE_VAULT_V2, PROOF_TX, STOLEN_KEY_VAULT } from "@/lib/config";
 
 const KEY = "aw-tour-hidden";
 
@@ -14,7 +14,7 @@ const STEPS = [
     title: "Small payment: paid at once",
     text: "Claude paid a saved contact $3 over MCP. Inside its limits, so the vault sent it straight away.",
     tx: PROOF_TX.paidAtOnce,
-    proof: REFERENCE_VAULT,
+    proof: JUDGE_VAULT_V2,
   },
   {
     icon: Fingerprint,
@@ -22,7 +22,7 @@ const STEPS = [
     title: "Over the limit: waits for the passkey",
     text: "Claude asked for $12, over its $10 limit. Nothing moved until the owner approved it with the passkey on their phone.",
     tx: PROOF_TX.approvedOnPhone,
-    proof: REFERENCE_VAULT,
+    proof: JUDGE_VAULT_V2,
   },
   {
     icon: ShieldX,

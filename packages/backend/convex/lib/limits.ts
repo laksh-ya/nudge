@@ -1,3 +1,4 @@
+import { ConvexError } from "convex/values";
 import type { MutationCtx } from "../_generated/server";
 
 /**
@@ -22,6 +23,6 @@ export async function hit(ctx: MutationCtx, key: string, max: number, windowMs: 
     else await ctx.db.insert("limits", { key, windowStart: now, count: 1 });
     return;
   }
-  if (row.count >= max) throw new Error(message);
+  if (row.count >= max) throw new ConvexError(message);
   await ctx.db.patch(row._id, { count: row.count + 1 });
 }

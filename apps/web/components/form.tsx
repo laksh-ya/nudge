@@ -140,8 +140,13 @@ export function ErrorText({ children }: { children?: React.ReactNode }) {
 }
 
 export function errorMessage(e: unknown): string {
+  // Refusals come as ConvexError with the sentence in `data`; production Convex blanks every other
+  // server error to "Server Error", so never show that raw.
+  const data = (e as { data?: unknown } | null)?.data;
+  if (typeof data === "string") return data.slice(0, 160);
   const m = e instanceof Error ? e.message : String(e);
-  // Convex wraps server errors: "[CONVEX M(x)] [Request ID: …] Server Error\nUncaught Error: message\n  at …"
-  const uncaught = m.match(/Uncaught Error: ([^\n]+)/);
-  return (uncaught?.[1] ?? m).slice(0, 160);
+  const uncaught = m.match(/Uncaught (?:Convex)?Error: ([^\n]+)/);
+  if (uncaught) return uncaught[1]!.slice(0, 160);
+  if (m.includes("Server Error")) return "Something went wrong on our side. Try again in a moment.";
+  return m.slice(0, 160);
 }

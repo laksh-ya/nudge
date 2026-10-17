@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
@@ -31,7 +31,7 @@ export const cancel = mutation({
     const user = await requireViewer(ctx);
     const task = await own(user, await ctx.db.get(taskId));
     if (!["drafted", "needs_info", "checked", "awaiting_approval"].includes(task.state)) {
-      throw new Error("This payment has already been sent");
+      throw new ConvexError("This payment has already been sent");
     }
     await ctx.db.patch(taskId, { state: "cancelled", approvalToken: undefined, updatedAt: Date.now() });
   },

@@ -62,7 +62,13 @@ function useNow() {
 function errorText(e: unknown) {
   const m = e instanceof Error ? e.message : String(e);
   if (/NotAllowedError|timed out|not allowed/i.test(m)) return "The passkey prompt was closed. Try again.";
-  return (m.match(/Uncaught Error: ([^\n]+)/)?.[1] ?? m).slice(0, 160);
+  // Refusals come as ConvexError with the sentence in `data`; production blanks other server errors.
+  const data = (e as { data?: unknown } | null)?.data;
+  if (typeof data === "string") return data.slice(0, 160);
+  const uncaught = m.match(/Uncaught (?:Convex)?Error: ([^\n]+)/);
+  if (uncaught) return uncaught[1]!.slice(0, 160);
+  if (m.includes("Server Error")) return "Something went wrong on our side. Try again in a moment.";
+  return m.slice(0, 160);
 }
 
 function Wordmark() {

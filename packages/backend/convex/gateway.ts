@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { formatMoney, isVaultVersion } from "@agent-wallet/domain";
 import { internalMutation, internalQuery, mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -34,7 +34,7 @@ export const issueToken = mutation({
   handler: async (ctx, { agentId }) => {
     const user = await requireViewer(ctx);
     const agent = await own(user, await ctx.db.get(agentId));
-    if (agent.provider === "own") throw new Error("Your own assistant doesn't need a token");
+    if (agent.provider === "own") throw new ConvexError("Your own assistant doesn't need a token");
     const token = randomToken();
     await ctx.db.patch(agent._id, { tokenHash: await sha256(token), status: agent.status === "frozen" ? "frozen" : "active", connectedAt: Date.now() });
     await ctx.db.insert("activity", { userId: user._id, kind: "agent", title: `New access key for ${agent.name}`, detail: "Older keys stop working", tone: "neutral" });
@@ -47,7 +47,7 @@ export const issueTokenAsOperator = internalMutation({
   args: { agentId: v.id("agents") },
   handler: async (ctx, { agentId }) => {
     const agent = await ctx.db.get(agentId);
-    if (!agent || agent.provider === "own") throw new Error("No such assistant");
+    if (!agent || agent.provider === "own") throw new ConvexError("No such assistant");
     const token = randomToken();
     await ctx.db.patch(agent._id, { tokenHash: await sha256(token), connectedAt: Date.now() });
     await ctx.db.insert("activity", { userId: agent.userId, kind: "agent", title: `New access key for ${agent.name}`, detail: "Issued by the operator for a demo", tone: "neutral" });
@@ -67,9 +67,9 @@ export const updateGrant = mutation({
   handler: async (ctx, args) => {
     const user = await requireViewer(ctx);
     const agent = await own(user, await ctx.db.get(args.agentId));
-    for (const n of [args.dailyCapMinor, args.perPaymentMinor]) if (!Number.isSafeInteger(n) || n < 0 || n > 1e9) throw new Error("Limit is out of range");
-    if (args.perPaymentMinor > args.dailyCapMinor) throw new Error("A single payment can't exceed the daily limit");
-    if (!Number.isInteger(args.days) || args.days < 1 || args.days > 365) throw new Error("Pick 1 to 365 days");
+    for (const n of [args.dailyCapMinor, args.perPaymentMinor]) if (!Number.isSafeInteger(n) || n < 0 || n > 1e9) throw new ConvexError("Limit is out of range");
+    if (args.perPaymentMinor > args.dailyCapMinor) throw new ConvexError("A single payment can't exceed the daily limit");
+    if (!Number.isInteger(args.days) || args.days < 1 || args.days > 365) throw new ConvexError("Pick 1 to 365 days");
     const scopes = [...new Set(args.scopes)];
     if (!scopes.includes("read")) scopes.unshift("read");
     await ctx.db.patch(agent._id, { hidesBalances: args.hidesBalances });
@@ -95,7 +95,7 @@ export const revoke = mutation({
   handler: async (ctx, { agentId }) => {
     const user = await requireViewer(ctx);
     const agent = await own(user, await ctx.db.get(agentId));
-    if (agent.provider === "own") throw new Error("Freeze your own assistant instead");
+    if (agent.provider === "own") throw new ConvexError("Freeze your own assistant instead");
     return await revokeAgent(ctx, user, agent);
   },
 });
@@ -124,17 +124,17 @@ type Agent = Doc<"agents">;
 
 async function load(ctx: QueryCtx, agentId: Id<"agents">) {
   const agent = await ctx.db.get(agentId);
-  if (!agent) throw new Error("Unknown assistant");
-  if (agent.status === "revoked") throw new Error(`${agent.name} was disconnected by its owner. The owner can reconnect it from the Agents screen with a new key.`);
-  if (agent.status === "frozen") throw new Error(`${agent.name} is frozen by its owner. Nothing can be read or paid until the owner unfreezes it on the Agents screen.`);
-  if (agent.expiresAt < Date.now()) throw new Error(`${agent.name}'s access has expired. Ask the owner to extend it in Agents → ${agent.name} → Limits.`);
+  if (!agent) throw new ConvexError("Unknown assistant");
+  if (agent.status === "revoked") throw new ConvexError(`${agent.name} was disconnected by its owner. The owner can reconnect it from the Agents screen with a new key.`);
+  if (agent.status === "frozen") throw new ConvexError(`${agent.name} is frozen by its owner. Nothing can be read or paid until the owner unfreezes it on the Agents screen.`);
+  if (agent.expiresAt < Date.now()) throw new ConvexError(`${agent.name}'s access has expired. Ask the owner to extend it in Agents → ${agent.name} → Limits.`);
   const user = (await ctx.db.get(agent.userId))!;
   return { agent, user };
 }
 
 /** Refuses in words a model can pass on: what this assistant can't do and where the owner allows it. */
 function need(agent: Agent, scope: Agent["scopes"][number]) {
-  if (!agent.scopes.includes(scope)) throw new Error(scopeMessage(agent.name, scope, agent.scopes));
+  if (!agent.scopes.includes(scope)) throw new ConvexError(scopeMessage(agent.name, scope, agent.scopes));
 }
 
 /**
@@ -212,7 +212,7 @@ export const canAfford = internalQuery({
   handler: async (ctx, { agentId, amount }) => {
     const { agent, user } = await load(ctx, agentId);
     need(agent, "read");
-    if (!Number.isFinite(amount) || amount <= 0 || amount > 1e9) throw new Error("Amount must be a positive number");
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 1e9) throw new ConvexError("Amount must be a positive number");
     // A yes/no about any amount would let an assistant find a hidden balance by halving guesses.
     if (agent.hidesBalances) {
       return { hidden: true, note: "The owner keeps balances private from this assistant. Propose the payment; the wallet's limits decide." };
@@ -522,7 +522,7 @@ export const taskStatus = internalQuery({
     const task = id ? await ctx.db.get(id) : null;
     // Another assistant's task is visible only when it was handed back as a duplicate of the same invoice.
     const shared = Boolean(task?.sharedWith?.includes(agent._id));
-    if (!task || task.userId !== user._id || (task.agentId !== agent._id && !shared)) throw new Error("No such task for this assistant");
+    if (!task || task.userId !== user._id || (task.agentId !== agent._id && !shared)) throw new ConvexError("No such task for this assistant");
     // Settled on-chain: the AP2 PaymentMandate for it, under this assistant's intent mandate.
     const intent = task.state === "confirmed" && task.agentId === agent._id ? await intentFor(ctx, agent) : null;
     const payment_mandate = intent ? await paymentFor(ctx, task, agent, intent) : null;
@@ -546,7 +546,7 @@ export const cancelTask = internalMutation({
     const { agent, user } = await load(ctx, agentId);
     const id = ctx.db.normalizeId("tasks", taskId);
     const task = id ? await ctx.db.get(id) : null;
-    if (!task || task.userId !== user._id || task.agentId !== agent._id) throw new Error("No such task for this assistant");
+    if (!task || task.userId !== user._id || task.agentId !== agent._id) throw new ConvexError("No such task for this assistant");
     if (task.state !== "awaiting_approval" && task.state !== "drafted") return { cancelled: false, state: task.state };
     await ctx.db.patch(task._id, { state: "cancelled", approvalToken: undefined, updatedAt: Date.now() });
     return { cancelled: true, state: "cancelled" };

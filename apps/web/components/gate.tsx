@@ -28,7 +28,7 @@ function DemoBar({ readOnly }: { readOnly: boolean }) {
     if (!readOnly) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const onRejection = (e: PromiseRejectionEvent) => {
-      if (!String(e.reason?.message ?? e.reason).includes("read-only")) return;
+      if (!String(e.reason?.data ?? e.reason?.message ?? e.reason).includes("read-only")) return;
       e.preventDefault();
       setRefused(true);
       clearTimeout(timer);

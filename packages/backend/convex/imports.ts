@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { mutation } from "./_generated/server";
 import { importKind } from "./schema";
 import { own, requireViewer } from "./lib/auth";
@@ -34,7 +34,7 @@ export const commit = mutation({
   handler: async (ctx, { accountId, kind, fileName, fileId, rows }) => {
     const user = await requireViewer(ctx);
     const account = await own(user, await ctx.db.get(accountId));
-    if (rows.length > MAX_ROWS) throw new Error(`Import up to ${MAX_ROWS} rows at a time`);
+    if (rows.length > MAX_ROWS) throw new ConvexError(`Import up to ${MAX_ROWS} rows at a time`);
     const importId = await ctx.db.insert("imports", {
       userId: user._id,
       accountId,
@@ -86,7 +86,7 @@ export const addOne = mutation({
     const user = await requireViewer(ctx);
     const account = await own(user, await ctx.db.get(args.accountId));
     const merchant = args.merchant.trim().slice(0, 80);
-    if (!merchant) throw new Error("Add who it was paid to");
+    if (!merchant) throw new ConvexError("Add who it was paid to");
     const importId = await ctx.db.insert("imports", {
       userId: user._id,
       accountId: account._id,
@@ -104,7 +104,7 @@ export const addOne = mutation({
       importId,
       { manual: true },
     );
-    if (result.rows === 0) throw new Error("Check the date and amount");
+    if (result.rows === 0) throw new ConvexError("Check the date and amount");
     await ctx.db.patch(importId, result);
     return result;
   },

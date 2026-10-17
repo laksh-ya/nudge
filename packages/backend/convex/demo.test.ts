@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import { convexTest, type TestConvex } from "convex-test";
+import { ConvexError } from "convex/values";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import schema from "./schema";
 import { api, internal } from "./_generated/api";
@@ -82,6 +83,15 @@ describe("the judge account", () => {
     await expect(visitor.mutation(api.gateway.issueToken, { agentId: claude._id })).rejects.toThrow(JUDGE_READ_ONLY);
     await expect(visitor.mutation(api.agents.setStatus, { agentId: claude._id, status: "frozen" })).rejects.toThrow(JUDGE_READ_ONLY);
     await expect(visitor.mutation(api.messages.send, { text: "pay someone" })).rejects.toThrow(JUDGE_READ_ONLY);
+  });
+
+  it("refuses visitors with a ConvexError, so the reason survives production's error redaction (#74)", async () => {
+    const t = convexTest(schema, modules);
+    const visitor = judge(t, false);
+    await visitor.mutation(api.users.ensure, {});
+    const err = await visitor.mutation(api.vault.upgradeVault, {}).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ConvexError);
+    expect((err as ConvexError<string>).data).toBe(JUDGE_READ_ONLY);
   });
 
   it("stays writable for the team's admin token", async () => {

@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { formatMoney } from "@agent-wallet/domain";
 import { internalAction, internalMutation, mutation, query } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
@@ -189,7 +189,7 @@ export const cancel = mutation({
   handler: async (ctx, { reminderId }) => {
     const user = await requireViewer(ctx);
     const r = await ctx.db.get(reminderId);
-    if (!r || r.userId !== user._id) throw new Error("No such reminder");
+    if (!r || r.userId !== user._id) throw new ConvexError("No such reminder");
     if (r.status === "scheduled") await ctx.db.patch(r._id, { status: "cancelled" });
   },
 });

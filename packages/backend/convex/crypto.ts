@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { createPublicClient, erc20Abi, formatUnits, http, isAddress, verifyMessage } from "viem";
 import { CHAINS } from "@agent-wallet/domain";
 import { action, internalAction, internalMutation, internalQuery } from "./_generated/server";
@@ -22,13 +22,13 @@ async function evmHoldings(address: `0x${string}`): Promise<Holding[]> {
     }),
   );
   const failed = results.filter((r) => r.status === "rejected").length;
-  if (failed === results.length) throw new Error("Couldn't reach any network");
+  if (failed === results.length) throw new ConvexError("Couldn't reach any network");
   return results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
 }
 
 async function bitcoinHoldings(address: string): Promise<Holding[]> {
   const res = await fetch(`https://mempool.space/api/address/${encodeURIComponent(address)}`);
-  if (!res.ok) throw new Error("Bitcoin address not found");
+  if (!res.ok) throw new ConvexError("Bitcoin address not found");
   const d = (await res.json()) as { chain_stats: { funded_txo_sum: number; spent_txo_sum: number }; mempool_stats: { funded_txo_sum: number; spent_txo_sum: number } };
   const sats = d.chain_stats.funded_txo_sum - d.chain_stats.spent_txo_sum + d.mempool_stats.funded_txo_sum - d.mempool_stats.spent_txo_sum;
   return sats > 0 ? [{ chain: "bitcoin", asset: "BTC", amount: sats / 1e8, coingecko: "bitcoin" }] : [];
@@ -42,7 +42,7 @@ async function solanaHoldings(address: string): Promise<Holding[]> {
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getBalance", params: [address] }),
   });
   const d = (await res.json()) as { result?: { value: number }; error?: { message: string } };
-  if (d.error) throw new Error("Solana address not found");
+  if (d.error) throw new ConvexError("Solana address not found");
   const lamports = d.result?.value ?? 0;
   return lamports > 0 ? [{ chain: "solana", asset: "SOL", amount: lamports / 1e9, coingecko: "solana" }] : [];
 }
@@ -193,17 +193,17 @@ export const verifyOwnership = action({
   args: { accountId: v.id("accounts"), message: v.string(), signature: v.string() },
   handler: async (ctx, { accountId, message, signature }) => {
     const account = await ctx.runQuery(internal.crypto.ownerOf, { accountId });
-    if (!account?.address || account.chain !== "evm" || !isAddress(account.address)) throw new Error("Not an EVM wallet");
+    if (!account?.address || account.chain !== "evm" || !isAddress(account.address)) throw new ConvexError("Not an EVM wallet");
     const issued = Number(message.match(/Issued at: (\d+)/)?.[1]);
     if (!message.includes(accountId) || !Number.isFinite(issued) || Math.abs(Date.now() - issued) > 10 * 60_000) {
-      throw new Error("This signature request expired. Try again.");
+      throw new ConvexError("This signature request expired. Try again.");
     }
     const ok = await verifyMessage({
       address: account.address as `0x${string}`,
       message,
       signature: signature as `0x${string}`,
     });
-    if (!ok) throw new Error("The signature doesn't match this address");
+    if (!ok) throw new ConvexError("The signature doesn't match this address");
     await ctx.runMutation(internal.crypto.markVerified, { accountId });
     return true;
   },
