@@ -10,8 +10,8 @@ import { p256 } from "@noble/curves/p256";
 import { sha256 } from "@noble/hashes/sha2";
 import { createPublicClient, http, type Address, type Hex } from "viem";
 import { expect } from "vitest";
-import { CHAIN_ID, EXPLORER, actionDigest, type Op } from "./vault";
-import { base64url, toWebAuthnAuth } from "./webauthn";
+import { CHAIN_ID, EXPLORER, actionDigest, type Op } from "../src/vault";
+import { base64url, toWebAuthnAuth } from "../src/webauthn";
 
 export const CONVEX = process.env.E2E_CONVEX_URL;
 export const JWK = process.env.E2E_DEMO_JWK;

@@ -1,6 +1,6 @@
 import { expect,it } from "vitest";
-import { parseDate,parseAmount,linesToTransactions,parseReceipt } from "./statements";
-import { convert } from "./money";
+import { parseDate,parseAmount,linesToTransactions,parseReceipt } from "../src/statements";
+import { convert } from "../src/money";
 it("CONTROL Indian grouped amount parses",()=>expect(parseAmount("1,23,456.78")).toBe(123456.78));
 it("CONTROL JPY conversion honors zero decimals",()=>expect(convert(100,"USD","JPY",{USD:1,JPY:150})).toBe(150));
 it("CONTROL valid leap date parses",()=>expect(new Date(parseDate("29/02/2024")!).toISOString().slice(0,10)).toBe("2024-02-29"));

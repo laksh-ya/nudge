@@ -18,7 +18,7 @@ import { resolve } from "node:path";
 import { createPublicClient, http, parseEventLogs, type Address, type Hex, type Log } from "viem";
 import { baseSepolia } from "viem/chains";
 import { describe, expect, it } from "vitest";
-import { policyVaultAbi, testUsdAbi, vaultFactoryAbi } from "./abi";
+import { policyVaultAbi, testUsdAbi, vaultFactoryAbi } from "../src/abi";
 
 const rpc = process.env.EVIDENCE_RPC ?? "";
 const run = rpc ? describe : describe.skip;

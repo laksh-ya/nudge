@@ -1,7 +1,7 @@
 import type { Address, Hex } from "viem";
 import { describe, expect, it } from "vitest";
-import { checkApproval, type ChainReader } from "./approval-truth";
-import { Op, contactIdOf, encode, toTokenUnits } from "./vault";
+import { checkApproval, type ChainReader } from "../src/approval-truth";
+import { Op, contactIdOf, encode, toTokenUnits } from "../src/vault";
 
 const SHOP = "0xCb4C82Dc556883c90eBd9a7440b096728a7A5fc6" as Address;
 const ATTACKER = "0x9b1c4f0e2a7d33c8e5f61a20b4d7e9c3f2a18b55" as Address;
@@ -70,8 +70,8 @@ describe("approval page truth", () => {
 
 describe("exposure preview for agent grants", () => {
   it("shows the most a new agent key could lose in 24 hours, read from the vault", async () => {
-    const { checkApproval } = await import("./approval-truth");
-    const { Op, encode } = await import("./vault");
+    const { checkApproval } = await import("../src/approval-truth");
+    const { Op, encode } = await import("../src/vault");
     const data = encode.setAgent("0x00000000000000000000000000000000000000c1", 10_000_000n, 15_000_000n, 2_000_000_000n);
     const chain = {
       contact: async () => ({ payee: "0x0000000000000000000000000000000000000000" as const, activeAt: 0n }),

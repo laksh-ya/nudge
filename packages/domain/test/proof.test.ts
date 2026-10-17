@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeEvent, exposure, type ProofEvent } from "./proof";
+import { describeEvent, exposure, type ProofEvent } from "../src/proof";
 
 const ev = (eventName: string, args: Record<string, unknown>): ProofEvent => ({ eventName, args, transactionHash: "0xab", blockNumber: 1n, logIndex: 0 });
 const names = { agents: { "0x00000000000000000000000000000000000000c1": "Claude" }, contacts: { "0xcc": "Blue Tokai" }, addresses: {} };

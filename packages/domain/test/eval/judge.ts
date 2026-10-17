@@ -12,7 +12,7 @@
  */
 import type { Address } from "viem";
 import { parseEventLogs, type Log } from "viem";
-import { policyVaultAbi } from "../abi";
+import { policyVaultAbi } from "../../src/abi";
 import type { Case } from "./cases";
 
 export type ToolCall = { id: string; name: string; input: Record<string, unknown>; result?: Record<string, unknown> | string };

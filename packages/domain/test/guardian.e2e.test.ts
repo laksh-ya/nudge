@@ -9,9 +9,9 @@
  */
 import { parseEventLogs, type Address, type Hex } from "viem";
 import { describe, expect, it } from "vitest";
-import { policyVaultAbi } from "./abi";
+import { policyVaultAbi } from "../src/abi";
 import { CONVEX, enabled, harness, mcp, pub, until } from "./e2e-harness";
-import { EXPLORER } from "./vault";
+import { EXPLORER } from "../src/vault";
 
 const run = enabled && process.env.GUARDIAN ? describe : describe.skip;
 const owner = harness("guardian-owner");

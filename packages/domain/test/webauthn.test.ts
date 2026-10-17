@@ -2,7 +2,7 @@ import { p256 } from "@noble/curves/p256";
 import { sha256 } from "@noble/hashes/sha2";
 import type { Hex } from "viem";
 import { describe, expect, it } from "vitest";
-import { assertionProblem, base64url, toWebAuthnAuth } from "./webauthn";
+import { assertionProblem, base64url, toWebAuthnAuth } from "../src/webauthn";
 
 const RP = "agent-wallet-approve.vercel.app";
 const priv = p256.utils.randomPrivateKey();

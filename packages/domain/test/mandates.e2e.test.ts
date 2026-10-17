@@ -11,7 +11,7 @@ import { resolve } from "node:path";
 import { createPublicClient, http, type PublicClient } from "viem";
 import { baseSepolia } from "viem/chains";
 import { describe, expect, it } from "vitest";
-import { INTENT_MANDATE_DATA_KEY, PAYMENT_MANDATE_DATA_KEY, mandateId, verifyIntent, verifyPayment, type IntentMandate, type PaymentMandate } from "./mandates";
+import { INTENT_MANDATE_DATA_KEY, PAYMENT_MANDATE_DATA_KEY, mandateId, verifyIntent, verifyPayment, type IntentMandate, type PaymentMandate } from "../src/mandates";
 
 const rpc = process.env.EVIDENCE_RPC ?? "";
 const run = rpc ? describe : describe.skip;

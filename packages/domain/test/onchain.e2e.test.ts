@@ -3,7 +3,8 @@
  * an owner-confirmed passkey, the vault and its rules, Claude paying over MCP (at once, held then
  * released, held then cancelled, and a retried request that never pays twice), an over-limit payment
  * the owner approves, a stolen agent key that strikes out and freezes itself, a delayed unfreeze,
- * a chat freeze checked with the old key, and a disconnect that removes the key from the vault.
+ * a chat freeze checked with the old key, a disconnect that removes the key from the vault, and the
+ * owner paying a contact and withdrawing from the Wallet screen (#11).
  *
  * A software P-256 key stands in for the phone and builds what a browser would send.
  *
@@ -24,9 +25,9 @@ import { sha256 } from "@noble/hashes/sha2";
 import { createPublicClient, createWalletClient, http, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { describe, expect, it } from "vitest";
-import { policyVaultAbi } from "./abi";
-import { CHAIN_ID, EXPLORER, actionDigest, contactIdOf, paymentIdOf, toTokenUnits, type Op } from "./vault";
-import { base64url, toWebAuthnAuth } from "./webauthn";
+import { policyVaultAbi, testUsdAbi } from "../src/abi";
+import { CHAIN_ID, EXPLORER, actionDigest, contactIdOf, paymentIdOf, toTokenUnits, type Op } from "../src/vault";
+import { base64url, toWebAuthnAuth } from "../src/webauthn";
 
 const CONVEX = process.env.E2E_CONVEX_URL;
 const JWK = process.env.E2E_DEMO_JWK;
@@ -309,6 +310,10 @@ run("Base Sepolia, end to end (contract v2)", () => {
   }, 400_000);
 
   it("freezes from chat, confirmed on-chain, so the old key is refused", async () => {
+    const frozenNow = async () => ((await pub.readContract({ address: vault, abi: policyVaultAbi, functionName: "agents", args: [privateKeyToAccount(leaked).address] })) as readonly unknown[])[4] === true;
+    // The previous test unfroze this key; a lagging node can still show it frozen, which would pass
+    // the check below before the chat freeze has landed.
+    await until("the unfreeze on this node", async () => ((await frozenNow()) ? null : true));
     await convex("mutation", "messages:send", { text: "freeze everything" });
     await until("the freeze", async () => {
       const fields = (await pub.readContract({ address: vault, abi: policyVaultAbi, functionName: "agents", args: [privateKeyToAccount(leaked).address] })) as readonly unknown[];
@@ -344,4 +349,37 @@ run("Base Sepolia, end to end (contract v2)", () => {
     });
     expect(fields[3]).toBe(false);
   }, 200_000);
+
+  it("lets the owner pay a contact and withdraw, each signed by the passkey (#11)", async () => {
+    const token = (await pub.readContract({ address: vault, abi: policyVaultAbi, functionName: "token" })) as Address;
+    const bal = (who: Address) => pub.readContract({ address: token, abi: testUsdAbi, functionName: "balanceOf", args: [who] });
+    const { payees } = await convex<{ payees: { _id: string; address?: string }[] }>("query", "wallet:get");
+    const shop = payees.find((p) => p._id === shopId)!.address as Address;
+
+    // Paying a saved contact applies when the passkey signs.
+    const shopBefore = await bal(shop);
+    const paid = await approve(await convex<string>("mutation", "owner:pay", { payeeId: shopId, amountMinor: 200, note: "e2e owner pay" }));
+    expect(paid.state).toBe("confirmed");
+    log("Owner pays a contact $2 from the Wallet screen", paid.txHash);
+    // A public node can lag the relayer's; wait for it to show the payment.
+    expect(await until("the payment", async () => ((await bal(shop)) - shopBefore === toTokenUnits(200) ? true : null))).toBe(true);
+
+    // Withdrawing loosens, so the vault queues it for its change delay and then sends it.
+    const to = privateKeyToAccount(`0x${randomBytes(32).toString("hex")}`).address;
+    const withdrawToken = await convex<string>("mutation", "owner:withdraw", { to, amountMinor: 100 });
+    const queued = await approve(withdrawToken, ["queued", "failed"]);
+    expect(queued.state).toBe("queued");
+    log("Owner signs a $1 withdrawal: queued", queued.txHash);
+    const applied = await until(
+      "the delay",
+      async () => {
+        const t = await convex<Approval>("query", "approvals:get", { token: withdrawToken }, false);
+        return t.state === "confirmed" || t.state === "failed" ? t : null;
+      },
+      300_000,
+    );
+    expect(applied.state).toBe("confirmed");
+    log("Withdrawal sent after the delay", applied.txHash);
+    expect(await until("the withdrawal", async () => ((await bal(to)) === toTokenUnits(100) ? true : null))).toBe(true);
+  }, 500_000);
 });

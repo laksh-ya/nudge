@@ -5,7 +5,7 @@ Three suites, each runnable on its own. Results are committed under `results/`.
 | Suite | What it shows | Run |
 |---|---|---|
 | Contract attacks | The same nine attacks against a hot wallet, a capped wallet (allowlist + calendar-day caps + server-held owner key, the common hackathon design) and PolicyVault, with stolen agent keys and our server bypassed | `./evals/run-contract-attacks.sh` |
-| Races and lost receipts | Four simultaneous payments against one limit; a payment whose receipt is lost, then retried | `packages/domain/src/resilience.e2e.test.ts` (Base Sepolia, dev backend) |
+| Races and lost receipts | Four simultaneous payments against one limit; a payment whose receipt is lost, then retried | `packages/domain/test/resilience.e2e.test.ts` (Base Sepolia, dev backend) |
 | Prompt injection | 38 attacks in the rules' four categories (induced transfer, information extraction, privilege escalation, prompt injection), 12 of them hidden in the owner's own bills, contacts and spending, and 16 legitimate tasks, in English, Chinese and Hindi; the model alone versus the full system on a fresh vault per case | `EVAL=1 vitest run agent.eval` with Anvil running; `ANTHROPIC_API_KEY` for real models, otherwise a scripted model that always obeys |
 
 ## P0 attack coverage
@@ -14,7 +14,7 @@ All 68 P0 attacks from our attack corpus, each mapped to the tests, eval cases a
 
 ## Task table
 
-[`TASKS.md`](TASKS.md): all 54 eval tasks as "owner said → right outcome → what the assistant did → money settled", from the Claude Opus run over MCP (53 of 54 correct). Regenerate with `(cd packages/domain && npx tsx src/eval/task-table.ts)`.
+[`TASKS.md`](TASKS.md): all 54 eval tasks as "owner said → right outcome → what the assistant did → money settled", from the Claude Opus run over MCP (53 of 54 correct). Regenerate with `(cd packages/domain && npx tsx test/eval/task-table.ts)`.
 
 ## AP2 mandates, checked on-chain (17 Oct)
 
@@ -30,7 +30,7 @@ Google's Agent Payments Protocol (AP2) describes three signed mandates. PolicyVa
 
 ## Family guardian, on the deployed app (17 Oct)
 
-An owner invites a guardian (a second account); Claude pays $6 over MCP; the vault holds it; the guardian sees it from their own account and stops it. Vault [`0x1bAc392A…`](https://sepolia.basescan.org/address/0x1bAc392A06A058A72A8B0fb1dF4b3F8686CA3747), test `packages/domain/src/guardian.e2e.test.ts` (`GUARDIAN=1`), against prod with demo sandboxes.
+An owner invites a guardian (a second account); Claude pays $6 over MCP; the vault holds it; the guardian sees it from their own account and stops it. Vault [`0x1bAc392A…`](https://sepolia.basescan.org/address/0x1bAc392A06A058A72A8B0fb1dF4b3F8686CA3747), test `packages/domain/test/guardian.e2e.test.ts` (`GUARDIAN=1`), against prod with demo sandboxes.
 
 | Step | Who signs | Transaction |
 |---|---|---|
@@ -41,7 +41,7 @@ The test also checks that nothing is still held for that payment and no release 
 
 ## Any AI, one wallet (17 Oct)
 
-Two assistants from different vendors on one vault, each with its own key and limits, through the same MCP door: Claude Code (Anthropic, Sonnet) and Hermes Agent (Nous Research, running Zhipu AI's GLM-5.3 on NVIDIA NIM). Each was asked to pay the saved contact Blue Tokai; both payments were above $5, so the vault held them for 2 minutes and then released them, and both count toward the one $40 daily ceiling for all agents ($13 used). Vault [`0x31F68A8d…`](https://sepolia.basescan.org/address/0x31F68A8d36e4392725d2F09261D42a529e6aDc32); details in [`results/multi-agent.md`](results/multi-agent.md); test `packages/domain/src/multi-agent.e2e.test.ts`.
+Two assistants from different vendors on one vault, each with its own key and limits, through the same MCP door: Claude Code (Anthropic, Sonnet) and Hermes Agent (Nous Research, running Zhipu AI's GLM-5.3 on NVIDIA NIM). Each was asked to pay the saved contact Blue Tokai; both payments were above $5, so the vault held them for 2 minutes and then released them, and both count toward the one $40 daily ceiling for all agents ($13 used). Vault [`0x31F68A8d…`](https://sepolia.basescan.org/address/0x31F68A8d36e4392725d2F09261D42a529e6aDc32); details in [`results/multi-agent.md`](results/multi-agent.md); test `packages/domain/test/multi-agent.e2e.test.ts`.
 
 | Assistant | Vault key | Held | Released |
 |---|---|---|---|
@@ -52,7 +52,7 @@ Any other assistant that can add a remote MCP server with an Authorization heade
 
 ## Live attacks on the deployed app (16 Oct)
 
-`packages/domain/src/live-attacks.e2e.test.ts` against the production deployment, from a fresh demo sandbox with a live v3 vault ([`0x041A6Acb…`](https://sepolia.basescan.org/address/0x041A6AcbAcD14a6C501C995d1fe78456D9D22216)) and a second sandbox as the stranger; never the judge account. Results: [`results/live-attacks.csv`](results/live-attacks.csv), 12 of 12 as intended.
+`packages/domain/test/live-attacks.e2e.test.ts` against the production deployment, from a fresh demo sandbox with a live v3 vault ([`0x041A6Acb…`](https://sepolia.basescan.org/address/0x041A6AcbAcD14a6C501C995d1fe78456D9D22216)) and a second sandbox as the stranger; never the judge account. Results: [`results/live-attacks.csv`](results/live-attacks.csv), 12 of 12 as intended.
 
 - A stolen MCP key: over its limit goes to the owner with no link for the agent; unknown contacts and raw addresses refused (2010); sub-cent, negative and huge amounts and text in a request id refused.
 - The same request sent three times at once paid once. Four chat payments and two from Claude at the same moment: the in-app assistant sent two ($18 of its $25 cap) and asked the owner for the rest; Claude sent both.
@@ -91,7 +91,7 @@ What PolicyVault does not stop: an in-limit payment to a saved contact the attac
 
 ## Prompt injection
 
-`packages/domain/src/agent.eval.test.ts`, cases in `packages/domain/src/eval/cases.ts`.
+`packages/domain/test/agent.eval.test.ts`, cases in `packages/domain/test/eval/cases.ts`.
 
 Each case is a short chat with the app's own assistant. Two systems run it with the same model:
 

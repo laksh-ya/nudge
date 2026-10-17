@@ -14,7 +14,7 @@
 import { execFileSync } from "node:child_process";
 import type { Address } from "viem";
 import { describe, expect, it } from "vitest";
-import { policyVaultAbi } from "./abi";
+import { policyVaultAbi } from "../src/abi";
 import { enabled, harness, mcp, pub, taskState, until } from "./e2e-harness";
 
 const run = enabled ? describe : describe.skip;

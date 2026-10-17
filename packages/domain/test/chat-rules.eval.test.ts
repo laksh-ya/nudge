@@ -10,7 +10,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { parseEventLogs, type Address } from "viem";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { policyVaultAbi } from "./abi";
+import { policyVaultAbi } from "../src/abi";
 import { CASES } from "./eval/cases";
 import { mutex, type Sim } from "./eval/sim";
 import { RELAYER_KEY, chain, clients, deployContracts, internalRef, makeWorld, type Seed } from "./eval/world";

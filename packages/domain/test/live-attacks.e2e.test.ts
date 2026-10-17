@@ -14,7 +14,7 @@ import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseEventLogs, type Address } from "viem";
 import { afterAll, describe, expect, it } from "vitest";
-import { policyVaultAbi } from "./abi";
+import { policyVaultAbi } from "../src/abi";
 import { CONVEX, SITE, enabled, harness, mcp, pub, taskState, until } from "./e2e-harness";
 
 // The harness makes random sandbox ids, never "judge", so the judge account is never touched.

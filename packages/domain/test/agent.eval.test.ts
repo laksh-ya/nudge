@@ -34,7 +34,7 @@ import { resolve } from "node:path";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { Address } from "viem";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { policyVaultAbi, testUsdAbi } from "./abi";
+import { policyVaultAbi, testUsdAbi } from "../src/abi";
 import { CASES, type Case, type Step } from "./eval/cases";
 import { cost, judgeAlone, judgeFull, readChain, summary, toCsv, type Row, type ToolCall, type Usage } from "./eval/judge";
 import { claudeTurn, serveNaiveWallet, serveWallet } from "./eval/mcp";

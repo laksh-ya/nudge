@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import Papa from "papaparse";
 import { describe, expect, it } from "vitest";
-import { categorize, merchantKey, normalizeMerchant, titleCase } from "./categorize";
-import { convert, formatMoney } from "./money";
-import { findHeaderRow, guessMapping, linesToTransactions, parseAmount, parseDate, parseReceipt, rowsToTransactions } from "./statements";
+import { categorize, merchantKey, normalizeMerchant, titleCase } from "../src/categorize";
+import { convert, formatMoney } from "../src/money";
+import { findHeaderRow, guessMapping, linesToTransactions, parseAmount, parseDate, parseReceipt, rowsToTransactions } from "../src/statements";
 
 const samples = join(__dirname, "../../../apps/web/public/samples");
 

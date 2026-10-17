@@ -15,8 +15,8 @@ import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseEventLogs, type Address } from "viem";
 import { afterAll, describe, expect, it } from "vitest";
-import { policyVaultAbi } from "./abi";
-import { EXPLORER } from "./vault";
+import { policyVaultAbi } from "../src/abi";
+import { EXPLORER } from "../src/vault";
 import { CONVEX, SITE, enabled, harness, pub, until } from "./e2e-harness";
 
 const run = enabled && process.env.MULTI_AGENT ? describe : describe.skip;

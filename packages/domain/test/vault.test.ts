@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Op, actionDigest, changeIdOf, contactIdOf, describe as describeOp, encode, fromTokenUnits, keyIdOf, toTokenUnits } from "./vault";
+import { Op, actionDigest, changeIdOf, contactIdOf, describe as describeOp, encode, fromTokenUnits, keyIdOf, toTokenUnits } from "../src/vault";
 
 describe("vault encoding", () => {
   it("matches the contract's digest byte for byte", () => {

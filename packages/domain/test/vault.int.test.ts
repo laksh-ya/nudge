@@ -7,9 +7,9 @@ import { sha256 } from "@noble/hashes/sha2";
 import { createPublicClient, createWalletClient, http, parseEventLogs, type Address, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { describe, expect, it } from "vitest";
-import { policyVaultAbi, testUsdAbi, vaultFactoryAbi } from "./abi";
-import { CHAIN_ID, Op, actionDigest, contactIdOf, encode, paymentIdOf, toTokenUnits } from "./vault";
-import { base64url, spkiToXY, toWebAuthnAuth } from "./webauthn";
+import { policyVaultAbi, testUsdAbi, vaultFactoryAbi } from "../src/abi";
+import { CHAIN_ID, Op, actionDigest, contactIdOf, encode, paymentIdOf, toTokenUnits } from "../src/vault";
+import { base64url, spkiToXY, toWebAuthnAuth } from "../src/webauthn";
 
 const url = process.env.ANVIL_URL ?? "";
 const run = url ? describe : describe.skip;

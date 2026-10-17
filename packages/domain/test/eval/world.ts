@@ -9,9 +9,9 @@ import { p256 } from "@noble/curves/p256";
 import { sha256 } from "@noble/hashes/sha2";
 import { createPublicClient, createTestClient, createWalletClient, http, parseEther, type Address, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
-import { policyVaultAbi, testUsdAbi, vaultFactoryAbi } from "../abi";
-import { CHAIN_ID, Op, actionDigest, contactIdOf, encode, testPayeeAddress, toTokenUnits } from "../vault";
-import { base64url, spkiToXY, toWebAuthnAuth } from "../webauthn";
+import { policyVaultAbi, testUsdAbi, vaultFactoryAbi } from "../../src/abi";
+import { CHAIN_ID, Op, actionDigest, contactIdOf, encode, testPayeeAddress, toTokenUnits } from "../../src/vault";
+import { base64url, spkiToXY, toWebAuthnAuth } from "../../src/webauthn";
 import { sha256 as sha256Hex } from "../../../backend/convex/lib/hash";
 import { Sim } from "./sim";
 
