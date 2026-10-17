@@ -93,7 +93,7 @@ describe("gateway decision matrix (scope x limits x frozen x new contact x live/
     const want = oracle(c);
     const run = () => w.t.mutation(internal.gateway.proposePayment, { agentId: w.agent, contactId: w.payee, amount: AMOUNT[c.amount], reason: "matrix" });
     if ("throws" in want) {
-      await expect(run()).rejects.toThrow(/permission/);
+      await expect(run()).rejects.toThrow(/can only read .* "Prepare payments"/);
       return;
     }
     const got = await run();
