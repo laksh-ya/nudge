@@ -22,7 +22,7 @@ export const INTENT_MANDATE_DATA_KEY = "ap2.mandates.IntentMandate";
 export const CART_MANDATE_DATA_KEY = "ap2.mandates.CartMandate";
 export const PAYMENT_MANDATE_DATA_KEY = "ap2.mandates.PaymentMandate";
 /** The payment method AP2 names in payment requests and responses. */
-export const PAYMENT_METHOD = "https://nudge-wallet.vercel.app/ap2/policyvault";
+export const PAYMENT_METHOD = "https://www.heynudge.live/ap2/policyvault";
 
 type Amount = { currency: "USD"; value: string };
 const usd = (units: bigint): Amount => ({ currency: "USD", value: (Number(units) / 1e6).toFixed(2) });

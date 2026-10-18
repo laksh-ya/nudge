@@ -19,16 +19,14 @@ const config: NextConfig = {
   async headers() {
     return [{ source: "/(.*)", headers: security }];
   },
-  // The old address still points at this project: send every visit to the same page on the new one.
+  // The old addresses still point at this project: send every visit to the same page on heynudge.live.
   async redirects() {
-    return [
-      {
-        source: "/:path*",
-        has: [{ type: "host", value: "agent-wallet-nu.vercel.app" }],
-        destination: "https://nudge-wallet.vercel.app/:path*",
-        permanent: true,
-      },
-    ];
+    return ["agent-wallet-nu.vercel.app", "nudge-wallet.vercel.app"].map((host) => ({
+      source: "/:path*",
+      has: [{ type: "host" as const, value: host }],
+      destination: "https://www.heynudge.live/:path*",
+      permanent: true,
+    }));
   },
 };
 

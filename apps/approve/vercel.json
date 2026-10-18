@@ -9,7 +9,29 @@
           "value": "agent-wallet-approve.vercel.app"
         }
       ],
-      "destination": "https://nudge-approve.vercel.app/$1",
+      "destination": "https://approve.heynudge.live/$1",
+      "permanent": true
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "nudge-approve.vercel.app"
+        }
+      ],
+      "destination": "https://approve.heynudge.live/",
+      "permanent": true
+    },
+    {
+      "source": "/enrol/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "nudge-approve.vercel.app"
+        }
+      ],
+      "destination": "https://approve.heynudge.live/enrol/$1",
       "permanent": true
     }
   ],

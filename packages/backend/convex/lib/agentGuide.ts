@@ -6,7 +6,7 @@ import { MCP_TOOLS, OUTCOMES, REASON_CODES } from "./mcp";
  * into their assistant. Plain data and pure functions only, so the web app can import it.
  */
 
-export const WEB_URL = "https://nudge-wallet.vercel.app";
+export const WEB_URL = "https://www.heynudge.live";
 export const DEFAULT_MCP_URL = "https://ceaseless-raven-960.convex.site/mcp";
 
 const GROUPS: { id: (typeof MCP_TOOLS)[number]["group"]; title: string }[] = [

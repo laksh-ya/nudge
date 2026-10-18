@@ -12,7 +12,7 @@ Nudge is a wallet your AI assistants can pay from, on a leash you set. Small pay
 ![Chain](https://img.shields.io/badge/chain-Base%20Sepolia-0052FF)
 ![Money](https://img.shields.io/badge/money-test%20dollars%20only-orange)
 
-[**Live app**](https://nudge-wallet.vercel.app) · [**Proof on-chain**](https://nudge-wallet.vercel.app/proof) · [**Connect your agent**](https://nudge-wallet.vercel.app/agents/docs) · [**Telegram**](https://t.me/heynudge_bot) · [Docs](docs/README.md)
+[**Live app**](https://www.heynudge.live) · [**Proof on-chain**](https://www.heynudge.live/proof) · [**Connect your agent**](https://www.heynudge.live/agents/docs) · [**Telegram**](https://t.me/heynudge_bot) · [Docs](docs/README.md)
 
 <img src="docs/images/hero.jpg" alt="Nudge: Let your AI pay. Only within your rules." width="820">
 
@@ -137,11 +137,11 @@ Every on-chain claim links to its transaction in [docs/EVIDENCE.md](docs/EVIDENC
 
 | | Open | What you'll see |
 |---|---|---|
-| 1 | [**Try the demo**](https://nudge-wallet.vercel.app) | A private sandbox: assistants, limits, bills, family, a chat that pays |
-| 2 | [**Proof page**](https://nudge-wallet.vercel.app/proof) | The vault read live from Base Sepolia, including what a leaked key could still move |
+| 1 | [**Try the demo**](https://www.heynudge.live) | A private sandbox: assistants, limits, bills, family, a chat that pays |
+| 2 | [**Proof page**](https://www.heynudge.live/proof) | The vault read live from Base Sepolia, including what a leaked key could still move |
 | 3 | [**A stolen key, refused**](https://sepolia.basescan.org/tx/0x0563fdacf54f69d18a35f7d5a0a4668bd881781b2635c565df17ecf8eb9c80bd) | An agent key used behind our back, refused by the vault (code 2003) |
-| 4 | [**Connect your own AI**](https://nudge-wallet.vercel.app/agents/docs) | Any MCP client gets its own key and starts read-only |
-| 5 | [**Telegram**](https://t.me/heynudge_bot) · [**Brand**](https://nudge-wallet.vercel.app/brand) | The same assistant in chat; the characters and the rules behind the look |
+| 4 | [**Connect your own AI**](https://www.heynudge.live/agents/docs) | Any MCP client gets its own key and starts read-only |
+| 5 | [**Telegram**](https://t.me/heynudge_bot) · [**Brand**](https://www.heynudge.live/brand) | The same assistant in chat; the characters and the rules behind the look |
 
 ## Brand
 

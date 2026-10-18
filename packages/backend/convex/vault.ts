@@ -36,8 +36,10 @@ async function accepts(ctx: MutationCtx, t: Doc<"tasks">, next: { ok?: boolean; 
 }
 const ENROL_MINUTES = 15;
 
+/** Sites a payment passkey may be made on: always the approval site, plus any in RP_IDS (the old host, localhost). */
 function allowedRpIds() {
-  return (process.env.RP_IDS ?? "nudge-approve.vercel.app,localhost").split(",").map((s) => s.trim());
+  const extra = (process.env.RP_IDS ?? "nudge-approve.vercel.app,localhost").split(",").map((s) => s.trim()).filter(Boolean);
+  return [...new Set(["approve.heynudge.live", ...extra])];
 }
 
 async function walletOf(ctx: MutationCtx, userId: Id<"users">) {

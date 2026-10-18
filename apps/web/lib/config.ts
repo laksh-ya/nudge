@@ -1,6 +1,13 @@
 export const APP_NAME = "Nudge";
-// A production build without the variable must still link to the real approval site, never localhost (#110).
-export const APPROVE_URL = process.env.NEXT_PUBLIC_APPROVE_URL ?? (process.env.NODE_ENV === "production" ? "https://nudge-approve.vercel.app" : "http://localhost:3001");
+// A production build without the variable, or still set to a retired host, must link to the real approval site,
+// never localhost (#110). Wallets whose passkey lives on the old host are sent there by the approval page itself.
+const APPROVE_ENV = process.env.NEXT_PUBLIC_APPROVE_URL?.trim().replace(/\/+$/, "");
+export const APPROVE_URL =
+  APPROVE_ENV && !/(agent-wallet-approve|nudge-approve)\.vercel\.app/i.test(APPROVE_ENV)
+    ? APPROVE_ENV
+    : process.env.NODE_ENV === "production"
+      ? "https://approve.heynudge.live"
+      : "http://localhost:3001";
 
 export function approvalLink(token: string) {
   return `${APPROVE_URL}/a/${token}`;

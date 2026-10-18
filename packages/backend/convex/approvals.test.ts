@@ -93,7 +93,7 @@ describe("approval links in an agent's hands can't approve anything (#6, revised
     const r = await f.t.mutation(internal.gateway.proposePayment, { agentId: f.agent, contactId: f.payee, amount: 12, reason: "over the limit" });
     expect(r.outcome).toBe("needs_approval");
     const task = await f.t.run((ctx) => ctx.db.get(taskOf(r)));
-    expect(r).toMatchObject({ approvalUrl: `https://nudge-approve.vercel.app/a/${task!.approvalToken}` });
+    expect(r).toMatchObject({ approvalUrl: `https://approve.heynudge.live/a/${task!.approvalToken}` });
   });
 
   it("a token holder who isn't the signed-in owner can neither approve nor decline", async () => {

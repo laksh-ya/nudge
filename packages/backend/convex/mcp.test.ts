@@ -95,7 +95,7 @@ describe("a key without its own limit asks instead of being refused", () => {
     const out = await w.call("propose_payment", { contactId: w.payee, amount: 3, reason: "coffee" });
     expect(out.isError).toBe(false);
     expect(out.structuredContent).toMatchObject({ outcome: "needs_approval" });
-    expect(out.structuredContent.approvalUrl).toMatch(/^https:\/\/nudge-approve\.vercel\.app\/a\/.{16,}$/);
+    expect(out.structuredContent.approvalUrl).toMatch(/^https:\/\/approve\.heynudge\.live\/a\/.{16,}$/);
     const [task] = await w.tasks();
     expect(task!.state).toBe("awaiting_approval");
     expect(sent).toHaveLength(0);

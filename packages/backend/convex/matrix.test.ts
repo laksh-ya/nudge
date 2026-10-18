@@ -103,7 +103,7 @@ describe("gateway decision matrix (scope x limits x frozen x new contact x live/
       const task = await w.t.run((ctx) => ctx.db.get(got.taskId as Id<"tasks">));
       expect(task!.state).toBe("awaiting_approval");
       // The link is the task's own approval page, nothing more.
-      expect(got.approvalUrl).toBe(`https://nudge-approve.vercel.app/a/${task!.approvalToken}`);
+      expect(got.approvalUrl).toBe(`https://approve.heynudge.live/a/${task!.approvalToken}`);
     }
   });
 

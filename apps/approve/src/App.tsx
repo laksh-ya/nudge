@@ -7,13 +7,19 @@ import { CHAIN_ID, actionDigest, checkApproval, formatMoney, isVaultVersion, pol
 import { createPublicClient, http, type Address, type Hex } from "viem";
 import { createPasskey, inAppBrowser, passkeysSupported, signWithPasskey } from "./passkey";
 
-// The app's address. A build env still set to the retired address must not send owners back there.
+// The app's address. A build env still set to a retired address must not send owners back there.
 const WEB_URL = (() => {
-  const fallback = "https://nudge-wallet.vercel.app";
+  const fallback = "https://www.heynudge.live";
   const v = import.meta.env.VITE_WEB_URL?.trim();
-  if (!v || /agent-wallet[a-z0-9-]*\.vercel\.app/i.test(v)) return fallback;
+  if (!v || /(agent-wallet[a-z0-9-]*|nudge-wallet)\.vercel\.app/i.test(v)) return fallback;
   return v.replace(/\/+$/, "");
 })();
+
+/**
+ * Our approval sites. A passkey only signs on the site it was made on, and the vault pins that site, so a wallet
+ * whose passkey was made on the old host is sent back there (and the other way round). Only between these two.
+ */
+const APPROVE_HOSTS = new Set(["approve.heynudge.live", "nudge-approve.vercel.app"]);
 
 /** Reads the vault from a public Base Sepolia node, so what the page calls a saved contact doesn't depend on our server. */
 const baseSepolia = createPublicClient({
@@ -273,6 +279,13 @@ function Approve({ token }: { token: string }) {
   const [checked, setChecked] = useState(false);
   // Only the owner's copy of the link (Telegram) carries the key that lets this page decline (#106).
   const declineKey = useMemo(() => new URLSearchParams(window.location.search).get("k") ?? undefined, []);
+  const passkeySite = data?.onchain?.rpId;
+  useEffect(() => {
+    const here = window.location.hostname;
+    if (passkeySite && passkeySite !== here && APPROVE_HOSTS.has(passkeySite) && APPROVE_HOSTS.has(here)) {
+      window.location.replace(`https://${passkeySite}${window.location.pathname}${window.location.search}`);
+    }
+  }, [passkeySite]);
 
   // The digest is computed here from the exact bytes; the server never supplies the challenge.
   const signed = useMemo(() => {

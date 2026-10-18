@@ -189,7 +189,7 @@ describe("agent tools beyond paying", () => {
     await t.mutation(internal.gateway.proposePayment, { agentId: w.agent, contactId: payee!._id, amount: 2, reason: "tea" });
     const p = await t.query(internal.agentTools.pending, { agentId: w.agent });
     expect(p.waitingForApproval).toHaveLength(1);
-    expect(p.waitingForApproval[0]!.approvalUrl).toMatch(/^https:\/\/nudge-approve\.vercel\.app\/a\//);
+    expect(p.waitingForApproval[0]!.approvalUrl).toMatch(/^https:\/\/approve\.heynudge\.live\/a\//);
     expect(p.reminders).toHaveLength(1);
   });
 

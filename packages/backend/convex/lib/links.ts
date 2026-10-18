@@ -1,7 +1,11 @@
 /** Where approval links point. One place, so a wrong or old value can't send owners elsewhere (#110). */
-export const APPROVE_ORIGIN = "https://nudge-approve.vercel.app";
-/** Origins approval links must never use again (passkeys there belong to retired setups). */
-const RETIRED = new Set(["agent-wallet-approve.vercel.app"]);
+export const APPROVE_ORIGIN = "https://approve.heynudge.live";
+/**
+ * Approval hosts new links must not use. nudge-approve.vercel.app still serves the page for wallets whose
+ * passkey was made there (a passkey only signs on its own site); the page sends each wallet to its own
+ * host, so links can always start at APPROVE_ORIGIN.
+ */
+const RETIRED = new Set(["agent-wallet-approve.vercel.app", "nudge-approve.vercel.app"]);
 
 export function approveBase() {
   const raw = process.env.APPROVE_URL?.trim();

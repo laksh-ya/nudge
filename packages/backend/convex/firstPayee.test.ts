@@ -250,13 +250,16 @@ describe("approval links always point at the real approval site (#110)", () => {
   it("ignores a retired, non-https or broken APPROVE_URL", async () => {
     const { approveBase } = await import("./lib/links");
     vi.stubEnv("APPROVE_URL", "");
-    expect(approveBase()).toBe("https://nudge-approve.vercel.app");
+    expect(approveBase()).toBe("https://approve.heynudge.live");
     vi.stubEnv("APPROVE_URL", "https://agent-wallet-approve.vercel.app");
-    expect(approveBase()).toBe("https://nudge-approve.vercel.app");
+    expect(approveBase()).toBe("https://approve.heynudge.live");
+    // The old host still serves wallets whose passkey lives there, but new links start on the new one.
+    vi.stubEnv("APPROVE_URL", "https://nudge-approve.vercel.app");
+    expect(approveBase()).toBe("https://approve.heynudge.live");
     vi.stubEnv("APPROVE_URL", "http://evil.example");
-    expect(approveBase()).toBe("https://nudge-approve.vercel.app");
+    expect(approveBase()).toBe("https://approve.heynudge.live");
     vi.stubEnv("APPROVE_URL", "not a url");
-    expect(approveBase()).toBe("https://nudge-approve.vercel.app");
+    expect(approveBase()).toBe("https://approve.heynudge.live");
     vi.stubEnv("APPROVE_URL", "https://approve.staging.example/");
     expect(approveBase()).toBe("https://approve.staging.example");
     vi.unstubAllEnvs();
