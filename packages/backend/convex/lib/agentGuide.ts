@@ -60,7 +60,7 @@ There is no dead end: if you can't do something on your own, there is always a l
 
 **Pay someone saved:** list_contacts → propose_payment {contactId, amount, reason, requestId}. submitted: done, confirm with get_task_status. needs_approval: share approvalUrl.
 
-**Pay someone new:** propose_payment {toAddress, name, amount, reason, requestId}. The first payment always needs the user's passkey. If they'll pay them again, also call add_contact so future payments inside your limits go through on their own.
+**Pay someone new:** propose_payment {toAddress, name, amount, reason, requestId}. It returns one approvalUrl; one passkey pays it once. Don't call add_contact to make a payment: that is a second, separate approval. If you call propose_payment again for the same thing, you get the same link back, so hand over that one. Only if the user says they want you to pay this payee on your own in future, offer add_contact; it takes its own passkey and then the vault's wait for new contacts (list_contacts shows activeAt).
 
 **Over your limit:** just propose it; you'll get needs_approval with a link. If this keeps happening, call request_limits {perPayment, perDay, why} and share that link.
 

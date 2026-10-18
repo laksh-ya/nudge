@@ -75,7 +75,7 @@ Signed-in users authenticate with Clerk. Demo visitors get a private sandbox: th
 |---|---|---|
 | Contract (unit, fuzz, 13 invariants, requirement tests) | 166 | `cd contracts && forge test` |
 | Backend (convex-test: gateway matrix, approvals, Telegram, limits, settlement) | 165 | `pnpm --filter @agent-wallet/backend test` |
-| Encoding, digest, statements, gateway audit | 63 | `pnpm --filter @agent-wallet/domain exec vitest run` |
+| Encoding, digest, statements, gateway audit, approval-page checks | 66 | `pnpm --filter @agent-wallet/domain exec vitest run` |
 | Everything above | | `pnpm test` |
 | Local chain, browser-shaped passkeys | 2 | `ANVIL_URL=… TOKEN=… FACTORY=… vitest run vault.int` |
 | Base Sepolia through the real backend | 7 | `vitest run onchain.e2e` (see the file header) |

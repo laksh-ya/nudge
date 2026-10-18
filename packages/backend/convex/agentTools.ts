@@ -8,7 +8,7 @@ import { approveUrl, load, payeeForAddress } from "./gateway";
 import { computeOverview } from "./lib/overview";
 import { createReminder, goalPlan, telegramLinked, wantsTelegram } from "./lib/assist";
 import { DAY, dateLabel, safeTz, zoned } from "./lib/schedule";
-import { addContactTask } from "./lib/actions";
+import { DEFAULT_RULES, addContactTask, durationText } from "./lib/actions";
 import { changeLimits } from "./lib/control";
 import { newApprovalToken } from "./lib/seed";
 
@@ -272,7 +272,7 @@ export const addContact = internalMutation({
         contactId: payee._id,
         taskId,
         approvalUrl: approveUrl(token),
-        message: `Give the user this link to add ${payee.name} with their passkey. After that (and the vault's short waiting period) you can pay it within your limits.`,
+        message: `Give the user this link to add ${payee.name} as a trusted contact with their passkey. After that, the vault's own wait for new contacts (${durationText(w.vault?.contactDelay ?? DEFAULT_RULES.contactDelay)} on this vault) must pass before you can pay it alone; list_contacts shows activeAt. To pay it now instead, use propose_payment: one passkey pays it once without adding it.`,
       };
     }
     const { taskId, token } = await settingsTask(ctx, user, agent, {

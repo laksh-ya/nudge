@@ -263,6 +263,8 @@ function Approve({ token }: { token: string }) {
   const now = useNow();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  // A first payment to an address not in the vault signs only after the owner says they checked it.
+  const [checked, setChecked] = useState(false);
 
   // The digest is computed here from the exact bytes; the server never supplies the challenge.
   const signed = useMemo(() => {
@@ -308,7 +310,8 @@ function Approve({ token }: { token: string }) {
   const legacy = Boolean(data.onchain && !isVaultVersion(data.onchain.version));
   const open = data.state === "awaiting_approval" && !expired && !legacy;
   // Signing waits for the check, and never happens when the server and the bytes disagree.
-  const blocked = live && (!truth || truth.mismatches.length > 0);
+  const unchecked = Boolean(truth?.payee?.fresh) && !checked;
+  const blocked = live && (!truth || truth.mismatches.length > 0 || unchecked);
   const txUrl = data.txHash ? `${data.explorer}/tx/${data.txHash}` : null;
   // A payment if the signed bytes say so (on-chain), or the request carries an amount (test mode).
   const payment = live ? data.onchain!.action.op === Op.Pay || truth?.amountMinor != null : data.amountMinor > 0;
@@ -348,13 +351,19 @@ function Approve({ token }: { token: string }) {
   };
 
   if (data.state === "queued" && data.readyAt) {
+    const wait = waitLabel(data.onchain?.changeDelay ?? 0);
+    const paying = data.amountMinor > 0;
     return (
       <Frame live>
         <div className="mt-14 flex flex-col items-center text-center">
           <span className="pop"><Character of="nudge" mood="watch" size={88} /></span>
-          <h1 className="rise mt-6 text-head font-semibold">Approved. Applies at {clock(data.readyAt)}</h1>
+          <h1 className="rise mt-6 text-head font-semibold">
+            Approved. {paying ? "Pays" : "Applies"} at {clock(data.readyAt)}
+          </h1>
           <p className="rise mt-1 max-w-xs text-body text-ink-2">
-            Loosening a rule waits {Math.round((data.onchain?.changeDelay ?? 0) / 60)} min in the vault. You can cancel it from the Wallet screen until then.
+            {paying
+              ? `Paying someone who isn't saved in your vault waits ${wait} (your vault's change delay), so a payment you didn't mean can still be stopped. Cancel it from the Wallet screen until then.`
+              : `Loosening a rule waits ${wait} (your vault's change delay). You can cancel it from the Wallet screen until then.`}
           </p>
           {txUrl && (
             <a href={txUrl} target="_blank" rel="noopener" className="rise mt-4 inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-label font-semibold text-navy shadow-sm">
@@ -371,8 +380,17 @@ function Approve({ token }: { token: string }) {
       <Frame live={live}>
         <div className="mt-14 flex flex-col items-center text-center">
           <span className="pop"><Character of="nudge" mood="sleep" size={88} /></span>
-          <h1 className="rise mt-6 text-head font-semibold">Declined</h1>
-          <p className="rise mt-1 max-w-xs text-body text-ink-2">{payment ? "Nothing was paid." : "Nothing was changed."} The request is closed.</p>
+          {data.reason?.startsWith("Handled through another link") ? (
+            <>
+              <h1 className="rise mt-6 text-head font-semibold">Already handled</h1>
+              <p className="rise mt-1 max-w-xs text-body text-ink-2">You decided this request through another link. This one is closed.</p>
+            </>
+          ) : (
+            <>
+              <h1 className="rise mt-6 text-head font-semibold">Declined</h1>
+              <p className="rise mt-1 max-w-xs text-body text-ink-2">{payment ? "Nothing was paid." : "Nothing was changed."} The request is closed.</p>
+            </>
+          )}
         </div>
       </Frame>
     );
@@ -415,6 +433,19 @@ function Approve({ token }: { token: string }) {
           ) : (
             <p className="rise mt-3 text-label text-mute">Simulated payment. No real money moved.</p>
           )}
+          {data.amountMinor > 0 && data.payee && !data.payee.trusted && (
+            // A separate, optional choice (#98): paying once never made them trusted.
+            <div className="rise mt-6 w-full max-w-xs rounded-2xl bg-white p-4 text-left shadow-sm">
+              <div className="text-body font-semibold">Pay {data.payee.name} again without asking?</div>
+              <p className="mt-1 text-label text-ink-2">
+                Only if you want: add them as a trusted contact and your assistants can pay them on their own, within their limits. It takes your
+                passkey once, then your vault's wait for new contacts.
+              </p>
+              <a href={`${WEB_URL}/wallet`} className="press mt-3 flex h-10 items-center justify-center rounded-[10px] bg-sky text-body font-semibold text-navy">
+                Add as trusted contact
+              </a>
+            </div>
+          )}
         </div>
       </Frame>
     );
@@ -444,6 +475,15 @@ function Approve({ token }: { token: string }) {
                       <span className="grid size-7 place-items-center rounded-full bg-navy text-label font-bold text-white">{truth.payee.saved.name.slice(0, 1)}</span>
                       <span className="text-body font-semibold">{truth.payee.saved.name}</span>
                       <ShieldCheck className="size-4 text-green" aria-label="Saved contact in your vault" />
+                    </div>
+                  ) : truth.payee.fresh ? (
+                    // Someone new. Still red with the whole address: this is also how a swapped payee looks.
+                    <div className="mt-3 flex flex-col items-center gap-1.5">
+                      <div className="inline-flex items-center gap-2 rounded-full bg-red-soft py-1.5 pr-3 pl-2 text-red">
+                        <TriangleAlert className="size-4" />
+                        <span className="text-body font-semibold">Not a saved contact</span>
+                      </div>
+                      <span className="num max-w-[30ch] text-label break-all text-ink">{truth.payee.address}</span>
                     </div>
                   ) : (
                     <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-red-soft py-1.5 pr-3 pl-2 text-red">
@@ -540,6 +580,16 @@ function Approve({ token }: { token: string }) {
         <div className="border-t border-line p-4">
           {legacy && <p className="mb-3 text-label font-medium text-amber">This request was made for your earlier vault. Ask again from the app.</p>}
           {open && live && <WebViewNotice />}
+          {open && live && truth?.payee?.fresh && truth.mismatches.length === 0 && (
+            <label className="mb-3 flex items-start gap-2.5 rounded-xl border border-red/30 bg-red-soft p-3 text-label text-ink">
+              <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-[#c62828]" checked={checked} onChange={(e) => setChecked(e.target.checked)} />
+              <span>
+                <span className="font-semibold text-red">First payment to this address.</span> I checked the full address above with who I'm paying
+                {truth.payee.label ? ` (${truth.payee.label})` : ""}. Pay it once; this doesn't make them a trusted contact, and your vault waits{" "}
+                {waitLabel(data.onchain?.changeDelay ?? 0)} before the money leaves, so I can still cancel.
+              </span>
+            </label>
+          )}
           {error && <p className="mb-3 text-label font-medium text-red">{error}</p>}
           {open && data.rail === "handoff" && data.payee && /@/.test(data.payee.handle) && (
             <a
@@ -609,6 +659,12 @@ function Approve({ token }: { token: string }) {
       </p>
     </Frame>
   );
+}
+
+function waitLabel(seconds: number) {
+  if (seconds < 3600) return `${Math.max(1, Math.round(seconds / 60))} min`;
+  if (seconds < 86_400) return `${+(seconds / 3600).toFixed(1)} h`;
+  return seconds === 86_400 ? "1 day" : `${+(seconds / 86_400).toFixed(1)} days`;
 }
 
 function headline(agent: string | undefined, payment: boolean) {

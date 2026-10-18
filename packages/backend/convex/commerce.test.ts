@@ -86,7 +86,7 @@ describe("x402: buying from a site that answers 402", () => {
     const w = await world({ trustStore: false });
     const r = (await t.action(internal.commerce.payX402, { agentId: w.agent, url: `${STORE}/x402/store/item?slug=report`, maxPrice: 1 })) as Record<string, any>;
     expect(r).toMatchObject({ outcome: "needs_approval" });
-    expect(r.reason).toMatch(/isn't a trusted contact yet/);
+    expect(r.reason).toMatch(/is a new payee, not a trusted contact/);
   });
 
   it("above maxPrice is refused before anything is created", async () => {

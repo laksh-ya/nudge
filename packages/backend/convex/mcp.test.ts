@@ -105,7 +105,7 @@ describe("a key without its own limit asks instead of being refused", () => {
     const w = await world(FULL);
     const out = await w.call("propose_payment", { toAddress: "0x00000000000000000000000000000000000000c3", name: "New Shop", amount: 2, reason: "a test" });
     expect(out.structuredContent).toMatchObject({ outcome: "needs_approval" });
-    expect(out.structuredContent.reason).toMatch(/New Shop isn't a trusted contact yet/);
+    expect(out.structuredContent.reason).toMatch(/New Shop is a new payee, not a trusted contact/);
     const bad = await w.call("propose_payment", { toAddress: "0x123", amount: 2, reason: "x" });
     expect(bad.structuredContent).toMatchObject({ outcome: "refused", code: "2014" });
   });

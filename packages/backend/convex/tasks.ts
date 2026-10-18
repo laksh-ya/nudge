@@ -5,6 +5,7 @@ import type { QueryCtx } from "./_generated/server";
 import { own, requireViewer, viewer } from "./lib/auth";
 import { formatMoney } from "@agent-wallet/domain";
 import { afterTask } from "./lib/circle";
+import { closeTwins } from "./lib/actions";
 
 export async function withNames(ctx: QueryCtx, task: Doc<"tasks">) {
   const payee = task.payeeId ? await ctx.db.get(task.payeeId) : null;
@@ -35,6 +36,7 @@ export const cancel = mutation({
       throw new ConvexError("This payment has already been sent");
     }
     await ctx.db.patch(taskId, { state: "cancelled", approvalToken: undefined, updatedAt: Date.now() });
+    await closeTwins(ctx, task);
     await afterTask(ctx, (await ctx.db.get(taskId))!);
   },
 });

@@ -138,6 +138,6 @@ describe("approval links in an agent's hands can't approve anything (#6, revised
     expect(page).not.toHaveProperty("owner");
     expect(page).not.toHaveProperty("wallet");
     expect(text).not.toContain("Someone else");
-    expect(page!.onchain!.contacts).toEqual([{ payeeId: f.payee, name: "Blue Tokai", address: SHOP }]);
+    expect(page!.onchain!.contacts).toEqual([{ payeeId: f.payee, name: "Blue Tokai", address: SHOP, saved: true }]);
   });
 });

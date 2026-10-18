@@ -129,7 +129,7 @@ export const MCP_TOOLS: McpTool[] = [
     group: "pay",
     title: "Saved contacts",
     description:
-      "People and merchants the user saved, each with a contactId. trusted:false means the user hasn't approved it in their vault yet, so a payment to it comes back with an approval link.",
+      "People and merchants the user saved, each with a contactId and a status: trusted (you may pay it within your limits), waiting (saved in the vault; payable on your own from activeAt), or new (every payment needs the owner's passkey). Paying a waiting or new contact comes back with one approval link that pays it once.",
     inputSchema: none,
     annotations: read,
     requires: null,
@@ -180,7 +180,7 @@ export const MCP_TOOLS: McpTool[] = [
     name: "add_contact",
     group: "pay",
     title: "Save a new contact",
-    description: `Save a person or merchant by Base Sepolia address. On a live wallet the user approves it with their passkey (the result has an approvalUrl); after that you can pay it inside your limits. ${APPROVAL_NOTE}`,
+    description: `Make a person or merchant a trusted contact by Base Sepolia address, so you can pay them on your own in future. Not needed to pay someone once: propose_payment does that with one passkey. Use it only when the user wants this. On a live wallet the user approves it with their passkey (the result has an approvalUrl), then the vault's wait for new contacts applies. ${APPROVAL_NOTE}`,
     inputSchema: obj({
       name: { type: "string", description: "Their name, up to 40 characters" },
       address: { type: "string", description: "0x… address on Base Sepolia" },

@@ -32,8 +32,12 @@ function grantedCaps(op: Op, data: Hex): bigint[] {
 export type ServerClaims = {
   amountMinor?: number;
   payee?: { name: string; address?: string | null } | null;
-  /** Saved contacts the server says the bytes refer to: the id their on-chain record is keyed by. */
-  contacts: { payeeId: string; name: string; address?: string | null }[];
+  /**
+   * Contacts the server has for addresses in the bytes: the id their on-chain record is keyed by.
+   * `saved: false` is the server saying "this is a new payee, not in the vault"; anything else is a
+   * claim that the vault has it, which the page checks.
+   */
+  contacts: { payeeId: string; name: string; address?: string | null; saved?: boolean }[];
   /** Names for other addresses in the bytes (agent keys, new contacts). Shown as unverified. */
   names: Record<string, string>;
 };
@@ -42,6 +46,15 @@ export type Payee = {
   address: Address;
   /** A saved contact in this vault, confirmed by reading the vault. */
   saved: { name: string; activeAt: number } | null;
+  /**
+   * Not in the vault, and the server doesn't claim it is: a first payment to someone new. Still shown
+   * as "not a saved contact" in red with the full address (it is how a swapped payee shows up); the
+   * page asks the owner to confirm they checked the address before the passkey can sign (#90, #91).
+   * The vault then queues the payment for its change delay, cancellable.
+   */
+  fresh: boolean;
+  /** The name the app uses for a new payee. Not checked: it is shown as such. */
+  label?: string;
 };
 
 export type Truth = {
@@ -115,18 +128,32 @@ export async function checkApproval(op: Op, data: Hex, claims: ServerClaims, cha
   if (claims.payee && saved && claims.payee.name !== saved.name) {
     mismatches.push(`The app says ${claims.payee.name}, but this address is saved as ${saved.name}`);
   }
-  if (claims.payee && !saved) {
-    mismatches.push(`The app says ${claims.payee.name}, but this address is not a saved contact in your vault`);
+  // The server claims the vault has this address (as a contact for it); the vault says otherwise.
+  // A new payee the server labels as new is not a disagreement: the page says so plainly (#90, #91).
+  const claimedSaved = claims.contacts.some((c) => same(c.address, address) && c.saved !== false);
+  if (claims.payee && !saved && claimedSaved) {
+    mismatches.push(`The app says ${claims.payee.name} is a saved contact, but your vault has no saved contact at this address`);
   }
+  const fresh = !saved && !claimedSaved;
+  const label = fresh ? (claims.payee?.name ?? claims.names[address.toLowerCase()]) : undefined;
+  const waiting = saved && saved.activeAt > Date.now();
 
   return {
     title: `Pay ${money(amount)}`,
     amountMinor: minor,
-    payee: { address, saved },
+    payee: { address, saved, fresh, ...(label ? { label } : {}) },
     lines: [
       saved
-        ? { label: "To", value: `${saved.name}, a saved contact in your vault`, tone: "ok" }
-        : { label: "To", value: "NOT a saved contact in your vault", tone: "bad" },
+        ? {
+            label: "To",
+            value: waiting
+              ? `${saved.name}, saved in your vault; agents may pay it on their own from ${new Date(saved.activeAt).toLocaleString()}`
+              : `${saved.name}, a saved contact in your vault`,
+            tone: "ok",
+          }
+        : fresh
+          ? { label: "To", value: `NOT a saved contact in your vault: a first payment to this address${label ? ` (the app calls it ${label}, not checked)` : ""}. Paying once doesn't save it`, tone: "bad" }
+          : { label: "To", value: "NOT a saved contact in your vault", tone: "bad" },
       { label: "Address", value: address, mono: true },
       { label: "Amount", value: `${money(amount)} test dollars` },
       { label: "Payment ID", value: `${paymentId.slice(0, 10)}…`, mono: true },

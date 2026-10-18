@@ -6,6 +6,7 @@ import type { Address, Hex } from "viem";
 import { requireViewer } from "./lib/auth";
 import { laneOf, lanePool } from "./lib/relayer";
 import { afterTask } from "./lib/circle";
+import { closeTwins } from "./lib/actions";
 
 /**
  * The approval link carries an opaque token. Opening it only reads; nothing is
@@ -32,11 +33,13 @@ export const get = query({
       const bytes = task.action.data.toLowerCase();
       const inBytes = (addr?: string) => Boolean(addr && bytes.includes(addr.slice(2).toLowerCase()));
       const names: Record<string, string> = {};
-      const contacts: { payeeId: string; name: string; address: string }[] = [];
+      const contacts: { payeeId: string; name: string; address: string; saved: boolean }[] = [];
       for (const p of await ctx.db.query("payees").withIndex("by_user", (q) => q.eq("userId", task.userId)).take(200)) {
         if (!p.address || !inBytes(p.address)) continue;
         names[p.address.toLowerCase()] = p.name;
-        contacts.push({ payeeId: p._id, name: p.name, address: p.address });
+        // `saved` is our claim that the vault has this contact; the page checks it on-chain. A payee
+        // the vault doesn't have yet is shown as new, not as a disagreement.
+        contacts.push({ payeeId: p._id, name: p.name, address: p.address, saved: Boolean(p.onchain) });
       }
       for (const a of await ctx.db.query("agents").withIndex("by_user", (q) => q.eq("userId", task.userId)).take(50)) {
         if (a.chainAddress && inBytes(a.chainAddress)) names[a.chainAddress.toLowerCase()] = a.name;
@@ -103,6 +106,7 @@ export const decide = mutation({
       return "expired";
     }
     if (approve && task.action) throw new ConvexError("Approve this with your passkey");
+    await closeTwins(ctx, task);
     if (!approve) {
       await ctx.db.patch(task._id, { state: "cancelled", updatedAt: Date.now() });
       await afterTask(ctx, (await ctx.db.get(task._id))!);
@@ -149,6 +153,7 @@ export const decline = mutation({
     if (!task) throw new ConvexError("This link is no longer valid");
     if (task.state !== "awaiting_approval") return task.state;
     await ctx.db.patch(task._id, { state: "cancelled", reason: "Declined on the approval page", updatedAt: Date.now() });
+    await closeTwins(ctx, task);
     await afterTask(ctx, (await ctx.db.get(task._id))!);
     await ctx.db.insert("activity", { userId: task.userId, kind: task.amountMinor ? "payment" : "setting", title: `Declined ${task.title}`, detail: "Nothing was paid or changed", tone: "neutral" });
     return "cancelled";
@@ -212,6 +217,7 @@ export const submit = mutation({
       return "rejected";
     }
     await ctx.db.patch(task._id, { state: "reserved", updatedAt: Date.now() });
+    await closeTwins(ctx, task);
     const lane = laneOf(task.userId);
     await lanePool(lane).enqueueAction(ctx, internal.chain.relayOwner, { taskId: task._id, auth, keyId, lane });
     return "reserved";

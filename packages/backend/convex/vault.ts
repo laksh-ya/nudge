@@ -7,7 +7,7 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { isSandbox, requireViewer, viewer } from "./lib/auth";
 import { newApprovalToken } from "./lib/seed";
-import { DEFAULT_RULES, addKeyTask, contactCapTask, setupTask } from "./lib/actions";
+import { DEFAULT_RULES, addKeyTask, contactCapTask, queuedReason, setupTask } from "./lib/actions";
 import { laneOf, lanePool, relayer } from "./lib/relayer";
 import { hit, tryHit } from "./lib/limits";
 import { spendDeploy } from "./lib/budget";
@@ -571,7 +571,7 @@ export const onReplaced = internalMutation({
       txNonce: undefined,
       txFrom: undefined,
       checks: 0,
-      reason: state === "held" ? "Held so you can cancel it before it leaves" : "Approved. Loosening waits before it applies; you can still cancel.",
+      reason: state === "held" ? "Held so you can cancel it before it leaves" : queuedReason(t, await changeDelayOf(ctx, t.userId)),
       updatedAt: Date.now(),
     });
     return true;
@@ -611,12 +611,17 @@ export const onChecked = internalMutation({
   },
 });
 
+async function changeDelayOf(ctx: MutationCtx, userId: Id<"users">) {
+  const w = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", userId)).unique();
+  return w?.vault?.changeDelay ?? 0;
+}
+
 export const onQueued = internalMutation({
   args: { taskId: v.id("tasks"), txHash: v.string(), changeId: v.string(), readyAt: v.number() },
   handler: async (ctx, { taskId, txHash, changeId, readyAt }) => {
     const t = await ctx.db.get(taskId);
     if (!t || !(await accepts(ctx, t, { state: "queued", txHash }))) return;
-    await ctx.db.patch(taskId, { state: "queued", txHash, changeId, readyAt, reason: "Approved. Loosening waits before it applies; you can still cancel.", updatedAt: Date.now() });
+    await ctx.db.patch(taskId, { state: "queued", txHash, changeId, readyAt, reason: queuedReason(t, await changeDelayOf(ctx, t.userId)), updatedAt: Date.now() });
     await ctx.db.insert("activity", { userId: t.userId, kind: "security", title: `${t.title}: waiting`, detail: `Applies at ${new Date(readyAt).toISOString().slice(11, 16)} UTC unless you cancel`, tone: "warn" });
   },
 });

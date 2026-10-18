@@ -39,7 +39,7 @@ describe("approval page truth", () => {
     expect(t.lines[0]).toMatchObject({ value: "NOT a saved contact in your vault", tone: "bad" });
     expect(t.title).toBe("Pay $200.00");
     expect(t.mismatches.join(" ")).toMatch(/says \$12\.00, but the signature would pay \$200\.00/);
-    expect(t.mismatches.join(" ")).toMatch(/not a saved contact/);
+    expect(t.mismatches.join(" ")).toMatch(/no saved contact at this address/);
   });
 
   it("flags a payee name that doesn't match the vault's own record", async () => {
@@ -52,6 +52,32 @@ describe("approval page truth", () => {
     const t = await checkApproval(Op.Pay, encode.pay(SHOP, toTokenUnits(1200), PAYMENT), honest, down);
     expect(t.payee?.saved).toBeNull();
     expect(t.mismatches.length).toBeGreaterThan(0);
+  });
+
+  it("a first payment to a new payee stays red and unsaved, but isn't a server/signature disagreement (#90, #91)", async () => {
+    const NEW = "0x1592Aea1B8882f2CB138ed1f9B7FE7f88375Cfeb" as Address;
+    const claims = { amountMinor: 400, payee: { name: "Nudge Test Shop", address: NEW }, contacts: [{ payeeId: "payee-new", name: "Nudge Test Shop", address: NEW, saved: false }], names: { [NEW.toLowerCase()]: "Nudge Test Shop" } };
+    const t = await checkApproval(Op.Pay, encode.pay(NEW, toTokenUnits(400), PAYMENT), claims, chain);
+    expect(t.mismatches).toEqual([]);
+    expect(t.payee).toMatchObject({ saved: null, fresh: true, label: "Nudge Test Shop" });
+    expect(t.lines[0]!.value).toMatch(/^NOT a saved contact in your vault: a first payment to this address \(the app calls it Nudge Test Shop, not checked\)/);
+    expect(t.lines[0]!.tone).toBe("bad");
+    // The bytes still decide: a different amount than the app shows is refused as before.
+    const off = await checkApproval(Op.Pay, encode.pay(NEW, toTokenUnits(40_000), PAYMENT), claims, chain);
+    expect(off.mismatches.join(" ")).toMatch(/says \$4\.00, but the signature would pay \$400\.00/);
+  });
+
+  it("a server claiming the vault has an address it doesn't is still refused", async () => {
+    const t = await checkApproval(Op.Pay, encode.pay(ATTACKER, toTokenUnits(1200), PAYMENT), { ...honest, payee: { name: "Blue Tokai", address: ATTACKER }, contacts: [{ payeeId: "payee-x", name: "Blue Tokai", address: ATTACKER, saved: true }] }, chain);
+    expect(t.payee?.fresh).toBe(false);
+    expect(t.mismatches.join(" ")).toMatch(/your vault has no saved contact at this address/);
+  });
+
+  it("a saved contact still in its waiting period says when agents may pay it (#92)", async () => {
+    const later: ChainReader = { contact: async () => ({ payee: SHOP, activeAt: BigInt(Math.floor(Date.now() / 1000) + 86_400) }) };
+    const t = await checkApproval(Op.Pay, encode.pay(SHOP, toTokenUnits(1200), PAYMENT), honest, later);
+    expect(t.mismatches).toEqual([]);
+    expect(t.lines[0]!.value).toMatch(/agents may pay it on their own from/);
   });
 
   it("refuses an amount shown for an action that pays no one", async () => {

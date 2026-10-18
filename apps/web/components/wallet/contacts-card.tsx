@@ -75,21 +75,24 @@ export function ContactsCard({ payees, live, contactDelay, children }: { payees:
           disabled={busy}
           onClick={() => run(async () => window.location.assign(approvalLink(await approveAdd({ payeeId: p._id }))), setRowError)}
         >
-          Approve
+          Trust
         </Button>
       );
     }
     if (p.activeAt && p.activeAt > now) {
       return (
         <Chip tone="amber">
-          <Clock className="size-3" /> <span className="num">Active in {waitLeft(p.activeAt - now)}</span>
+          <Clock className="size-3" />{" "}
+          <span className="num" title={`Agents can pay it on their own from ${new Date(p.activeAt).toLocaleString()}`}>
+            Agents can pay from {new Date(p.activeAt).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })} ({waitLeft(p.activeAt - now)})
+          </span>
         </Chip>
       );
     }
     if (!p.trusted) {
       return (
         <Chip tone="amber">
-          <Clock className="size-3" /> New, on hold
+          <Clock className="size-3" /> New: you approve each payment
         </Chip>
       );
     }

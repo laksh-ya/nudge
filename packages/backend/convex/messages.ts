@@ -258,7 +258,11 @@ async function pay(
   if (!payee.trusted || payee.pendingPasskey) {
     // Anyone can be paid; someone not yet trusted is paid only with the owner's passkey.
     const taskId = await createPayment(ctx, user, payee, minor, currency, title, turn.channel);
-    return say(turn, `${payee.name} isn't a trusted contact yet, so sending ${label} needs your approval. Review and approve.${replaced}`, { taskId, draft });
+    return say(
+      turn,
+      `${payee.name} isn't a trusted contact, so you approve this one yourself: one approval pays ${label} once and doesn't add them as trusted.${replaced}`,
+      { taskId, draft },
+    );
   }
   const taskId = await createPayment(ctx, user, payee, minor, currency, title, turn.channel);
   const how = cur === "USD" ? "Review and approve." : "Approve it and I'll open UPI for you.";

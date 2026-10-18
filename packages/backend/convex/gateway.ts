@@ -8,7 +8,7 @@ import { own, requireViewer } from "./lib/auth";
 import { computeOverview } from "./lib/overview";
 import { newApprovalToken } from "./lib/seed";
 import { sha256 } from "./lib/hash";
-import { ownerPayTask, paymentIdFor } from "./lib/actions";
+import { durationText, openTwin, ownerPayTask, paymentIdFor, whenText } from "./lib/actions";
 import { changeLimits, revokeAgent } from "./lib/control";
 import { intentFor, paymentFor } from "./lib/mandates";
 import { agentPool, laneOf } from "./lib/relayer";
@@ -192,29 +192,42 @@ export const overview = internalQuery({
     const { agent, user } = await load(ctx, agentId);
     need(agent, "read");
     const o = await computeOverview(ctx, user);
-    const bills = o.upcoming.slice(0, 5).map((b) => ({ name: b.name, amount: formatMoney(b.amountMinor, b.currency), due: new Date(b.nextDueAt).toISOString().slice(0, 10) }));
+    // One currency per group, never summed across (#97): bills by their own currency, the owner's
+    // money in their home currency, and the Nudge wallet in test dollars on its own.
+    const billsByCurrency: Record<string, { name: string; amount: string; due: string }[]> = {};
+    for (const b of o.upcoming.slice(0, 5)) {
+      (billsByCurrency[b.currency] ??= []).push({ name: b.name, amount: formatMoney(b.amountMinor, b.currency), due: new Date(b.nextDueAt).toISOString().slice(0, 10) });
+    }
     const allowance = Math.max(0, agent.dailyCapMinor - agent.spentTodayMinor);
+    const yourAllowanceToday = `${formatMoney(Math.min(allowance, o.agentAuthority), "USDC")} (test dollars, from the Nudge wallet)`;
     if (agent.hidesBalances) {
       return {
         owner: user.name,
         balances: "hidden by the owner",
         daysToPayday: o.daysToIncome,
-        upcomingBills: bills,
-        yourAllowanceToday: formatMoney(Math.min(allowance, o.agentAuthority), "USDC"),
+        upcomingBillsByCurrency: billsByCurrency,
+        yourAllowanceToday,
       };
     }
     const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
     const walletMinor = wallet ? (wallet.status === "live" && wallet.vault ? wallet.vault.balanceMinor - wallet.vault.heldMinor : wallet.balanceMinor) : null;
     return {
       owner: user.name,
-      nudgeWallet: walletMinor === null ? "not set up" : `${formatMoney(walletMinor, "USDC")} (test dollars${wallet?.status === "live" ? " on Base Sepolia" : ", simulated"})`,
-      safeToSpend: formatMoney(o.available, o.currency),
-      perDayUntilPayday: formatMoney(o.perDay, o.currency),
+      homeCurrency: o.currency,
+      inHomeCurrency: {
+        note: `Everything here is in ${o.currency}${o.ratesDate ? `, other currencies converted at ${o.ratesDate} rates` : ""}${o.unconverted.length ? `; ${o.unconverted.join(", ")} left out (no rate)` : ""}.`,
+        safeToSpend: formatMoney(o.available, o.currency),
+        perDayUntilPayday: formatMoney(o.perDay, o.currency),
+        spentThisMonth: formatMoney(o.spentThisMonth, o.currency),
+        monthlyBudget: o.budget ? formatMoney(o.budget, o.currency) : null,
+      },
       daysToPayday: o.daysToIncome,
-      spentThisMonth: formatMoney(o.spentThisMonth, o.currency),
-      monthlyBudget: o.budget ? formatMoney(o.budget, o.currency) : null,
-      upcomingBills: bills,
-      yourAllowanceToday: formatMoney(Math.min(allowance, o.agentAuthority), "USDC"),
+      nudgeWallet:
+        walletMinor === null
+          ? "not set up"
+          : `${formatMoney(walletMinor, "USDC")} (test dollars${wallet?.status === "live" ? " on Base Sepolia" : ", simulated"}; separate from the ${o.currency} money above, never add them)`,
+      upcomingBillsByCurrency: billsByCurrency,
+      yourAllowanceToday,
     };
   },
 });
@@ -273,8 +286,27 @@ export const contacts = internalQuery({
     const { agent, user } = await load(ctx, agentId);
     need(agent, "read");
     const payees = await ctx.db.query("payees").withIndex("by_user", (q) => q.eq("userId", user._id)).take(200);
-    // Ids and names only. Addresses never leave the wallet.
-    return payees.map((p) => ({ contactId: p._id, name: p.name, kind: p.kind, trusted: Boolean(p.trusted && !p.pendingPasskey && !(p.activeAt && p.activeAt > Date.now())) }));
+    // Ids and names only. Addresses never leave the wallet. Each says where it stands (#92): a new
+    // payee needs the owner for every payment; a saved one may still be in the vault's wait.
+    const now = Date.now();
+    return payees.map((p) => {
+      const until = Math.max(p.activeAt ?? 0, p.holdUntil ?? 0);
+      const status = p.pendingPasskey || !p.trusted ? "new" : until > now ? "waiting" : "trusted";
+      return {
+        contactId: p._id,
+        name: p.name,
+        kind: p.kind,
+        trusted: status === "trusted",
+        status,
+        ...(status === "waiting" ? { activeAt: new Date(until).toISOString() } : {}),
+        canPayAlone:
+          status === "trusted"
+            ? "yes, within your limits"
+            : status === "waiting"
+              ? `from ${new Date(until).toISOString()}; until then the owner approves each payment`
+              : "no: the owner approves each payment with the passkey (or makes it a trusted contact)",
+      };
+    });
   },
 });
 
@@ -443,7 +475,15 @@ export async function propose(ctx: MutationCtx, { agentId, contactId, toAddress,
     if (agentSpent + minor > dailyCap) blockers.push({ code: "2003", why: `Above ${agent.name}'s daily limit` });
     if (spentToday + minor > ceiling) blockers.push({ code: "2004", why: "Above the wallet's daily ceiling for all agents" });
     if (free - minor < protectedMinor) blockers.push({ code: "2005", why: "Would dip into the protected amount" });
-    if (notYet || !payee.trusted || (payee.holdUntil && payee.holdUntil > Date.now())) blockers.push({ code: "2006", why: `${payee.name} isn't a trusted contact yet` });
+    if (notYet || !payee.trusted || (payee.holdUntil && payee.holdUntil > Date.now())) {
+      // Say which state it is in, with the vault's own numbers (#89, #92): new, or saved and waiting.
+      const until = Math.max(payee.activeAt ?? 0, payee.holdUntil ?? 0);
+      const why =
+        until > Date.now() && !payee.pendingPasskey
+          ? `${payee.name} is saved, but agents may pay it on their own only from ${whenText(until, user.timezone)} (your vault's ${durationText(wallet.vault?.contactDelay ?? wallet.rules?.contactDelay ?? 0)} wait for new contacts)`
+          : `${payee.name} is a new payee, not a trusted contact`;
+      blockers.push({ code: "2006", why });
+    }
     if (agent.allowedPayees?.length && !agent.allowedPayees.includes(payee._id)) blockers.push({ code: "2016", why: `${payee.name} isn't on ${agent.name}'s list of who it may pay alone` });
     if (payee.dailyCapMinor) {
       const toPayee = await agentPaidTo(ctx, payee._id);
@@ -513,6 +553,19 @@ export async function propose(ctx: MutationCtx, { agentId, contactId, toAddress,
       return { outcome: "refused", code: b.code, reason: b.why };
     }
 
+    // Asked again while the first request still waits (a retry, a second tool call): the same link,
+    // not a new one, and no second notification (#95).
+    const twin = await openTwin(ctx, user._id, { agentId: agent._id, payeeId: payee._id, amountMinor: minor, requestId });
+    if (twin) {
+      return {
+        outcome: "needs_approval",
+        taskId: twin._id,
+        approvalUrl: approveUrl(twin.approvalToken!),
+        reason: twin.reason ?? blockers.map((b) => b.why).join(". "),
+        message: `This payment is already waiting for ${user.name || "the user"}'s approval. Give them the same approvalUrl; don't ask again. Then check get_task_status.`,
+      };
+    }
+
     if (live) {
       const { taskId, token } = await ownerPayTask(ctx, {
         user,
@@ -529,7 +582,10 @@ export async function propose(ctx: MutationCtx, { agentId, contactId, toAddress,
       if (agent.provider !== "own") {
         await notify(ctx, user._id, `${agent.name} asks to pay ${payee.name} ${formatMoney(minor, "USDC")}. ${blockers[0]!.why}, so it needs your passkey.`, approveUrl(token));
       }
-      return { outcome: "needs_approval", taskId, approvalUrl: approveUrl(token), reason: blockers.map((b) => b.why).join(". "), message: `Needs ${user.name || "the user"}'s passkey: ${blockers[0]!.why}. Give them the approvalUrl; then check get_task_status.` };
+      // Paying an address the vault hasn't saved waits the vault's change delay after the passkey;
+      // say so, so the assistant doesn't promise an instant payment or invent a different wait (#89).
+      const after = !payee.onchain && (wallet.vault?.changeDelay ?? 0) > 0 ? ` Once approved, the vault waits ${durationText(wallet.vault!.changeDelay)} before the money leaves (cancellable).` : "";
+      return { outcome: "needs_approval", taskId, approvalUrl: approveUrl(token), reason: blockers.map((b) => b.why).join(". "), message: `Needs ${user.name || "the user"}'s passkey: ${blockers[0]!.why}. Give them the approvalUrl (one passkey pays it once); then check get_task_status.${after}` };
     }
 
     const token = newApprovalToken();
@@ -571,6 +627,26 @@ export const mandate = internalQuery({
   },
 });
 
+/** What happens to a task next, in one sentence, so two reads a few seconds apart never look contradictory. */
+function nextStep(t: Doc<"tasks">) {
+  const at = (ms?: number) => (ms ? new Date(ms).toISOString() : "shortly");
+  switch (t.state) {
+    case "awaiting_approval":
+      return "Waiting for the owner. Nothing is paid until they approve.";
+    case "queued":
+      return `Approved; the vault pays at ${at(t.readyAt)} unless the owner cancels. It then becomes confirmed.`;
+    case "held":
+      return `Paid into a hold; it leaves at ${at(t.releaseAt)} unless the owner cancels. It then becomes confirmed.`;
+    case "reserved":
+    case "submitted":
+      return "On its way to the network; it becomes confirmed within a minute.";
+    case "confirmed":
+      return "Done. Nothing more will change.";
+    default:
+      return "Final. Nothing more will change.";
+  }
+}
+
 export const taskStatus = internalQuery({
   args: { agentId: v.id("agents"), taskId: v.string() },
   handler: async (ctx, { agentId, taskId }) => {
@@ -591,6 +667,11 @@ export const taskStatus = internalQuery({
       simulated: task.rail === "simulator",
       transaction: task.txHash ? `https://sepolia.basescan.org/tx/${task.txHash}` : null,
       releasesAt: task.state === "held" && task.releaseAt ? new Date(task.releaseAt).toISOString() : null,
+      // One source (this task) and an explicit word on whether it can still change (#94): a queued
+      // or held payment becomes confirmed on its own at readyAt / releasesAt unless cancelled.
+      final: ["confirmed", "failed", "cancelled", "expired", "reported"].includes(task.state),
+      ...(task.state === "queued" && task.readyAt ? { readyAt: new Date(task.readyAt).toISOString() } : {}),
+      next: nextStep(task),
       updatedAt: new Date(task.updatedAt).toISOString(),
       ...(task.state === "awaiting_approval" && task.approvalToken ? { approvalUrl: approveUrl(task.approvalToken) } : {}),
       ...(task.purchase ? { purchase: purchaseView(task.purchase, task.state) } : {}),

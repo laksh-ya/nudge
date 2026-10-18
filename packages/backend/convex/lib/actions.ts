@@ -244,7 +244,7 @@ export async function addContactTask(ctx: MutationCtx, user: Doc<"users">, payee
   const delay = wallet.vault?.contactDelay ?? DEFAULT_RULES.contactDelay;
   return await ownerTask(ctx, user, {
     title: `Add ${payee.name} to your contacts`,
-    reason: `Agents can pay a contact only once your passkey adds it to the vault, and then only after the vault's ${waitText(delay)} waiting period`,
+    reason: `Makes ${payee.name} a trusted contact, so your assistants can pay it on their own within their limits. They can start after your vault's ${durationText(delay)} wait for new contacts. You can pay it yourself any time without this.`,
     op: Op.AddContact,
     data: encode.addContact(contactIdOf(payee._id), payeeAddress(payee), false, { version: wallet.version, dailyCap: 0n }),
     effects: { payees: [payee._id] },
@@ -261,6 +261,70 @@ export async function removeContactTask(ctx: MutationCtx, user: Doc<"users">, pa
     data: encode.removeContact(contactIdOf(payee._id)),
     minutes: 24 * 60,
   });
+}
+
+/** The reason a request closed because the owner already decided it through another link. */
+export const HANDLED_ELSEWHERE = "Handled through another link for the same request";
+
+type Same = { agentId?: Id<"agents">; payeeId?: Id<"payees">; amountMinor?: number; requestId?: string };
+// A different invoice number is a different payment, even to the same payee for the same amount.
+const sameRequest = (a: Same, b: Same) =>
+  a.agentId === b.agentId && a.payeeId === b.payeeId && a.amountMinor === b.amountMinor && (a.requestId ?? null) === (b.requestId ?? null);
+
+/** An open approval for the same payment (same assistant, payee and amount), to hand back instead of a new link (#95). */
+export async function openTwin(ctx: MutationCtx, userId: Id<"users">, want: Same) {
+  if (!want.payeeId || want.amountMinor === undefined) return null;
+  const open = await ctx.db.query("tasks").withIndex("by_user_state", (q) => q.eq("userId", userId).eq("state", "awaiting_approval")).take(50);
+  const now = Date.now();
+  return (
+    open.find(
+      (t) => sameRequest(t, want) && t.approvalToken && (!t.expiresAt || t.expiresAt > now) && (!t.action || t.action.deadline * 1000 > now + 60_000),
+    ) ?? null
+  );
+}
+
+/** Once one link for a payment is decided, every other open link for it closes, Telegram copies included (#95). */
+export async function closeTwins(ctx: MutationCtx, task: Doc<"tasks">) {
+  if (task.amountMinor === undefined || !task.payeeId) return 0;
+  const open = await ctx.db.query("tasks").withIndex("by_user_state", (q) => q.eq("userId", task.userId).eq("state", "awaiting_approval")).take(50);
+  let n = 0;
+  for (const t of open) {
+    if (t._id === task._id || !sameRequest(t, task)) continue;
+    await ctx.db.patch(t._id, { state: "cancelled", reason: HANDLED_ELSEWHERE, updatedAt: Date.now() });
+    n++;
+  }
+  return n;
+}
+
+/** A moment as the owner reads it, in their own time zone. */
+export function whenText(ms: number, timeZone = "UTC") {
+  try {
+    return new Date(ms).toLocaleString("en-IN", { timeZone, weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  } catch {
+    return `${new Date(ms).toISOString().slice(0, 16).replace("T", " ")} UTC`;
+  }
+}
+
+/**
+ * Why an approved action is waiting, naming the one wait that applies (#93): an owner payment to
+ * someone not saved in the vault, or a loosened rule. Both wait the vault's change delay.
+ */
+export function queuedReason(t: { amountMinor?: number }, changeDelay: number) {
+  const wait = changeDelay > 0 ? ` ${durationText(changeDelay)}` : "";
+  return t.amountMinor
+    ? `Approved. Paying someone not saved in your vault waits${wait} (your vault's change delay), so you can still cancel it.`
+    : `Approved. Loosening a rule waits${wait} (your vault's change delay); you can still cancel it.`;
+}
+
+/** A wait as a noun: "2 min", "1 hour", "1 day", "3 days". */
+export function durationText(seconds: number) {
+  if (seconds < 3600) return `${Math.max(1, Math.round(seconds / 60))} min`;
+  if (seconds < 86_400) {
+    const h = +(seconds / 3600).toFixed(1);
+    return `${h} ${h === 1 ? "hour" : "hours"}`;
+  }
+  const d = +(seconds / 86_400).toFixed(1);
+  return `${d} ${d === 1 ? "day" : "days"}`;
 }
 
 export function waitText(seconds: number) {
