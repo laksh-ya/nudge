@@ -175,3 +175,90 @@ describe("first payment to a new merchant on a live vault (#100)", () => {
     expect((await f.t.mutation(internal.gateway.proposePayment, { agentId: f.agent, contactId: f.trusted, amount: 20, reason: "big order" })).outcome).toBe("needs_approval");
   });
 });
+
+describe("contact trust comes from the vault's own records (#101)", () => {
+  const VAULT_STATE = { version: 3, protectedMinor: 5000, ceilingMinor: 10_000, contactDelay: 86_400, changeDelay: 120, holdAboveMinor: 500, holdFor: 120, frozen: false, balanceMinor: 25_000, heldMinor: 0, spentMinor: 0, headroomMinor: 10_000, ownerKeys: 1, syncedAt: NOW };
+
+  it("a contact the vault made active early (an immediate re-add) is trusted, whatever we estimated", async () => {
+    const f = await liveOwner();
+    // Our estimate after the first add: payable only tomorrow. The vault's record says since yesterday.
+    const harsh = await f.t.run((ctx) =>
+      ctx.db.insert("payees", { userId: f.userId, name: "harsh", handle: "0x…", kind: "person", trusted: true, address: SHOP, onchain: true, activeAt: NOW + DAY }),
+    );
+    const walletId = await f.t.run(async (ctx) => (await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", f.userId)).unique())!._id);
+    expect((await f.t.query(internal.gateway.contacts, { agentId: f.agent })).find((c) => c.name === "harsh")).toMatchObject({ status: "waiting" });
+
+    await f.t.mutation(internal.vault.onVaultState, { walletId, vault: VAULT_STATE, agents: [], contacts: [{ payeeId: harsh, payee: SHOP.toLowerCase(), activeAt: Math.floor((NOW - 18 * 3_600_000) / 1000) }] });
+    expect((await f.t.query(internal.gateway.contacts, { agentId: f.agent })).find((c) => c.name === "harsh")).toMatchObject({ status: "trusted", trusted: true });
+    // And the agent pays within its limits with no approval link.
+    expect((await f.t.mutation(internal.gateway.proposePayment, { agentId: f.agent, contactId: harsh, amount: 3, reason: "lunch" })).outcome).toBe("submitted");
+  });
+
+  it("no record in the vault, or one for another address, means agents can't pay it alone", async () => {
+    const f = await liveOwner();
+    const walletId = await f.t.run(async (ctx) => (await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", f.userId)).unique())!._id);
+    await f.t.mutation(internal.vault.onVaultState, { walletId, vault: VAULT_STATE, agents: [], contacts: [{ payeeId: f.trusted, payee: "0x0000000000000000000000000000000000000000", activeAt: 0 }] });
+    expect((await f.t.query(internal.gateway.contacts, { agentId: f.agent })).find((c) => c.name === "Blue Tokai")).toMatchObject({ status: "new", trusted: false });
+    expect((await f.t.mutation(internal.gateway.proposePayment, { agentId: f.agent, contactId: f.trusted, amount: 3, reason: "coffee" })).outcome).toBe("needs_approval");
+  });
+});
+
+describe("the AP2 mandate follows the vault's contact rule (#102)", () => {
+  it("lists only contacts past their waiting period, and dates the list", async () => {
+    const f = await liveOwner();
+    await f.t.run(async (ctx) => {
+      await ctx.db.insert("payees", { userId: f.userId, name: "Nudge demo store", handle: "0x…", kind: "merchant", trusted: true, address: SHOP, onchain: true, activeAt: NOW + DAY });
+      await ctx.db.insert("tasks", {
+        userId: f.userId, title: "Let Claude pay within limits", channel: "app", state: "confirmed", rail: "base-sepolia", updatedAt: NOW,
+        txHash: `0x${"aa".repeat(32)}`, effects: { agents: [f.agent], payees: [] },
+      });
+    });
+    const m = (await f.t.query(internal.gateway.mandate, { agentId: f.agent })) as unknown as { "x-policyvault": { contacts: { name: string }[]; contacts_as_of?: string } } & Record<string, { natural_language_description: string }>;
+    const names = m["x-policyvault"].contacts.map((c) => c.name);
+    expect(names).toEqual(["Blue Tokai"]);
+    expect(m["x-policyvault"].contacts_as_of).toBe(new Date(Math.floor(NOW / 1000) * 1000).toISOString());
+    const text = Object.values(m).find((v) => v && typeof v === "object" && "natural_language_description" in v)!.natural_language_description;
+    expect(text).toMatch(/may pay the contacts saved in my vault \(as of 2026-10-18 08:50 UTC: Blue Tokai\)/);
+  });
+});
+
+describe("payments the owner approved for an agent count toward its limits (#105)", () => {
+  it("an approved $20 leaves $5 of a $25 day, and the per-contact total sees it too", async () => {
+    const f = await liveOwner();
+    await f.t.run(async (ctx) => {
+      await ctx.db.patch(f.trusted, { dailyCapMinor: 2500 });
+      // Claude asked for $20 (over its $15 per payment); the owner approved it with the passkey.
+      await ctx.db.insert("tasks", {
+        userId: f.userId, title: "Pay Blue Tokai", channel: "mcp", agentId: f.agent, payeeId: f.trusted, amountMinor: 2000, currency: "USDC",
+        state: "confirmed", rail: "base-sepolia", approvedByOwner: true, updatedAt: NOW,
+        action: { op: Op.Pay, data: "0x", nonce: "1", deadline: Math.floor(NOW / 1000) + 600 },
+      });
+    });
+    const limits = await f.t.query(internal.gateway.myLimits, { agentId: f.agent });
+    expect(limits.leftToday.amountMinor).toBe(500);
+    // $6 on its own would exceed what's left of its day, and of Blue Tokai's $25 for all agents.
+    const r = await f.t.mutation(internal.gateway.proposePayment, { agentId: f.agent, contactId: f.trusted, amount: 6, reason: "more coffee" });
+    expect(r.outcome).toBe("needs_approval");
+    expect((r as { reason: string }).reason).toMatch(/daily limit/);
+    expect((r as { reason: string }).reason).toMatch(/Blue Tokai's \$25\.00 daily limit for all agents/);
+    // $4 still fits, and goes straight through.
+    expect((await f.t.mutation(internal.gateway.proposePayment, { agentId: f.agent, contactId: f.trusted, amount: 4, reason: "coffee" })).outcome).toBe("submitted");
+  });
+});
+
+describe("approval links always point at the real approval site (#110)", () => {
+  it("ignores a retired, non-https or broken APPROVE_URL", async () => {
+    const { approveBase } = await import("./lib/links");
+    vi.stubEnv("APPROVE_URL", "");
+    expect(approveBase()).toBe("https://nudge-approve.vercel.app");
+    vi.stubEnv("APPROVE_URL", "https://agent-wallet-approve.vercel.app");
+    expect(approveBase()).toBe("https://nudge-approve.vercel.app");
+    vi.stubEnv("APPROVE_URL", "http://evil.example");
+    expect(approveBase()).toBe("https://nudge-approve.vercel.app");
+    vi.stubEnv("APPROVE_URL", "not a url");
+    expect(approveBase()).toBe("https://nudge-approve.vercel.app");
+    vi.stubEnv("APPROVE_URL", "https://approve.staging.example/");
+    expect(approveBase()).toBe("https://approve.staging.example");
+    vi.unstubAllEnvs();
+  });
+});

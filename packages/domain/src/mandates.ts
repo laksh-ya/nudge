@@ -65,6 +65,11 @@ export type IntentMandate = {
     hold_above: Amount;
     hold_seconds: number;
     contacts: { name: string; address: Address; contact_id: Hex }[];
+    /**
+     * When the contact list was read. The passkey signature below signed the limits; each contact was
+     * added by its own signature, so the list is the vault's state at this time, not part of that one (#102).
+     */
+    contacts_as_of?: string;
     /** The owner's passkey signature, checked by the contract: where it was verified, and where the grant applied. */
     user_authorization: { method: "webauthn-p256-verified-by-contract"; signed_tx: Hex; applied_tx: Hex };
   };
@@ -84,6 +89,8 @@ export function intentMandate(i: {
   holdAbove: bigint;
   holdFor: number;
   contacts: Contact[];
+  /** Seconds: when the contact list was read from the vault. */
+  contactsAsOf?: bigint;
   signedTx: Hex;
   appliedTx: Hex;
 }): IntentMandate {
@@ -93,7 +100,7 @@ export function intentMandate(i: {
       // Inside these limits the owner's standing grant is the confirmation; anything above needs their passkey.
       user_cart_confirmation_required: false,
       natural_language_description:
-        `${i.agentName} may pay ${names.length ? names.join(", ") : "no one yet"}, at most ${usd(i.perPayment).value} USD a payment and ` +
+        `${i.agentName} may pay the contacts saved in my vault${i.contactsAsOf ? ` (as of ${iso(i.contactsAsOf).slice(0, 16).replace("T", " ")} UTC: ${names.length ? names.join(", ") : "none yet"})` : names.length ? ` (${names.join(", ")})` : " (none yet)"}, at most ${usd(i.perPayment).value} USD a payment and ` +
         `${usd(i.dailyCap).value} USD in any 24 hours, until ${iso(i.expiresAt).slice(0, 10)}. Payments above ${usd(i.holdAbove).value} USD wait ` +
         `${Math.round(i.holdFor / 60)} minutes so I can cancel. All assistants together stay under ${usd(i.ceiling).value} USD a day and never touch the ` +
         `${usd(i.protectedAmount).value} USD I keep protected. Anything else needs my passkey.`,
@@ -114,6 +121,7 @@ export function intentMandate(i: {
       hold_above: usd(i.holdAbove),
       hold_seconds: i.holdFor,
       contacts: i.contacts.map((c) => ({ name: c.name, address: c.address, contact_id: c.contactId })),
+      ...(i.contactsAsOf ? { contacts_as_of: iso(i.contactsAsOf) } : {}),
       user_authorization: { method: "webauthn-p256-verified-by-contract" as const, signed_tx: i.signedTx, applied_tx: i.appliedTx },
     },
   };
@@ -276,15 +284,21 @@ export async function verifyIntent(m: IntentMandate, pub: PublicClient): Promise
     checks.push({ ok: iso(g.expiresAt) === ap2.intent_expiry, what: `expires ${ap2.intent_expiry}` });
   }
   checks.push({ ok: ap2.merchants.length === x.contacts.length && x.contacts.every((c, i) => c.name === ap2.merchants[i]), what: "AP2 merchants are the listed contacts" });
+  const block = await pub.getBlock();
   for (const c of x.contacts) {
-    const [payee] = (await pub.readContract({ address: x.vault, abi: policyVaultAbi, functionName: "contacts", args: [c.contact_id] })) as readonly [Address, ...unknown[]];
-    checks.push({ ok: same(payee, c.address), what: `${c.name} is a saved contact at ${c.address.slice(0, 10)}…` });
+    // Saved at this address, and past its waiting period: the vault pays it only then (#102).
+    const [payee, activeAt] = (await pub.readContract({ address: x.vault, abi: policyVaultAbi, functionName: "contacts", args: [c.contact_id] })) as readonly [Address, bigint];
+    const at = same(payee, c.address);
+    const active = at && activeAt <= block.timestamp;
+    checks.push({
+      ok: active,
+      what: active ? `${c.name} is a saved contact at ${c.address.slice(0, 10)}…` : at ? `${c.name} is saved but the vault refuses agent payments until ${iso(activeAt)}` : `${c.name} is a saved contact at ${c.address.slice(0, 10)}…`,
+    });
   }
   const valid = checks.every((c) => c.ok);
   // In force today: the vault's current record for the agent still matches, and nothing revoked or froze it.
   const now = (await pub.readContract({ address: x.vault, abi: policyVaultAbi, functionName: "agents", args: [x.agent] })) as readonly [bigint, bigint, bigint, boolean, boolean, ...unknown[]];
   const [perPayment, dailyCap, expiresAt, active, frozen] = now;
-  const block = await pub.getBlock();
   const inForce = active && !frozen && perPayment === units(x.per_payment_max) && dailyCap === units(x.daily_max) && expiresAt > block.timestamp;
   checks.push({ ok: inForce, what: inForce ? "still in force today" : `no longer in force (${!active ? "removed" : frozen ? "frozen" : expiresAt <= block.timestamp ? "expired" : "replaced by a newer grant"})` });
   return { valid, inForce, checks };

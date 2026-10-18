@@ -1,5 +1,5 @@
 import { v, ConvexError } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { CHAIN_ID, EXPLORER, Op, actionDigest, assertionProblem } from "@agent-wallet/domain";
 import type { Address, Hex } from "viem";
@@ -132,19 +132,20 @@ export const decide = mutation({
       await ctx.db.insert("activity", { userId: task.userId, kind: "setting", title: `Approved: ${task.title}`, tone: "good" });
       return "confirmed";
     }
-    await ctx.db.patch(task._id, { state: "submitted", updatedAt: Date.now() });
+    await ctx.db.patch(task._id, { state: "submitted", approvedByOwner: true, updatedAt: Date.now() });
     await ctx.scheduler.runAfter(1600, internal.tasks.settle, { taskId: task._id });
     return "submitted";
   },
 });
 
 /**
- * Decline from the approval page itself. The link's token is enough: declining only stops a
- * request (nothing is paid or loosened), so it needs neither sign-in nor the passkey.
+ * Decline from the approval page itself. Declining only stops a request (nothing is paid or
+ * loosened), so it needs neither sign-in nor the passkey, but it does need the owner's copy of the
+ * link: the agent that asked holds the bare link too, and must not be able to cancel it (#106).
  */
 export const decline = mutation({
-  args: { token: v.string() },
-  handler: async (ctx, { token }) => {
+  args: { token: v.string(), key: v.optional(v.string()) },
+  handler: async (ctx, { token, key }) => {
     if (token.length < 16) throw new ConvexError("This link is no longer valid");
     const task = await ctx.db
       .query("tasks")
@@ -152,11 +153,26 @@ export const decline = mutation({
       .unique();
     if (!task) throw new ConvexError("This link is no longer valid");
     if (task.state !== "awaiting_approval") return task.state;
+    if (!task.declineKey || !key || key !== task.declineKey) throw new ConvexError("Decline from your Nudge app or from the link in your Telegram message");
     await ctx.db.patch(task._id, { state: "cancelled", reason: "Declined on the approval page", updatedAt: Date.now() });
     await closeTwins(ctx, task);
     await afterTask(ctx, (await ctx.db.get(task._id))!);
     await ctx.db.insert("activity", { userId: task.userId, kind: task.amountMinor ? "payment" : "setting", title: `Declined ${task.title}`, detail: "Nothing was paid or changed", tone: "neutral" });
     return "cancelled";
+  },
+});
+
+/** The owner's copy of an approval link: the same page, plus a key that lets it decline (#106). */
+export const ownerLinkKey = internalMutation({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    const task = await ctx.db.query("tasks").withIndex("by_approval_token", (q) => q.eq("approvalToken", token)).unique();
+    if (!task || task.state !== "awaiting_approval") return null;
+    if (task.declineKey) return task.declineKey;
+    const bytes = crypto.getRandomValues(new Uint8Array(18));
+    const declineKey = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    await ctx.db.patch(task._id, { declineKey });
+    return declineKey;
   },
 });
 
@@ -216,7 +232,7 @@ export const submit = mutation({
       }
       return "rejected";
     }
-    await ctx.db.patch(task._id, { state: "reserved", updatedAt: Date.now() });
+    await ctx.db.patch(task._id, { state: "reserved", approvedByOwner: true, updatedAt: Date.now() });
     await closeTwins(ctx, task);
     const lane = laneOf(task.userId);
     await lanePool(lane).enqueueAction(ctx, internal.chain.relayOwner, { taskId: task._id, auth, keyId, lane });

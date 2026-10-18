@@ -15,7 +15,8 @@ const isHash = (h?: string): h is Hex => Boolean(h && /^0x[0-9a-fA-F]{64}$/.test
 async function contactsOf(ctx: QueryCtx, userId: Doc<"users">["_id"]): Promise<Contact[]> {
   const payees = await ctx.db.query("payees").withIndex("by_user", (q) => q.eq("userId", userId)).take(200);
   return payees
-    .filter((p) => p.onchain && p.trusted && !(p.holdUntil && p.holdUntil > Date.now()))
+    // The vault's own rule (#102): a contact counts only once its activeAt has passed.
+    .filter((p) => p.onchain && p.trusted && !p.pendingPasskey && !(p.holdUntil && p.holdUntil > Date.now()) && !(p.activeAt && p.activeAt > Date.now()))
     .map((p) => ({ name: p.name, address: payeeAddress(p), contactId: contactIdOf(p._id) }));
 }
 
@@ -51,6 +52,7 @@ export async function intentFor(ctx: QueryCtx, agent: Doc<"agents">): Promise<In
     holdAbove: toTokenUnits(v.holdAboveMinor),
     holdFor: v.holdFor,
     contacts: await contactsOf(ctx, agent.userId),
+    contactsAsOf: BigInt(Math.floor((v.syncedAt || Date.now()) / 1000)),
     // A loosening's passkey signature is in the transaction that queued it; the verifier finds it either way.
     signedTx: (isHash(task.priorTxHash) ? task.priorTxHash : task.txHash) as Hex,
     appliedTx: task.txHash as Hex,

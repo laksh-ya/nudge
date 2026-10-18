@@ -83,7 +83,7 @@ export const run = internalMutation({
       if (!users.has(id)) users.set(id, await ctx.db.get(id));
       return users.get(id) ?? null;
     };
-    const quiet = (u: Doc<"users">) => inQuietHours(now, safeTz(u.timezone), u.quietFrom ?? "22:00", u.quietTo ?? "08:00");
+    const quiet = (u: Doc<"users">) => inQuietHours(now, safeTz(u.timezone), u.quietFrom, u.quietTo);
     let sent = 0;
     let deferred = 0;
 
@@ -177,7 +177,7 @@ export const sendTest = mutation({
       app: true,
       telegram,
       telegramLinked: linked,
-      quietNow: inQuietHours(now, tz, user.quietFrom ?? "22:00", user.quietTo ?? "08:00"),
+      quietNow: inQuietHours(now, tz, user.quietFrom, user.quietTo),
     };
   },
 });
@@ -231,7 +231,7 @@ export const claimDelivery = internalMutation({
       await ctx.db.patch(deliveryId, { status: "failed", error: "Telegram unlinked or disabled" });
       return null;
     }
-    const next = afterQuietHours(Date.now(), safeTz(user.timezone), user.quietFrom ?? "22:00", user.quietTo ?? "08:00");
+    const next = afterQuietHours(Date.now(), safeTz(user.timezone), user.quietFrom, user.quietTo);
     if (!row.key.startsWith("test:") && next > Date.now()) {
       await ctx.db.patch(deliveryId, { nextAttemptAt: next });
       await ctx.scheduler.runAt(next, internal.reminders.deliverTelegram, { deliveryId });

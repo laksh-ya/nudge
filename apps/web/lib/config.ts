@@ -1,5 +1,6 @@
 export const APP_NAME = "Nudge";
-export const APPROVE_URL = process.env.NEXT_PUBLIC_APPROVE_URL ?? "http://localhost:3001";
+// A production build without the variable must still link to the real approval site, never localhost (#110).
+export const APPROVE_URL = process.env.NEXT_PUBLIC_APPROVE_URL ?? (process.env.NODE_ENV === "production" ? "https://nudge-approve.vercel.app" : "http://localhost:3001");
 
 export function approvalLink(token: string) {
   return `${APPROVE_URL}/a/${token}`;

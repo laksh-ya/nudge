@@ -7,7 +7,7 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { approveUrl, load, payeeForAddress } from "./gateway";
 import { computeOverview } from "./lib/overview";
 import { createReminder, goalPlan, telegramLinked, wantsTelegram } from "./lib/assist";
-import { DAY, dateLabel, safeTz, zoned } from "./lib/schedule";
+import { DAY, dateLabel, quietHoursOf, safeTz, zoned } from "./lib/schedule";
 import { DEFAULT_RULES, addContactTask, durationText } from "./lib/actions";
 import { changeLimits } from "./lib/control";
 import { newApprovalToken } from "./lib/seed";
@@ -127,7 +127,7 @@ export const reminders = internalQuery({
     const lead = user.reminderLeadDays ?? 2;
     return {
       reminders: rows.sort((a, b) => a.dueAt - b.dueAt).map((r) => ({ reminderId: r._id, text: r.text, at: new Date(r.dueAt).toISOString(), when: dateLabel(r.dueAt, tz, true), repeat: r.repeat ?? null })),
-      automatic: `Bills and renewals are reminded ${lead === 0 ? "on the day" : `${lead} day${lead === 1 ? "" : "s"} before`}${user.quietFrom ? `, outside quiet hours (${user.quietFrom}–${user.quietTo})` : ""}.`,
+      automatic: `Bills and renewals are reminded ${lead === 0 ? "on the day" : `${lead} day${lead === 1 ? "" : "s"} before`}${quietHoursOf(user) ? `, outside quiet hours (${user.quietFrom}–${user.quietTo})` : ", no quiet hours"}.`,
       deliveredTo: wantsTelegram(user) && (await telegramLinked(ctx, user._id)) ? "app and Telegram" : "app",
     };
   },

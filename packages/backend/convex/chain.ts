@@ -785,8 +785,26 @@ async function readVault(ctx: ActionCtx, pub: Pub, walletId: Id<"wallets">) {
           };
         }),
     );
+    // Each contact's record, so trust and activeAt come from the vault, not from our estimate (#101).
+    // The vault compares activeAt with its own block time, so read that too.
+    const chainNow = Number((await pub.getBlock()).timestamp);
+    const contacts = (
+      await Promise.all(
+        (w.payees as { _id: Id<"payees">; address: string }[]).map(async (p) => {
+          try {
+            const [payee, activeAt] = await pub.readContract({ ...vault, functionName: "contacts", args: [contactIdOf(p._id)] });
+            return { payeeId: p._id, payee: payee as string, activeAt: Number(activeAt) };
+          } catch {
+            // An unreadable record changes nothing.
+            return null;
+          }
+        }),
+      )
+    ).filter((c): c is { payeeId: Id<"payees">; payee: string; activeAt: number } => c !== null);
     await ctx.runMutation(internal.vault.onVaultState, {
       walletId,
+      contacts,
+      chainNow,
       vault: {
         version: w.version!,
         protectedMinor: fromTokenUnits(protectedAmount),

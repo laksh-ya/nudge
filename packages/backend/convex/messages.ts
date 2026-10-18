@@ -47,7 +47,8 @@ import {
   unitOf,
   wantsTelegram,
 } from "./lib/assist";
-import { DAY, MINUTE, dateLabel, inQuietHours, local, parseDeadline, parseRepeat, parseWhen, safeTz, whenWords, zoned } from "./lib/schedule";
+import { DAY, MINUTE, dateLabel, inQuietHours, local, parseDeadline, parseRepeat, parseWhen, quietHoursOf, safeTz, whenWords, zoned } from "./lib/schedule";
+import { approveBase } from "./lib/links";
 
 export const list = query({
   args: {},
@@ -125,7 +126,7 @@ async function say(turn: Turn, reply: string, extra: { taskId?: Id<"tasks">; sug
   });
   if (channel === "telegram") {
     const task = extra.taskId ? await ctx.db.get(extra.taskId) : null;
-    const base = process.env.APPROVE_URL ?? "https://nudge-approve.vercel.app";
+    const base = approveBase();
     await ctx.scheduler.runAfter(0, internal.telegram.send, {
       userId: user._id,
       text: reply,
@@ -529,7 +530,7 @@ async function onRemind(turn: Turn, pendingText?: string, pendingBill?: Id<"obli
   }
   await createReminder(ctx, user, { text: what, dueAt: when, repeat, obligationId: bill?._id });
   const where = wantsTelegram(user) && (await telegramLinked(ctx, user._id)) ? "here and on Telegram" : "here in the app";
-  const quiet = inQuietHours(when, tz, user.quietFrom ?? "22:00", user.quietTo ?? "08:00") ? " That's in your quiet hours, so it'll arrive when they end." : "";
+  const quiet = inQuietHours(when, tz, user.quietFrom, user.quietTo) ? " That's in your quiet hours, so it'll arrive when they end." : "";
   const billNote = bill ? ` ${bill.name} is ${money(bill.amountMinor, bill.currency)}, due ${whenWords(bill.nextDueAt, now, tz)}.` : "";
   const every = repeat ? ` and then every ${repeat === "monthly" ? "month" : "week"}` : "";
   return say(turn, `Done. I'll remind you to ${what.charAt(0).toLowerCase()}${what.slice(1)} on ${dateLabel(when, tz, true)}${every}, ${where}.${quiet}${billNote}`);
@@ -539,7 +540,7 @@ async function onReminders(turn: Turn, cancel: boolean) {
   const { ctx, user, tz } = turn;
   const rows = await ctx.db.query("reminders").withIndex("by_user", (q) => q.eq("userId", user._id).eq("status", "scheduled")).take(50);
   const lead = user.reminderLeadDays ?? 2;
-  const auto = `Bills and renewals are reminded ${lead === 0 ? "on the day" : `${lead} ${lead === 1 ? "day" : "days"} before`}, outside your quiet hours (${user.quietFrom ?? "22:00"}–${user.quietTo ?? "08:00"}).`;
+  const auto = `Bills and renewals are reminded ${lead === 0 ? "on the day" : `${lead} ${lead === 1 ? "day" : "days"} before`}, ${quietHoursOf(user) ? `, outside your quiet hours (${user.quietFrom}–${user.quietTo})` : ""}.`;
   if (cancel) {
     const t = normalize(turn.text);
     const hits = /\ball\b|\bevery\b/.test(t) ? rows : matchContacts(t, rows.map((r) => ({ ...r, name: r.text })));

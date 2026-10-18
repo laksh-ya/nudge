@@ -89,7 +89,7 @@ const STEPS: { n: number; title: string; body: string; art: DotArt; of: string; 
   { n: 2, title: "Big stuff waits for your nod.", body: "Over the limit, a new contact, or loosening any rule needs your passkey, signed over the exact amount and payee. Loosening then waits out a delay you can cancel.", art: "lock", of: "nudge", mood: "wink" },
   { n: 3, title: "A stolen key gets nowhere.", body: "The limits live in a contract on Base Sepolia, not just on our server. A key used behind our back is refused, and after five strikes the vault freezes it on its own.", art: "shield", of: "openclaw", mood: "grumpy" },
   { n: 4, title: "Someone you trust can hit pause.", body: "Add a guardian. They see held payments and can stop them or freeze everything. They can never pay, and never loosen a thing.", art: "pause", of: "hermes", mood: "watch" },
-  { n: 5, title: "Bring any AI.", body: "Paste one setup text into Claude, Instinct, Hermes or any MCP assistant. It connects itself, reads a guide written for agents, and can answer anything about your money from then on.", art: "plug", of: "chatgpt", mood: "happy" },
+  { n: 5, title: "Bring any AI.", body: "Paste one setup text into Claude, Instinct, Hermes or any MCP assistant. It connects itself, reads a guide written for agents, and can answer anything about your money from then on.", art: "plug", of: "instinct", mood: "happy" },
 ];
 
 const FEATURES: { icon: LucideIcon; title: string; body: string }[] = [
@@ -126,7 +126,7 @@ export function Landing() {
       <section className="relative mx-auto max-w-6xl px-5 pt-10 pb-16 text-center sm:pt-16">
         <Floater of="claude" mood="happy" size={92} look={[4, 2]} className="top-6 left-[1%] hidden rotate-[-12deg] lg:block" />
         <Floater of="hermes" mood="watch" size={84} className="top-16 right-[2%] hidden rotate-[10deg] lg:block" delay={0.8} />
-        <Floater of="chatgpt" mood="neutral" size={70} look={[5, -2]} className="top-[340px] left-[3%] hidden xl:block" delay={1.6} />
+        <Floater of="poke" mood="neutral" size={70} look={[5, -2]} className="top-[340px] left-[3%] hidden xl:block" delay={1.6} />
         <Floater of="openclaw" mood="grumpy" size={78} className="top-[320px] right-[4%] hidden rotate-[-8deg] xl:block" delay={0.4} />
 
         <div className="mb-5 flex items-end justify-center gap-2 lg:hidden" aria-hidden>
@@ -205,7 +205,7 @@ export function Landing() {
         <h2 className="text-[34px] leading-tight font-black tracking-[-0.045em] [font-stretch:110%] sm:text-[44px]">Every assistant gets a face.</h2>
         <p className="mx-auto mt-3 max-w-[50ch] text-[17px] text-ink-2">Its own key, its own limits, its own colour. One look tells you who&apos;s paying, who&apos;s waiting and who got caught.</p>
         <div className="mt-10 flex flex-wrap items-end justify-center gap-6 sm:gap-10">
-          {(["claude", "chatgpt", "nudge", "instinct", "hermes", "openclaw"] as const).map((k) => (
+          {(["claude", "poke", "nudge", "instinct", "hermes", "openclaw"] as const).map((k) => (
             <div key={k} className="flex flex-col items-center gap-2">
               <Character of={k} mood={k === "nudge" ? "wink" : "happy"} size={k === "nudge" ? 112 : 80} bob={k === "nudge"} />
               <span className="text-[14px] font-bold">{CAST[k]!.name}</span>

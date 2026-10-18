@@ -107,6 +107,16 @@ function minutesOf(s?: string | null) {
 }
 
 /**
+ * The owner's quiet hours, or null: one rule for every screen, the scheduler and MCP (#103). Unset,
+ * empty, malformed or an equal start and end all mean none.
+ */
+export function quietHoursOf(u: { quietFrom?: string | null; quietTo?: string | null }): { from: string; to: string } | null {
+  const f = minutesOf(u.quietFrom);
+  const t = minutesOf(u.quietTo);
+  return f === null || t === null || f === t ? null : { from: u.quietFrom!, to: u.quietTo! };
+}
+
+/**
  * Whether `at` falls in the owner's quiet hours. A window that crosses midnight (22:00 to 07:00)
  * wraps; an equal start and end, or a missing one, means no quiet hours.
  */

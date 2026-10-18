@@ -110,7 +110,7 @@ export default function SettingsPage() {
             sub="Pick the Claude model, or use your own API key"
             trailing={<span className="text-body text-ink-2">{u.ownModelKey ? `Your key ··${u.ownModelKey}` : MODEL_LABEL[u.assistantModel].split(" (")[0]}</span>}
           />
-          <Row onClick={() => setEditing("assistant")} leading={<IconTile icon={Bell} tone="page" />} title="Reminders" trailing={<span className="text-body text-ink-2">{u.reminderChannel === "app" ? "App" : "App and Telegram"}{u.quietFrom ? ` · quiet ${u.quietFrom}–${u.quietTo}` : ""}</span>} />
+          <Row onClick={() => setEditing("assistant")} leading={<IconTile icon={Bell} tone="page" />} title="Reminders" trailing={<span className="text-body text-ink-2">{u.reminderChannel === "app" ? "App" : "App and Telegram"}{u.quietFrom && u.quietTo && u.quietFrom !== u.quietTo ? ` · quiet ${u.quietFrom}–${u.quietTo}` : ""}</span>} />
           <Row href="/agents" leading={<IconTile icon={Bot} tone="page" />} title="Connected assistants" trailing={<span className="text-body text-ink-2">{state.agents.length}</span>} />
         </Divided>
       </Card>

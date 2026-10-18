@@ -489,6 +489,13 @@ export default defineSchema({
     title: v.string(),
     channel,
     agentId: v.optional(v.id("agents")),
+    /**
+     * Lets the owner's own copy of the approval link (Telegram) decline without signing in. Agents get
+     * the bare link, which can only show the request (#106).
+     */
+    declineKey: v.optional(v.string()),
+    /** An assistant asked and the owner approved it: counts toward that assistant's usage (#105). */
+    approvedByOwner: v.optional(v.boolean()),
     payeeId: v.optional(v.id("payees")),
     amountMinor: v.optional(v.number()),
     currency: v.optional(currency),

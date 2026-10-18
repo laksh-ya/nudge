@@ -144,6 +144,12 @@ export const send = internalAction({
       console.warn("telegram.send: no linked chat", userId);
       return { ok: false, reason: "no linked chat", retryAfter: undefined, unknown: false };
     }
+    // This chat is the owner's, so its copy of an approval link may also decline (#106).
+    const linkToken = approvalUrl?.match(/\/a\/([A-Za-z0-9]{16,})$/)?.[1];
+    if (approvalUrl && linkToken) {
+      const key = await ctx.runMutation(internal.approvals.ownerLinkKey, { token: linkToken });
+      if (key) approvalUrl = `${approvalUrl}?k=${key}`;
+    }
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "content-type": "application/json" },

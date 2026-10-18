@@ -1,5 +1,5 @@
 import { v, ConvexError } from "convex/values";
-import { isVaultVersion } from "@agent-wallet/domain";
+import { Op, isVaultVersion } from "@agent-wallet/domain";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { unfreezeTask } from "./lib/actions";
 import { freezeAgent, freezeAll as freezeAll_ } from "./lib/control";
@@ -17,6 +17,14 @@ export const list = query({
       .filter((a) => a.status !== "revoked")
       .map(({ tokenHash, ...a }) => ({
         ...a,
+        // Shown usage includes payments it asked for that you approved (#105), as its limits count them.
+        spentTodayMinor:
+          a.spentTodayMinor +
+          (a.provider === "own"
+            ? 0
+            : recent
+                .filter((t) => t.agentId === a._id && t._creationTime > Date.now() - 86_400_000 && (t.approvedByOwner || t.action?.op === Op.Pay) && ["reserved", "submitted", "unknown", "queued", "held", "confirmed"].includes(t.state))
+                .reduce((s, t) => s + (t.amountMinor ?? 0), 0)),
         hasKey: Boolean(tokenHash),
         // Its last few payments and requests, for the card.
         recent: recent

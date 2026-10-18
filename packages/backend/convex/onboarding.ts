@@ -194,6 +194,7 @@ export const saveAssistant = mutation({
     const hhmm = (s: string) => s === "" || /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(s);
     if (!hhmm(args.quietFrom) || !hhmm(args.quietTo)) throw new ConvexError("Use HH:MM, or leave quiet hours off");
     if ((args.quietFrom === "") !== (args.quietTo === "")) throw new ConvexError("Set both quiet-hours times, or turn quiet hours off");
+    if (args.quietFrom !== "" && args.quietFrom === args.quietTo) throw new ConvexError("Quiet hours need different start and end times, or turn them off");
     if (!Number.isInteger(args.reminderLeadDays) || args.reminderLeadDays < 0 || args.reminderLeadDays > 14) throw new ConvexError("Pick 0 to 14 days");
     const { assistantModel, ...rest } = args;
     await ctx.db.patch(user._id, { ...rest, ...(assistantModel ? { assistantModel: assistantModel === "auto" ? undefined : assistantModel } : {}) });

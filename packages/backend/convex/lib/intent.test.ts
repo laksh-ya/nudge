@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { amounts, classify, isHedge, isYes, matchCategory, matchContacts, parsePeriod, pickAmount, reasonOf, splitCorrection } from "./intent";
-import { afterQuietHours, daysUntil, inQuietHours, local, nextRepeat, parseDeadline, parseWhen, whenWords } from "./schedule";
+import { afterQuietHours, daysUntil, inQuietHours, local, nextRepeat, parseDeadline, parseWhen, quietHoursOf, whenWords } from "./schedule";
 import { reminderWhat } from "./assist";
 
 // The basic assistant (no model key, as on prod) reading ordinary messages. Issue #17 and audit U25/U26.
@@ -215,6 +215,14 @@ describe("quiet hours", () => {
     expect(inQuietHours(ist(14), tz, "13:00", "14:00")).toBe(false);
     expect(inQuietHours(ist(13), tz, "08:00", "08:00")).toBe(false);
     expect(inQuietHours(ist(13), tz, "nonsense", "08:00")).toBe(false);
+  });
+  it("one rule for what counts as quiet hours, shown and enforced alike (#103)", () => {
+    expect(quietHoursOf({ quietFrom: "22:00", quietTo: "07:00" })).toEqual({ from: "22:00", to: "07:00" });
+    expect(quietHoursOf({ quietFrom: "08:00", quietTo: "08:00" })).toBeNull();
+    expect(quietHoursOf({ quietFrom: "", quietTo: "" })).toBeNull();
+    expect(quietHoursOf({})).toBeNull();
+    // Never set means none, here and in the scheduler (no hidden 22:00–08:00 default).
+    expect(inQuietHours(ist(23), tz, undefined, undefined)).toBe(false);
   });
   it("uses the owner's zone, not the server's", () => {
     // 23:00 in Bengaluru is 17:30 UTC and 13:30 in New York.

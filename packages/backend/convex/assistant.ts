@@ -13,6 +13,7 @@ import { open } from "./lib/secrets";
 import { createReminder, findGoal, goalLine, matchBill, saveGoal, spendingSentence, spendingSummary } from "./lib/assist";
 import { dateLabel, parseDeadline, parseRepeat, parseWhen, safeTz } from "./lib/schedule";
 import { toMinor } from "@agent-wallet/domain";
+import { approveBase } from "./lib/links";
 
 /**
  * The app's own assistant, backed by Claude. It has exactly the tools an outside assistant has over
@@ -152,7 +153,7 @@ export const say = internalMutation({
     await ctx.db.insert("messages", { userId, role: "assistant", text, channel, taskId, mode, fallback });
     if (channel === "telegram") {
       const task = taskId ? await ctx.db.get(taskId) : null;
-      const base = process.env.APPROVE_URL ?? "https://nudge-approve.vercel.app";
+      const base = approveBase();
       await ctx.scheduler.runAfter(0, internal.telegram.send, { userId, text, approvalUrl: task?.approvalToken ? `${base}/a/${task.approvalToken}` : undefined });
     }
   },

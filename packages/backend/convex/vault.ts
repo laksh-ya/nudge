@@ -412,9 +412,12 @@ export const walletForChain = internalQuery({
     const w = await ctx.db.get(walletId);
     if (!w) return null;
     const agents = await ctx.db.query("agents").withIndex("by_user", (q) => q.eq("userId", w.userId)).take(50);
+    const payees = await ctx.db.query("payees").withIndex("by_user", (q) => q.eq("userId", w.userId)).take(100);
     return {
       ...w,
       agents: agents.map((a) => ({ _id: a._id, chainAddress: a.chainAddress })),
+      // Contacts the vault could hold: the sync reads each one's record back (#101).
+      payees: payees.filter((p) => p.address).map((p) => ({ _id: p._id, address: p.address! })),
       spendingAgents: agents.filter((a) => a.status === "active" && a.scopes.includes("spend") && !a.chainAddress).map((a) => a._id),
     };
   },
@@ -638,6 +641,9 @@ async function applyEffects(ctx: MutationCtx, t: Doc<"tasks">) {
     // A contact the owner added waits out the vault's own period from now before agents can pay it.
     const wait = p.pendingPasskey ? { trusted: true, pendingPasskey: undefined, activeAt: Date.now() + (w?.vault?.contactDelay ?? DEFAULT_RULES.contactDelay) * 1000 } : {};
     await ctx.db.patch(id, { onchain: true, ...wait });
+    // The sync after this transaction replaces the estimate with the vault's own activeAt; read once
+    // more when the wait ends, so the contact shows as payable on time (#101).
+    if (w && "activeAt" in wait && wait.activeAt) await ctx.scheduler.runAt(wait.activeAt + 5_000, internal.chain.syncVault, { walletId: w._id });
   }
   if (e.contactCap && (await ctx.db.get(e.contactCap.payeeId))) await ctx.db.patch(e.contactCap.payeeId, { dailyCapMinor: e.contactCap.dailyCapMinor || undefined });
   if (e.grant) {
@@ -852,8 +858,31 @@ export const onVaultState = internalMutation({
         spentMinor: v.number(),
       }),
     ),
+    /** Each contact's record in the vault: who it pays and from when (seconds; 0 when absent). */
+    contacts: v.optional(v.array(v.object({ payeeId: v.id("payees"), payee: v.string(), activeAt: v.number() }))),
+    /** The vault's clock (latest block time, seconds), which contact activeAt is compared with. */
+    chainNow: v.optional(v.number()),
   },
-  handler: async (ctx, { walletId, vault, agents }) => {
+  handler: async (ctx, { walletId, vault, agents, contacts, chainNow }) => {
+    const w = await ctx.db.get(walletId);
+    // The vault's contact list is the truth (#101): only the owner's passkey can add to it, so a record
+    // paying this exact address makes the contact trusted from the vault's own activeAt (an immediate
+    // re-add included). No record, or one for another address, means agents can't pay it.
+    for (const c of contacts ?? []) {
+      const p = await ctx.db.get(c.payeeId);
+      if (!p || !w || p.userId !== w.userId || !p.address) continue;
+      const inVault = c.activeAt > 0 && c.payee.toLowerCase() === p.address.toLowerCase();
+      if (inVault) {
+        // What's left of the wait on the vault's clock, mapped onto ours (chain time can drift).
+        const left = Math.max(0, c.activeAt - (chainNow ?? Math.floor(Date.now() / 1000)));
+        const activeAt = left > 0 ? Date.now() + left * 1000 : Math.min(c.activeAt * 1000, Date.now());
+        const was = p.activeAt ?? 0;
+        const changed = !p.onchain || !p.trusted || p.pendingPasskey || (was > Date.now()) !== (activeAt > Date.now()) || Math.abs(was - activeAt) > 60_000;
+        if (changed) await ctx.db.patch(p._id, { onchain: true, trusted: true, pendingPasskey: undefined, activeAt, holdUntil: undefined });
+      } else if (p.onchain) {
+        await ctx.db.patch(p._id, { onchain: false, trusted: false, activeAt: undefined });
+      }
+    }
     await ctx.db.patch(walletId, { vault, balanceMinor: vault.balanceMinor, frozen: vault.frozen });
     for (const { agentId, ...a } of agents) {
       const agent = await ctx.db.get(agentId);

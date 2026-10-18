@@ -1,5 +1,5 @@
 import { v, ConvexError } from "convex/values";
-import { formatMoney, isVaultVersion } from "@agent-wallet/domain";
+import { Op, formatMoney, isVaultVersion } from "@agent-wallet/domain";
 import { internalMutation, internalQuery, mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -15,6 +15,7 @@ import { agentPool, laneOf } from "./lib/relayer";
 import { tryHit } from "./lib/limits";
 import { toolsFor } from "./lib/mcp";
 import { purchaseView } from "./lib/commerce";
+import { approveLink } from "./lib/links";
 import { getAddress, isAddress, zeroAddress } from "viem";
 
 /**
@@ -146,7 +147,7 @@ function need(_agent: Agent, _scope: Agent["scopes"][number]) {}
 
 /** The approval page for a token. Handed to the owner and, since 18 Oct, to the asking assistant too: the link only shows the request; approving needs the owner's passkey (or their signed-in session on a simulated wallet). */
 export function approveUrl(token: string) {
-  return `${process.env.APPROVE_URL ?? "https://nudge-approve.vercel.app"}/a/${token}`;
+  return approveLink(token);
 }
 
 /**
@@ -171,12 +172,21 @@ export const myLimits = internalQuery({
       payOnYourOwn: spend && perPayment > 0,
       perPaymentLimit: usd(perPayment),
       dailyLimit: usd(dailyCap),
-      leftToday: usd(Math.max(0, dailyCap - agent.spentTodayMinor)),
+      // Includes payments it asked for that the owner approved (#105), as the gateway counts them.
+      leftToday: usd(Math.max(0, dailyCap - agent.spentTodayMinor - (agent.provider === "own" ? 0 : await approvedForAgent(ctx, user._id, agent._id)))),
       holdAbove: holdAbove === null ? null : usd(holdAbove),
       balancesHidden: agent.hidesBalances,
       walletFrozen: Boolean(wallet?.frozen || wallet?.vault?.frozen),
       walletOnChain: live,
       accessExpiresAt: new Date(agent.expiresAt).toISOString(),
+      // On a live vault the grant has its own expiry, set when the owner signed it (#104). Paying alone
+      // stops at the earlier of the two; say which.
+      ...(live && agent.vault?.active
+        ? {
+            vaultGrantExpiresAt: new Date(agent.vault.expiresAt).toISOString(),
+            payAloneUntil: new Date(Math.min(agent.expiresAt, agent.vault.expiresAt)).toISOString(),
+          }
+        : {}),
       tools: toolsFor().map((t) => t.name),
       note:
         spend && perPayment > 0
@@ -328,14 +338,33 @@ async function paymentsInFlight(ctx: QueryCtx, userId: Id<"users">) {
   return rows.flat().filter((t) => t.rail === "base-sepolia" && t.agentId && t.action === undefined);
 }
 
-/** What agents sent this contact in the last 24 hours, counting payments still on their way. */
-async function agentPaidTo(ctx: QueryCtx, payeeId: Id<"payees">) {
-  const counted = new Set(["reserved", "submitted", "unknown", "held", "confirmed"]);
+const COUNTED = new Set(["reserved", "submitted", "unknown", "queued", "held", "confirmed"]);
+
+/** An assistant asked for it and the owner approved it with the passkey (or, simulated, in the app). */
+const ownerApproved = (t: Doc<"tasks">) => Boolean(t.approvedByOwner || t.action?.op === Op.Pay);
+
+/**
+ * What agents sent this contact in the last 24 hours, counting payments still on their way and
+ * payments an agent asked for that the owner approved (#105). The owner's own assistant (chat)
+ * is the owner, so its payments don't count against the assistants.
+ */
+async function agentPaidTo(ctx: QueryCtx, payeeId: Id<"payees">, ownAgents: Set<string>) {
   const recent = await ctx.db
     .query("tasks")
     .withIndex("by_payee", (q) => q.eq("payeeId", payeeId).gt("_creationTime", Date.now() - 24 * 3600_000))
     .take(500);
-  return recent.filter((t) => t.agentId && t.action === undefined && t.rail !== "handoff" && counted.has(t.state)).reduce((s, t) => s + (t.amountMinor ?? 0), 0);
+  return recent
+    .filter((t) => t.agentId && !ownAgents.has(t.agentId) && t.rail !== "handoff" && COUNTED.has(t.state) && (t.action === undefined || ownerApproved(t)))
+    .reduce((s, t) => s + (t.amountMinor ?? 0), 0);
+}
+
+/** Payments this agent asked for in the last 24 hours that the owner approved: the vault doesn't count them, we do (#105). */
+export async function approvedForAgent(ctx: QueryCtx, userId: Id<"users">, agentId: Id<"agents">) {
+  const since = Date.now() - 24 * 3600_000;
+  const rows = await ctx.db.query("tasks").withIndex("by_user_updated", (q) => q.eq("userId", userId).gt("updatedAt", since)).take(300);
+  return rows
+    .filter((t) => t.agentId === agentId && t._creationTime > since && COUNTED.has(t.state) && ownerApproved(t))
+    .reduce((s, t) => s + (t.amountMinor ?? 0), 0);
 }
 
 type Decision =
@@ -463,7 +492,9 @@ export async function propose(ctx: MutationCtx, { agentId, contactId, toAddress,
     const inFlight = vault ? await paymentsInFlight(ctx, user._id) : [];
     const pendingAll = inFlight.reduce((s, t) => s + (t.amountMinor ?? 0), 0);
     const pendingAgent = inFlight.filter((t) => t.agentId === agent._id).reduce((s, t) => s + (t.amountMinor ?? 0), 0);
-    const agentSpent = agent.spentTodayMinor + pendingAgent;
+    // Owner-approved payments it asked for count too (#105); only ever stricter than the vault.
+    const approvedAgent = agent.provider === "own" ? 0 : await approvedForAgent(ctx, user._id, agent._id);
+    const agentSpent = agent.spentTodayMinor + pendingAgent + approvedAgent;
     const spentToday = (vault ? vault.spentMinor : agents.reduce((s, a) => s + a.spentTodayMinor, 0)) + pendingAll;
     const ceiling = Math.min(wallet.dailyCeilingMinor, vault?.ceilingMinor ?? Infinity);
     const protectedMinor = Math.max(wallet.protectedMinor, vault?.protectedMinor ?? 0);
@@ -483,10 +514,14 @@ export async function propose(ctx: MutationCtx, { agentId, contactId, toAddress,
           ? `${payee.name} is saved, but agents may pay it on their own only from ${whenText(until, user.timezone)} (your vault's ${durationText(wallet.vault?.contactDelay ?? wallet.rules?.contactDelay ?? 0)} wait for new contacts)`
           : `${payee.name} is a new payee, not a trusted contact`;
       blockers.push({ code: "2006", why });
+      // Our copy may be behind the vault (an immediate re-add, an add made elsewhere): read it again (#101).
+      if (wallet.status === "live" && wallet.vault && Date.now() - wallet.vault.syncedAt > 120_000) {
+        await ctx.scheduler.runAfter(0, internal.chain.syncVault, { walletId: wallet._id });
+      }
     }
     if (agent.allowedPayees?.length && !agent.allowedPayees.includes(payee._id)) blockers.push({ code: "2016", why: `${payee.name} isn't on ${agent.name}'s list of who it may pay alone` });
     if (payee.dailyCapMinor) {
-      const toPayee = await agentPaidTo(ctx, payee._id);
+      const toPayee = await agentPaidTo(ctx, payee._id, new Set(agents.filter((a) => a.provider === "own").map((a) => a._id as string)));
       if (toPayee + minor > payee.dailyCapMinor) blockers.push({ code: "2012", why: `Above ${payee.name}'s ${formatMoney(payee.dailyCapMinor, "USDC")} daily limit for all agents` });
     }
 

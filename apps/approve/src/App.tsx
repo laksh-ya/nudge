@@ -265,6 +265,8 @@ function Approve({ token }: { token: string }) {
   const [error, setError] = useState<string>();
   // A first payment to an address not in the vault signs only after the owner says they checked it.
   const [checked, setChecked] = useState(false);
+  // Only the owner's copy of the link (Telegram) carries the key that lets this page decline (#106).
+  const declineKey = useMemo(() => new URLSearchParams(window.location.search).get("k") ?? undefined, []);
 
   // The digest is computed here from the exact bytes; the server never supplies the challenge.
   const signed = useMemo(() => {
@@ -320,7 +322,7 @@ function Approve({ token }: { token: string }) {
     setBusy(true);
     setError(undefined);
     try {
-      await decline({ token });
+      await decline({ token, key: declineKey });
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -603,13 +605,22 @@ function Approve({ token }: { token: string }) {
             // No passkey step on this rail, so this link alone must not approve: the signed-in app does.
             // Declining only stops the request, so the link may do that.
             <div className="grid grid-cols-[1fr_2fr] gap-2">
-              <button
-                disabled={busy}
-                onClick={reject}
-                className="press flex h-12 items-center justify-center gap-1.5 rounded-[10px] border border-line text-title font-semibold text-ink-2 disabled:opacity-60"
-              >
-                <X className="size-4" /> Decline
-              </button>
+              {declineKey ? (
+                <button
+                  disabled={busy}
+                  onClick={reject}
+                  className="press flex h-12 items-center justify-center gap-1.5 rounded-[10px] border border-line text-title font-semibold text-ink-2 disabled:opacity-60"
+                >
+                  <X className="size-4" /> Decline
+                </button>
+              ) : (
+                <a
+                  href={WEB_URL}
+                  className="press flex h-12 items-center justify-center gap-1.5 rounded-[10px] border border-line text-center text-label font-semibold text-ink-2"
+                >
+                  <X className="size-4 shrink-0" /> Decline in app
+                </a>
+              )}
               <a
                 href={WEB_URL}
                 className="press flex h-12 items-center justify-center gap-2 rounded-[10px] bg-navy text-title font-semibold text-white"
@@ -619,13 +630,22 @@ function Approve({ token }: { token: string }) {
             </div>
           ) : open ? (
             <div className="grid grid-cols-[1fr_2fr] gap-2">
-              <button
-                disabled={busy}
-                onClick={reject}
-                className="press flex h-12 items-center justify-center gap-1.5 rounded-[10px] border border-line text-title font-semibold text-ink-2 disabled:opacity-60"
-              >
-                <X className="size-4" /> Decline
-              </button>
+              {declineKey ? (
+                <button
+                  disabled={busy}
+                  onClick={reject}
+                  className="press flex h-12 items-center justify-center gap-1.5 rounded-[10px] border border-line text-title font-semibold text-ink-2 disabled:opacity-60"
+                >
+                  <X className="size-4" /> Decline
+                </button>
+              ) : (
+                <a
+                  href={WEB_URL}
+                  className="press flex h-12 items-center justify-center gap-1.5 rounded-[10px] border border-line text-center text-label font-semibold text-ink-2"
+                >
+                  <X className="size-4 shrink-0" /> Decline in app
+                </a>
+              )}
               <button
                 disabled={busy || blocked || !passkeysSupported()}
                 onClick={approve}

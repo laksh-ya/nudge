@@ -230,16 +230,21 @@ describe("declining from the approval page", () => {
     const second = await f.t.mutation(internal.gateway.proposePayment, { agentId: f.chatgpt, contactId: f.payee, amount: 40, reason: "second" });
     const a = (await f.t.run((ctx) => ctx.db.get((first as { taskId: Id<"tasks"> }).taskId)))!;
     const b = (await f.t.run((ctx) => ctx.db.get((second as { taskId: Id<"tasks"> }).taskId)))!;
-    await f.t.mutation(api.approvals.decline, { token: a.approvalToken! });
+    const key = (await f.t.mutation(internal.approvals.ownerLinkKey, { token: a.approvalToken! }))!;
+    await f.t.mutation(api.approvals.decline, { token: a.approvalToken!, key });
     expect((await f.t.run((ctx) => ctx.db.get(a._id)))!.state).toBe("cancelled");
     expect((await f.t.run((ctx) => ctx.db.get(b._id)))!.state).toBe("awaiting_approval");
   });
-  it("cancels with the link alone and is idempotent", async () => {
+  it("the agent's bare link can't decline; the owner's copy (Telegram) can, once (#106)", async () => {
     const f = await fixture();
     const asked = await f.t.mutation(internal.gateway.proposePayment, { agentId: f.claude, contactId: f.payee, amount: 30, reason: "too big" });
     const task = (await f.t.run((ctx) => ctx.db.get((asked as { taskId: Id<"tasks"> }).taskId)))!;
-    expect(await f.t.mutation(api.approvals.decline, { token: task.approvalToken! })).toBe("cancelled");
-    expect(await f.t.mutation(api.approvals.decline, { token: task.approvalToken! })).toBe("cancelled");
+    await expect(f.t.mutation(api.approvals.decline, { token: task.approvalToken! })).rejects.toThrow(/Decline from your Nudge app/);
+    const key = (await f.t.mutation(internal.approvals.ownerLinkKey, { token: task.approvalToken! }))!;
+    await expect(f.t.mutation(api.approvals.decline, { token: task.approvalToken!, key: "0".repeat(36) })).rejects.toThrow(/Decline from your Nudge app/);
+    expect((await f.t.run((ctx) => ctx.db.get(task._id)))!.state).toBe("awaiting_approval");
+    expect(await f.t.mutation(api.approvals.decline, { token: task.approvalToken!, key })).toBe("cancelled");
+    expect(await f.t.mutation(api.approvals.decline, { token: task.approvalToken!, key })).toBe("cancelled");
     await expect(f.t.mutation(api.approvals.decline, { token: "x".repeat(24) })).rejects.toThrow(/no longer valid/);
   });
 });
