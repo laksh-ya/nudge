@@ -402,7 +402,7 @@ export const proposePayment = internalMutation({
  * The payee for an address the assistant names: a saved contact with that address, or a new,
  * untrusted one. An untrusted payee is never paid without the owner's passkey.
  */
-export async function payeeForAddress(ctx: MutationCtx, user: Doc<"users">, raw: string, name: string | undefined, kind: "person" | "merchant" = "person") {
+export async function payeeForAddress(ctx: MutationCtx, user: Doc<"users">, raw: string, name: string | undefined, kind: "person" | "merchant" = "person", host?: string) {
   if (!isAddress(raw.trim(), { strict: false })) return null;
   const address = getAddress(raw.trim());
   if (address === zeroAddress) return null;
@@ -421,6 +421,7 @@ export async function payeeForAddress(ctx: MutationCtx, user: Doc<"users">, raw:
     address,
     onchain: false,
     addedAt: Date.now(),
+    ...(host ? { host } : {}),
     ...(wallet?.status === "live" ? { pendingPasskey: true } : {}),
   });
   return (await ctx.db.get(id))!;
@@ -430,7 +431,7 @@ export async function payeeForAddress(ctx: MutationCtx, user: Doc<"users">, raw:
  * Pay inside the limits, ask the owner, or refuse. `quiet` skips the chat note for callers that
  * reply in the conversation themselves.
  */
-export async function propose(ctx: MutationCtx, { agentId, contactId, toAddress, name, amount, reason, requestId }: Proposal, opts: { quiet?: boolean; channel?: "mcp" | "app" | "telegram"; kind?: "person" | "merchant" } = {}): Promise<Decision> {
+export async function propose(ctx: MutationCtx, { agentId, contactId, toAddress, name, amount, reason, requestId }: Proposal, opts: { quiet?: boolean; channel?: "mcp" | "app" | "telegram"; kind?: "person" | "merchant"; host?: string; askOwner?: string } = {}): Promise<Decision> {
     const record = opts.quiet ? async () => {} : recordNote;
     const channel = opts.channel ?? "mcp";
     const { agent, user } = await load(ctx, agentId);
@@ -468,7 +469,7 @@ export async function propose(ctx: MutationCtx, { agentId, contactId, toAddress,
     // $0.004 would round to nothing, pass every check and then be refused on-chain as a strike.
     if (minor < 1 || Math.abs(amount * 100 - minor) > 1e-6) return { outcome: "refused", code: "2003", reason: "Amounts are whole cents, at least $0.01" };
     const payeeId = contactId ? ctx.db.normalizeId("payees", contactId) : null;
-    const payee = contactId ? (payeeId ? await ctx.db.get(payeeId) : null) : await payeeForAddress(ctx, user, toAddress!, name, opts.kind);
+    const payee = contactId ? (payeeId ? await ctx.db.get(payeeId) : null) : await payeeForAddress(ctx, user, toAddress!, name, opts.kind, opts.host);
     if (!payee || payee.userId !== user._id) {
       await ctx.db.insert("activity", { userId: user._id, kind: "agent", title: `${agent.name} tried an unknown contact id`, detail: "Refused: not in your contacts", tone: "warn" });
       return { outcome: "refused", code: "2010", reason: "Unknown contactId. Use list_contacts, or pay by toAddress with a name." };
@@ -519,6 +520,8 @@ export async function propose(ctx: MutationCtx, { agentId, contactId, toAddress,
         await ctx.scheduler.runAfter(0, internal.chain.syncVault, { walletId: wallet._id });
       }
     }
+    // A caller's own reason to put this in front of the owner (an x402 site that changed its address, #107).
+    if (opts.askOwner) blockers.push({ code: "2017", why: opts.askOwner });
     if (agent.allowedPayees?.length && !agent.allowedPayees.includes(payee._id)) blockers.push({ code: "2016", why: `${payee.name} isn't on ${agent.name}'s list of who it may pay alone` });
     if (payee.dailyCapMinor) {
       const toPayee = await agentPaidTo(ctx, payee._id, new Set(agents.filter((a) => a.provider === "own").map((a) => a._id as string)));
@@ -615,7 +618,8 @@ export async function propose(ctx: MutationCtx, { agentId, contactId, toAddress,
       });
       await record(ctx, user, agent, `${agent.name} asked to pay ${payee.name} ${formatMoney(minor, "USDC")}. ${blockers[0]!.why}, so it needs your passkey.`, taskId);
       if (agent.provider !== "own") {
-        await notify(ctx, user._id, `${agent.name} asks to pay ${payee.name} ${formatMoney(minor, "USDC")}. ${blockers[0]!.why}, so it needs your passkey.`, approveUrl(token));
+        // One link, one channel (#95): the asking assistant hands over the link; Telegram only says so.
+        await notify(ctx, user._id, `${agent.name} asks to pay ${payee.name} ${formatMoney(minor, "USDC")}. ${blockers[0]!.why}, so it needs your passkey. ${agent.name} has the approval link for you; it's also on your Nudge Home screen.`);
       }
       // Paying an address the vault hasn't saved waits the vault's change delay after the passkey;
       // say so, so the assistant doesn't promise an instant payment or invent a different wait (#89).
@@ -643,7 +647,7 @@ export async function propose(ctx: MutationCtx, { agentId, contactId, toAddress,
     });
     await record(ctx, user, agent, `${agent.name} asked to pay ${payee.name} ${formatMoney(minor, "USDC")}. ${blockers[0]!.why}, so it needs you.`, taskId);
     if (agent.provider !== "own") {
-      await notify(ctx, user._id, `${agent.name} asks to pay ${payee.name} ${formatMoney(minor, "USDC")}. ${blockers[0]!.why}, so it needs you.`, approveUrl(token));
+      await notify(ctx, user._id, `${agent.name} asks to pay ${payee.name} ${formatMoney(minor, "USDC")}. ${blockers[0]!.why}, so it needs you. ${agent.name} has the approval link for you; it's also on your Nudge Home screen.`);
     }
     return { outcome: "needs_approval", taskId, approvalUrl: approveUrl(token), reason: blockers.map((b) => b.why).join(". "), message: `Needs ${user.name || "the user"}'s approval: ${blockers[0]!.why}. Give them the approvalUrl; then check get_task_status.` };
   }

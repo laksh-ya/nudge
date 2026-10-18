@@ -162,7 +162,7 @@ async function callTool(ctx: ActionCtx, agentId: Id<"agents">, name: string, arg
         why: str("why"),
       });
     case "pay_x402":
-      return await ctx.runAction(internal.commerce.payX402, { agentId, url: str("url"), maxPrice: num("maxPrice"), requestId: opt("requestId") });
+      return await ctx.runAction(internal.commerce.payX402, { agentId, url: str("url"), maxPrice: num("maxPrice"), requestId: opt("requestId"), payTo: opt("payTo") });
     case "watch_price":
       return await ctx.runMutation(internal.commerce.watchPrice, { agentId, url: str("url"), item: str("item"), maxPrice: num("maxPrice"), days: args.days === undefined ? undefined : num("days") });
     case "list_watches":

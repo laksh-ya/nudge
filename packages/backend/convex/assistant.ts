@@ -14,6 +14,7 @@ import { createReminder, findGoal, goalLine, matchBill, saveGoal, spendingSenten
 import { dateLabel, parseDeadline, parseRepeat, parseWhen, safeTz } from "./lib/schedule";
 import { toMinor } from "@agent-wallet/domain";
 import { approveBase } from "./lib/links";
+import { NvidiaError, isNvidiaKey, nvidiaChat } from "./lib/nvidia";
 
 /**
  * The app's own assistant, backed by Claude. It has exactly the tools an outside assistant has over
@@ -28,6 +29,7 @@ const MODEL = "claude-opus-5-5";
 const SANDBOX_MODEL = "claude-sonnet-5-5";
 /** Models the owner can pick in Settings → Assistant ("basic" means rules only, no model). */
 export const MODELS = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"] as const;
+/** "nvidia" runs the assistant on an NVIDIA-hosted model (lib/nvidia.ts) with the owner's nvapi- key or NVIDIA_API_KEY. */
 const MAX_STEPS = 8;
 
 const SYSTEM = `You are Nudge, the assistant inside a personal-finance app with a wallet AI assistants can pay from. You act for one person, the owner, who is talking to you now.
@@ -308,13 +310,19 @@ export const respond = internalAction({
         ownKey = null;
       }
     }
-    const basic = c.model === "basic" ? "owner_chose_basic" : !ownKey && !process.env.ANTHROPIC_API_KEY ? "missing_key" : !c.ownAgentId ? "no_own_agent" : !useModel && !ownKey ? "quota" : null;
+    // Which provider answers: NVIDIA when chosen (or when the owner's own key is an NVIDIA key), else Claude.
+    const nvidia = c.model === "nvidia" || Boolean(ownKey && isNvidiaKey(ownKey));
+    const nvidiaKey = ownKey && isNvidiaKey(ownKey) ? ownKey : (process.env.NVIDIA_API_KEY ?? null);
+    const anthropicKey = ownKey && !isNvidiaKey(ownKey) ? ownKey : null;
+    const ownsKey = nvidia ? Boolean(ownKey && isNvidiaKey(ownKey)) : Boolean(anthropicKey);
+    const haveKey = nvidia ? Boolean(nvidiaKey) : Boolean(anthropicKey || process.env.ANTHROPIC_API_KEY);
+    const basic = c.model === "basic" ? "owner_chose_basic" : !haveKey ? "missing_key" : !c.ownAgentId ? "no_own_agent" : !useModel && !ownsKey ? "quota" : null;
     if (basic || !c.ownAgentId) {
       console.info("assistant: basic mode", { userId, reason: basic });
       await ctx.runMutation(internal.messages.reply, { userId, text, channel, fallback: basic ?? "no_own_agent" });
       return;
     }
-    const client = ownKey ? new Anthropic({ apiKey: ownKey }) : new Anthropic();
+    const client = anthropicKey ? new Anthropic({ apiKey: anthropicKey }) : new Anthropic();
     // Prior turns as plain text; the newest user message is already the last entry.
     const messages: Anthropic.Beta.BetaMessageParam[] = [];
     for (const m of c.history) {
@@ -331,8 +339,31 @@ export const respond = internalAction({
     let reply = "";
     /** Set once a tool that changes something has run; after that, a failure must not re-run the request. */
     let acted = false;
+    const system = `${SYSTEM}\n\nThe owner is ${c.name || "the user"}; their home currency is ${c.currency}.`;
+    const ownAgentId = c.ownAgentId;
     try {
-      for (let step = 0; step < MAX_STEPS; step++) {
+      if (nvidia) {
+        // Same read-only tools, same grounding check below; only the model differs.
+        reply = await nvidiaChat({
+          apiKey: nvidiaKey!,
+          system,
+          history: c.history.length ? c.history : [{ role: "user", text }],
+          tools: tools.filter((t) => readTools.has(t.name)) as { name: string; description?: string; input_schema: unknown }[],
+          maxSteps: MAX_STEPS,
+          runTool: async (name, input) => {
+            try {
+              if (!readTools.has(name)) throw new ConvexError("Use the owner's explicit instruction in chat; this model can only read.");
+              const out = (await runTool(ctx, userId, ownAgentId, name, input)) as Record<string, unknown> | null;
+              if (out && typeof out === "object" && typeof out.taskId === "string") taskId = out.taskId as Id<"tasks">;
+              provenance.push(JSON.stringify(out));
+              return { content: JSON.stringify(out), isError: false };
+            } catch (e) {
+              return { content: errorText(e, 300), isError: true };
+            }
+          },
+        });
+      }
+      for (let step = 0; !nvidia && step < MAX_STEPS; step++) {
         const response = await client.beta.messages.create({
           model: c.model && (MODELS as readonly string[]).includes(c.model) ? c.model : c.sandbox ? SANDBOX_MODEL : MODEL,
           max_tokens: 4000,
@@ -340,7 +371,7 @@ export const respond = internalAction({
           fallbacks: "default",
           output_config: { effort: "medium" },
           cache_control: { type: "ephemeral" },
-          system: `${SYSTEM}\n\nThe owner is ${c.name || "the user"}; their home currency is ${c.currency}.`,
+          system,
           tools: tools.filter((t) => readTools.has(t.name)),
           messages,
         });
@@ -373,7 +404,7 @@ export const respond = internalAction({
         messages.push({ role: "user", content: results });
       }
     } catch (e) {
-      const reason = e instanceof Anthropic.APIError ? `api_error:${e.status ?? "network"}` : "api_error:exception";
+      const reason = e instanceof Anthropic.APIError ? `api_error:${e.status ?? "network"}` : e instanceof NvidiaError ? `nvidia_error:${e.status}` : "api_error:exception";
       console.error("assistant: model call failed, answering in basic mode", { userId, reason, error: e instanceof Error ? e.message : String(e) });
       if (acted) {
         // Something already happened this turn (a payment proposed, say): running the request again

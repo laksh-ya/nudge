@@ -36,6 +36,7 @@ import type * as lib_budget from "../lib/budget.js";
 import type * as lib_commerce from "../lib/commerce.js";
 import type * as lib_identity from "../lib/identity.js";
 import type * as lib_links from "../lib/links.js";
+import type * as lib_nvidia from "../lib/nvidia.js";
 import type * as lib_control from "../lib/control.js";
 import type * as lib_errors from "../lib/errors.js";
 import type * as lib_grounding from "../lib/grounding.js";
@@ -102,6 +103,7 @@ declare const fullApi: ApiFromModules<{
   "lib/commerce": typeof lib_commerce;
   "lib/identity": typeof lib_identity;
   "lib/links": typeof lib_links;
+  "lib/nvidia": typeof lib_nvidia;
   "lib/control": typeof lib_control;
   "lib/errors": typeof lib_errors;
   "lib/grounding": typeof lib_grounding;

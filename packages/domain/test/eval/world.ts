@@ -101,6 +101,8 @@ export type World = {
   mcpToken: string;
   payees: { id: string; name: string; address: Address }[];
   startBlock: bigint;
+  /** The owner's passkey signing an approval digest, as a phone would (browser-shaped assertion). */
+  ownerSign: (digest: Hex) => ReturnType<typeof browserAssertion>;
 };
 
 /**
@@ -297,6 +299,9 @@ export async function makeWorld(
         tokenAddress: contracts.token,
         rpId: RP_ID,
         credentialId: "eval-credential",
+        keyX: x,
+        keyY: y,
+        passkeys: [{ keyId, x, y, credentialId: "eval-credential", rpId: RP_ID, label: "Eval phone", addedAt: now, status: "active" }],
       },
     ],
     messages: [],
@@ -308,7 +313,7 @@ export async function makeWorld(
   sim.identity = { tokenIdentifier: "eval|owner" };
   // The backend reads what the vault enforces into the wallet and agent records, as after any transaction.
   await serial(() => sim.run(internalRef("chain:syncVault"), { walletId: "wallets_1" }));
-  return { sim, vault, userId, agentId, agentAddress, mcpAgentId, mcpAgentAddress, mcpToken, payees, startBlock };
+  return { sim, vault, userId, agentId, agentAddress, mcpAgentId, mcpAgentAddress, mcpToken, payees, startBlock, ownerSign: (digest: Hex) => browserAssertion(priv, digest) };
 }
 
 /** A function reference the simulator understands, without importing the generated api. */

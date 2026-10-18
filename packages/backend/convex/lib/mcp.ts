@@ -348,12 +348,13 @@ export const MCP_TOOLS: McpTool[] = [
     description: [
       "Buy something from a website or API that charges with HTTP 402 (x402). Pass its URL. The wallet reads the price and the merchant's address from the 402 answer, then pays it like any payment: inside your limits it goes at once; otherwise the result has an approvalUrl for the user.",
       "maxPrice caps what you accept (US dollars). Once get_task_status says confirmed, it includes what you bought (the resource).",
-      "Only x402 offers on Base Sepolia in the wallet's test dollars can be paid.",
+      "Only x402 offers on Base Sepolia in the wallet's test dollars can be paid. The site can't redirect payment: an address saved for another site or a person is refused, a site that changed its address goes to the user, and the bought resource must be on the same site.",
     ].join("\n"),
     inputSchema: obj({
       url: { type: "string", description: "https URL that answers 402 Payment Required" },
       maxPrice: { type: "number", description: "The most you'll pay, US dollars" },
       requestId: { type: "string", description: "Your id for this purchase; reusing it never pays twice" },
+      payTo: { type: "string", description: "Optional: the merchant address you were told to pay. If the 402 answer names another, nothing is paid" },
     }, ["url", "maxPrice"]),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     requires: null,
@@ -490,6 +491,7 @@ export const REASON_CODES = [
   { code: "2013", meaning: "The requestId was already used for a different contact or amount. Use a new requestId." },
   { code: "2014", meaning: "Not a valid Base Sepolia address." },
   { code: "2015", meaning: "The x402 offer can't be paid: wrong network or asset, above maxPrice, or no 402 answer." },
+  { code: "2017", meaning: "Sent to the owner: an x402 site asked to be paid at a different address than before." },
   { code: "2016", meaning: "Approval reason: the owner limited which contacts this assistant may pay on its own, and this isn't one of them." },
 ] as const;
 

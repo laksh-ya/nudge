@@ -20,13 +20,16 @@ const modules = import.meta.glob(["./**/*.ts", "./**/*.js", "!./**/*.test.ts"]);
 
 const NOW = Date.UTC(2026, 9, 18, 6);
 const DAY = 86_400_000;
-const STORE = "https://store.test";
+// The harness serves every request as some.convex.site, so the store is reached (and names itself) there.
+const STORE = "https://some.convex.site";
 let t: ReturnType<typeof convexTest>;
 const realFetch = globalThis.fetch;
 
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
+  // The store names its resources by this deployment's site URL, as on prod.
+  vi.stubEnv("CONVEX_SITE_URL", STORE);
   // The agent's fetches to the store land on this deployment's own HTTP routes.
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
@@ -243,5 +246,70 @@ describe("pure helpers", () => {
       expect(sum % 10).toBe(0);
     }
     expect((purchaseView({ kind: "card", card: { number: "4242424242424242", exp: "11/26", cvc: "123", last4: "4242" } }, "submitted") as { card?: object }).card).toEqual(expect.not.objectContaining({ number: expect.anything() }));
+  });
+});
+
+describe("a hostile 402 can't redirect payment (#107)", () => {
+  const ATTACKER = "0x9b1c4f0e2a7d33c8e5f61a20b4d7e9c3f2a18b55";
+  /** A site at `host` that answers with the real store's offer, edited. */
+  async function hostile(host: string, edit: (offer: Record<string, unknown>) => void) {
+    const real = await t.fetch("/x402/store/item?slug=coffee");
+    const body = (await real.json()) as { accepts: Record<string, unknown>[] };
+    for (const o of body.accepts) edit(o);
+    const inner = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+      if (url.host === host) return new Response(JSON.stringify(body), { status: 402, headers: { "content-type": "application/json" } });
+      return inner(input, init);
+    }) as typeof fetch;
+  }
+  const tasks = () => t.run((ctx) => ctx.db.query("tasks").collect());
+
+  it("an address you trust for another site is refused, before anything is created", async () => {
+    const w = await world();
+    // evil.test answers 402 asking to be paid at the demo store's (trusted) address.
+    await t.run(async (ctx) => {
+      const store = (await ctx.db.query("payees").collect()).find((p) => p.name === "Nudge demo store")!;
+      await ctx.db.patch(store._id, { host: "some.convex.site" });
+    });
+    await hostile("evil.test", (o) => {
+      o.resource = "https://evil.test/item";
+    });
+    const r = (await t.action(internal.commerce.payX402, { agentId: w.agent, url: "https://evil.test/item", maxPrice: 5 })) as Record<string, any>;
+    expect(r).toMatchObject({ outcome: "refused", code: "2015" });
+    expect(r.reason).toMatch(/address you know as Nudge demo store/);
+    expect(await tasks()).toHaveLength(0);
+  });
+
+  it("a known site that switches its address goes to the owner, never paid automatically", async () => {
+    const w = await world();
+    await t.run(async (ctx) => {
+      const store = (await ctx.db.query("payees").collect()).find((p) => p.name === "Nudge demo store")!;
+      await ctx.db.patch(store._id, { host: "shop.test" });
+    });
+    await hostile("shop.test", (o) => {
+      o.payTo = ATTACKER;
+      o.resource = "https://shop.test/item";
+    });
+    const r = (await t.action(internal.commerce.payX402, { agentId: w.agent, url: "https://shop.test/item", maxPrice: 5 })) as Record<string, any>;
+    expect(r.outcome).toBe("needs_approval");
+    expect(r.reason).toMatch(/now asks to be paid at a different address/);
+    const [task] = await tasks();
+    expect(task!.state).toBe("awaiting_approval");
+  });
+
+  it("an offer whose resource is on another site, or a payTo the agent didn't expect, is refused", async () => {
+    const w = await world();
+    await hostile("shop.test", (o) => {
+      o.resource = "https://elsewhere.test/item";
+    });
+    const off = (await t.action(internal.commerce.payX402, { agentId: w.agent, url: "https://shop.test/item", maxPrice: 5 })) as Record<string, any>;
+    expect(off).toMatchObject({ outcome: "refused", code: "2015" });
+    expect(off.reason).toMatch(/points the purchase at elsewhere\.test/);
+
+    const real = (await t.action(internal.commerce.payX402, { agentId: w.agent, url: `${STORE}/x402/store/item?slug=coffee`, maxPrice: 5, payTo: ATTACKER })) as Record<string, any>;
+    expect(real).toMatchObject({ outcome: "refused", code: "2015" });
+    expect(real.reason).toMatch(/not the 0x9b1c…8b55 you expected/);
+    expect(await tasks()).toHaveLength(0);
   });
 });

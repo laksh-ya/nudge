@@ -414,6 +414,8 @@ export default defineSchema({
     name: v.string(),
     handle: v.string(),
     kind: v.union(v.literal("person"), v.literal("merchant")),
+    /** For a merchant first paid over x402: the site it was paid for, so another site can't reuse its address (#107). */
+    host: v.optional(v.string()),
     trusted: v.boolean(),
     holdUntil: v.optional(v.number()),
     address: v.optional(v.string()),

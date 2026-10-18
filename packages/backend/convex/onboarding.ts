@@ -10,6 +10,7 @@ import { JUDGE, requireViewer, viewer } from "./lib/auth";
 import { wipeUser } from "./lib/wipe";
 import { hit } from "./lib/limits";
 import { seal } from "./lib/secrets";
+import { isNvidiaKey } from "./lib/nvidia";
 
 const DAY = 86_400_000;
 export const STEPS = ["you", "goals", "sources", "history", "review", "assistant", "wallet", "chat", "people", "done"] as const;
@@ -46,7 +47,7 @@ export const state = query({
         quietTo: user.quietTo ?? "",
         reminderLeadDays: user.reminderLeadDays ?? 2,
         privateReminders: user.privateReminders ?? false,
-        assistantModel: (user.assistantModel ?? "auto") as "auto" | "basic" | "claude-opus-5-5" | "claude-sonnet-5-5" | "claude-haiku-5-5",
+        assistantModel: (user.assistantModel ?? "auto") as "auto" | "basic" | "claude-opus-5-5" | "claude-sonnet-5-5" | "claude-haiku-5-5" | "nvidia",
         ownModelKey: user.modelKeyHint ?? null,
         monthlyBudgetMinor: user.monthlyBudgetMinor,
         emergencyMinor: user.emergencyMinor,
@@ -171,9 +172,9 @@ export const setModelKey = mutation({
       return null;
     }
     const k = key.trim();
-    if (!/^sk-ant-[A-Za-z0-9_-]{20,200}$/.test(k)) throw new ConvexError("That doesn't look like an Anthropic API key (it starts with sk-ant-)");
+    if (!/^sk-ant-[A-Za-z0-9_-]{20,200}$/.test(k) && !isNvidiaKey(k)) throw new ConvexError("Paste an Anthropic key (sk-ant-…) or an NVIDIA key (nvapi-…)");
     await ctx.db.patch(user._id, { modelKeySealed: await seal(k, `model:${user._id}`), modelKeyHint: k.slice(-4) });
-    await ctx.db.insert("activity", { userId: user._id, kind: "security", title: "Nudge now uses your own Claude API key", detail: `Ends in ${k.slice(-4)}`, tone: "good" });
+    await ctx.db.insert("activity", { userId: user._id, kind: "security", title: `Nudge now uses your own ${isNvidiaKey(k) ? "NVIDIA" : "Claude"} API key`, detail: `Ends in ${k.slice(-4)}`, tone: "good" });
     return k.slice(-4);
   },
 });
@@ -187,7 +188,7 @@ export const saveAssistant = mutation({
     reminderLeadDays: v.number(),
     privateReminders: v.optional(v.boolean()),
     /** Which model answers in the app and on Telegram; "basic" = rules only. */
-    assistantModel: v.optional(v.union(v.literal("auto"), v.literal("basic"), v.literal("claude-opus-5-5"), v.literal("claude-sonnet-5-5"), v.literal("claude-haiku-5-5"))),
+    assistantModel: v.optional(v.union(v.literal("auto"), v.literal("basic"), v.literal("claude-opus-5-5"), v.literal("claude-sonnet-5-5"), v.literal("claude-haiku-5-5"), v.literal("nvidia"))),
   },
   handler: async (ctx, args) => {
     const user = await requireViewer(ctx);

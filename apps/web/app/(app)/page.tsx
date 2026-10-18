@@ -83,7 +83,7 @@ export default function Home() {
           <Character of="nudge" mood="happy" size={40} bob /> Hi, {data.name}
         </h1>
 
-        <section className="rise overflow-hidden rounded-card bg-navy text-white shadow-[0_8px_24px_rgba(0,41,112,0.18)]">
+        <section className="rise overflow-hidden rounded-card bg-coal text-white shadow-[0_12px_32px_rgba(0,0,0,0.16)]">
           <div className="p-5">
             <div className="flex items-center justify-between">
               <span className="text-label font-medium text-white/70">Safe to spend</span>
@@ -145,7 +145,7 @@ export default function Home() {
             </>
             )}
           </div>
-          <Link href="/agents" className="press flex items-center justify-between gap-3 bg-navy-soft px-5 py-3 text-body">
+          <Link href="/agents" className="press flex items-center justify-between gap-3 bg-white/[0.07] px-5 py-3 text-body">
             <span className="text-white/75">Agents may still spend today</span>
             <span className="flex items-center gap-2 font-semibold">
               <span className="num">{formatMoney(o.agentAuthority, o.walletCurrency)}</span>
@@ -154,18 +154,10 @@ export default function Home() {
           </Link>
         </section>
 
-        {me?.demo && <DemoTour />}
 
-        <SetupCard />
-
-        <QuickActions />
-
-        <AssistantsStrip />
-
-        <Card title={attentionCount ? `Needs you · ${attentionCount}` : "Needs you"}>
-          {attentionCount === 0 ? (
-            <p className="text-body text-mute">Nothing right now.</p>
-          ) : (
+        {attentionCount > 0 && (
+        <Card title={`Needs you · ${attentionCount}`}>
+          {(
             <Divided>
               {attention.approvals.map((t) => (
                 // The same card as the Wallet screen: passkey requests open the approval site;
@@ -215,6 +207,16 @@ export default function Home() {
             </Divided>
           )}
         </Card>
+        )}
+
+        {me?.demo && <DemoTour />}
+
+        <SetupCard />
+
+        <QuickActions />
+
+        <AssistantsStrip />
+
       </div>
 
       <div className="min-w-0 space-y-4 lg:space-y-6 lg:pt-[54px]">
@@ -232,7 +234,7 @@ export default function Home() {
             className="mt-2"
           />
           <div className="mt-4 space-y-2.5">
-            {o.categories.slice(0, 5).map((c) => (
+            {o.categories.slice(0, 3).map((c) => (
               <div key={c.name} className="grid grid-cols-[88px_1fr_auto] items-center gap-3">
                 <span className="truncate text-label text-ink-2">{c.name}</span>
                 <Meter value={c.amount} max={maxCategory} tone="navy" />
@@ -247,7 +249,7 @@ export default function Home() {
             <Skeleton className="h-24" />
           ) : (
             <Divided>
-              {recent.slice(0, 4).map((a) => (
+              {recent.slice(0, 3).map((a) => (
                 <Row key={a._id} leading={<ActivityIcon kind={a.kind} tone={a.tone} />} title={a.title} sub={ago(a._creationTime)} />
               ))}
             </Divided>

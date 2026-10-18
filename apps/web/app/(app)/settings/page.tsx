@@ -36,6 +36,7 @@ const MODEL_LABEL = {
   "claude-opus-5-5": "Claude Opus 5.5 (smartest)",
   "claude-sonnet-5-5": "Claude Sonnet 5.5 (balanced)",
   "claude-haiku-5-5": "Claude Haiku 5.5 (fastest)",
+  nvidia: "NVIDIA (Llama on NVIDIA NIM)",
   basic: "Basic (no AI model, rules only)",
 } as const;
 
@@ -453,9 +454,9 @@ function OwnModelKey({ hint }: { hint: string | null }) {
   const [error, setError] = useState<string>();
   return (
     <div className="rounded-btn border border-line p-3">
-      <div className="text-body font-semibold">Your own Claude</div>
+      <div className="text-body font-semibold">Your own model key</div>
       <p className="text-label text-mute">
-        Paste an Anthropic API key and Nudge (here and on Telegram) runs on your own model and quota. It's stored encrypted and never shown again.
+        Paste an Anthropic key (sk-ant-…) or an NVIDIA key (nvapi-…) and Nudge, here and on Telegram, runs on your own model and quota. It&apos;s stored encrypted and never shown again.
         Payments still follow your limits and passkey.
       </p>
       {hint ? (
@@ -467,7 +468,7 @@ function OwnModelKey({ hint }: { hint: string | null }) {
         </div>
       ) : (
         <div className="mt-2 flex gap-2">
-          <Input type="password" value={key} onChange={(e) => setKeyText(e.target.value)} placeholder="sk-ant-…" autoComplete="off" />
+          <Input type="password" value={key} onChange={(e) => setKeyText(e.target.value)} placeholder="sk-ant-… or nvapi-…" autoComplete="off" />
           <Button
             tone="outline"
             disabled={!key.trim()}

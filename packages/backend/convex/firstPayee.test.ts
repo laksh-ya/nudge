@@ -289,3 +289,57 @@ describe("reminders warn when the paying account is short (#118)", () => {
     expect(shortfall(bill, null, {})).toBeNull();
   });
 });
+
+describe("one approval, one link, one channel (#95)", () => {
+  it("the agent gets the link; Telegram gets a heads-up without a second link", async () => {
+    vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+    const f = await liveOwner();
+    const r = await f.t.mutation(internal.gateway.proposePayment, { agentId: f.agent, toAddress: SHOP, name: "Nudge Test Shop", amount: 4, reason: "coffee" });
+    expect(r).toMatchObject({ outcome: "needs_approval", approvalUrl: expect.stringContaining("/a/") });
+    const sends = await f.t.run(async (ctx) =>
+      (await ctx.db.system.query("_scheduled_functions").collect()).filter((s) => s.name.includes("telegram")),
+    );
+    expect(sends).toHaveLength(1);
+    const args = sends[0]!.args[0] as { text: string; approvalUrl?: string };
+    expect(args.approvalUrl).toBeUndefined();
+    expect(args.text).toMatch(/Claude has the approval link for you; it's also on your Nudge Home screen/);
+    vi.unstubAllEnvs();
+  });
+});
+
+describe("payment state only moves forward (#94)", () => {
+  it("a late or repeated 'queued' callback after confirmation never moves the payment back", async () => {
+    const f = await liveOwner();
+    const r = (await f.t.mutation(internal.gateway.proposePayment, { agentId: f.agent, toAddress: SHOP, name: "Shop", amount: 4, reason: "coffee" })) as { taskId: Id<"tasks"> };
+    await f.t.run((ctx) => ctx.db.patch(r.taskId, { state: "reserved" }));
+    const tx = `0x${"cd".repeat(32)}`;
+    await f.t.mutation(internal.vault.onQueued, { taskId: r.taskId, txHash: tx, changeId: `0x${"ef".repeat(32)}`, readyAt: NOW + 120_000 });
+    await f.t.mutation(internal.vault.onOwnerResult, { taskId: r.taskId, txHash: `0x${"ab".repeat(32)}`, ok: true });
+    // The receipt for the queueing transaction is processed again, late (a retry, a second node).
+    await f.t.mutation(internal.vault.onQueued, { taskId: r.taskId, txHash: tx, changeId: `0x${"ef".repeat(32)}`, readyAt: NOW + 120_000 });
+    const reads = [await f.t.query(internal.gateway.taskStatus, { agentId: f.agent, taskId: r.taskId })];
+    vi.setSystemTime(NOW + 7_000);
+    reads.push(await f.t.query(internal.gateway.taskStatus, { agentId: f.agent, taskId: r.taskId }));
+    for (const s of reads) expect(s).toMatchObject({ state: "confirmed", final: true });
+    // The ignored callback is kept in the task's history, not applied.
+    const task = await f.t.run((ctx) => ctx.db.get(r.taskId));
+    expect(task!.attempts?.some((a) => a.ignored === "queued")).toBe(true);
+  });
+});
+
+describe("the agent overview never adds up different currencies (#97)", () => {
+  it("bills stay in their own currencies and the home-currency figures say they were converted", async () => {
+    const f = await liveOwner();
+    await f.t.run(async (ctx) => {
+      await ctx.db.patch(f.userId, { currency: "INR" });
+      for (const [name, amountMinor, currency] of [["Rent", 1_800_000, "INR"], ["Tokyo gym", 800_000, "JPY"], ["Notion", 1000, "USD"]] as const) {
+        await ctx.db.insert("obligations", { userId: f.userId, name, kind: "bill", amountMinor, currency, cadence: "monthly", nextDueAt: NOW + 3 * DAY, status: "active" });
+      }
+    });
+    const o = (await f.t.query(internal.gateway.overview, { agentId: f.agent })) as Record<string, any>;
+    expect(Object.keys(o.upcomingBillsByCurrency).sort()).toEqual(["INR", "JPY", "USD"]);
+    expect(o.inHomeCurrency.note).toMatch(/^Everything here is in INR/);
+    expect(o.nudgeWallet).toMatch(/separate from the INR money above/);
+    expect(o).not.toHaveProperty("upcomingBills");
+  });
+});

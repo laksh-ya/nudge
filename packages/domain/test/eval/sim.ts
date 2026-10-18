@@ -61,7 +61,10 @@ export class Sim {
       get: async (id: string) => self.all().find((d) => d._id === id) ?? null,
       normalizeId: (table: string, id: string) => ((self.tables[table] ?? []).some((d) => d._id === id) ? id : null),
       insert: async (table: string, doc: Record<string, unknown>) => {
-        const id = `${table}_${++self.seq}`;
+        // Seeded rows use hand-picked ids (payees_2, ...): never hand out one that's taken.
+        const taken = new Set((self.tables[table] ?? []).map((d) => d._id));
+        let id = `${table}_${++self.seq}`;
+        while (taken.has(id)) id = `${table}_${++self.seq}`;
         (self.tables[table] ??= []).push({ ...doc, _id: id, _creationTime: Date.now() + self.seq / 1000 });
         return id;
       },

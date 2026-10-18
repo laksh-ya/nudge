@@ -95,7 +95,24 @@ export const startPurchase = internalMutation({
   },
   handler: async (ctx, a) => {
     const merchant = a.payTo.toLowerCase() === storeAddress().toLowerCase() ? "Nudge demo store" : hostOf(a.url);
-    const d = await propose(ctx, { agentId: a.agentId, toAddress: a.payTo, name: merchant, amount: a.cents / 100, reason: `Buy: ${a.item}`.slice(0, 140), requestId: a.requestId }, { kind: "merchant" });
+    // The payee comes from the site's own 402 answer, so check it against what we know (#107).
+    const host = hostOf(a.url);
+    const { user } = await load(ctx, a.agentId);
+    const payees = await ctx.db.query("payees").withIndex("by_user", (q) => q.eq("userId", user._id)).take(200);
+    const same = (x?: string) => Boolean(x && x.toLowerCase() === a.payTo.toLowerCase());
+    // 1. An address already saved for another site, or for a person: a site can't borrow it.
+    const elsewhere = payees.find((p) => same(p.address) && ((p.host && p.host !== host) || p.kind === "person"));
+    if (elsewhere) {
+      return { outcome: "refused" as const, code: "2015", reason: `${host} asked to be paid at an address you know as ${elsewhere.name}${elsewhere.host ? ` (${elsewhere.host})` : ""}. Nothing was paid; check the site.` };
+    }
+    // 2. This site was paid at a different address before: the owner decides, never automatic.
+    const before = payees.find((p) => p.host === host && p.address && !same(p.address));
+    const askOwner = before ? `${host} now asks to be paid at a different address than before (${before.address!.slice(0, 6)}…${before.address!.slice(-4)}). Check it before approving` : undefined;
+    const d = await propose(
+      ctx,
+      { agentId: a.agentId, toAddress: a.payTo, name: merchant, amount: a.cents / 100, reason: `Buy: ${a.item}`.slice(0, 140), requestId: a.requestId },
+      { kind: "merchant", host, askOwner },
+    );
     if (d.outcome === "submitted" || d.outcome === "needs_approval" || d.outcome === "duplicate") {
       const task = (await ctx.db.get(d.taskId))!;
       if (!task.purchase) await ctx.db.patch(d.taskId, { purchase: { kind: a.kind, url: a.url, item: a.item, merchant, watchId: a.watchId } });
@@ -106,11 +123,19 @@ export const startPurchase = internalMutation({
 });
 
 export const payX402 = internalAction({
-  args: { agentId: v.id("agents"), url: v.string(), maxPrice: v.number(), requestId: v.optional(v.string()) },
-  handler: async (ctx, { agentId, url, maxPrice, requestId }): Promise<Record<string, unknown>> => {
+  args: { agentId: v.id("agents"), url: v.string(), maxPrice: v.number(), requestId: v.optional(v.string()), payTo: v.optional(v.string()) },
+  handler: async (ctx, { agentId, url, maxPrice, requestId, payTo }): Promise<Record<string, unknown>> => {
     await ctx.runQuery(internal.gateway.myLimits, { agentId });
     const q = await quote(url);
     if (!q.ok) return { outcome: "refused", code: "2015", reason: q.problem, ...(q.free ? { content: q.free } : {}) };
+    // The thing delivered must come from the site the agent was told to buy from (#107).
+    if (hostOf(q.resource) !== hostOf(url)) {
+      return { outcome: "refused", code: "2015", reason: `The 402 answer points the purchase at ${hostOf(q.resource)}, not ${hostOf(url)}. Nothing was paid.` };
+    }
+    // The agent knew who it should pay (from the user or the merchant): the 402 must agree.
+    if (payTo && payTo.trim().toLowerCase() !== q.payTo.toLowerCase()) {
+      return { outcome: "refused", code: "2015", reason: `The site asks to be paid at ${q.payTo.slice(0, 6)}…${q.payTo.slice(-4)}, not the ${payTo.trim().slice(0, 6)}…${payTo.trim().slice(-4)} you expected. Nothing was paid.` };
+    }
     if (!(maxPrice > 0) || q.cents > Math.round(maxPrice * 100)) {
       return { outcome: "refused", code: "2015", reason: `The price is ${formatMoney(q.cents, "USDC")}, above your maxPrice of ${formatMoney(Math.round(maxPrice * 100), "USDC")}. Ask the user before paying more.` };
     }
