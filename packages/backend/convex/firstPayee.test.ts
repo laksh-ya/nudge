@@ -262,3 +262,30 @@ describe("approval links always point at the real approval site (#110)", () => {
     vi.unstubAllEnvs();
   });
 });
+
+describe("onboarding wallet step after the passkey (#122)", () => {
+  it("Save and continue with the vault's own numbers asks for no passkey; a real change asks once", async () => {
+    const f = await liveOwner();
+    // The vault holds $100/day and $50 protected; the form shows those.
+    const same = await f.owner.mutation(api.onboarding.setupWallet, { dailyCeilingMinor: 10_000, protectedMinor: 5000, perPaymentMinor: 1000 });
+    expect(same).toBeNull();
+    // Raising the ceiling is a vault change: one link, and asking again returns the same link.
+    const first = await f.owner.mutation(api.onboarding.setupWallet, { dailyCeilingMinor: 12_000, protectedMinor: 5000, perPaymentMinor: 1000 });
+    const again = await f.owner.mutation(api.onboarding.setupWallet, { dailyCeilingMinor: 12_000, protectedMinor: 5000, perPaymentMinor: 1000 });
+    expect(first).toBeTruthy();
+    expect(again).toBe(first);
+  });
+});
+
+describe("reminders warn when the paying account is short (#118)", () => {
+  it("flags a debit account or card holding less than the bill, never a credit card's debt", async () => {
+    const { shortfall } = await import("./reminders");
+    const bill = { amountMinor: 64_900, currency: "INR" } as never;
+    const acct = (kind: string, balanceMinor: number, currency = "INR") => ({ kind, balanceMinor, currency, name: "HDFC Debit" }) as never;
+    expect(shortfall(bill, acct("bank", 40_000), {})).toMatchObject({ short: 24_900, has: 40_000 });
+    expect(shortfall(bill, acct("bank", 90_000), {})).toBeNull();
+    expect(shortfall(bill, acct("card", -120_000), {})).toBeNull();
+    expect(shortfall(bill, acct("card", 10_000), {})).toMatchObject({ short: 54_900 });
+    expect(shortfall(bill, null, {})).toBeNull();
+  });
+});

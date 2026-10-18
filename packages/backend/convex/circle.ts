@@ -11,6 +11,7 @@ import { ownerPayTask } from "./lib/actions";
 import { credit, month, usedThisMonth, walletOf } from "./lib/circle";
 import { maskEmail } from "./guardians";
 import { internal } from "./_generated/api";
+import { checkInviteEmail, inviteEmail } from "./lib/identity";
 
 /**
  * Family circle. The owner invites someone by link; they accept with their own Nudge account, and
@@ -94,13 +95,15 @@ export const mine = query({
 });
 
 export const invite = mutation({
-  args: { name: v.string(), relation: v.string(), allowanceMinor: v.number(), autoApproveMinor: v.number(), canProtect: v.optional(v.boolean()) },
+  args: { name: v.string(), relation: v.string(), email: v.optional(v.string()), allowanceMinor: v.number(), autoApproveMinor: v.number(), canProtect: v.optional(v.boolean()) },
   handler: async (ctx, a) => {
     const user = await requireViewer(ctx);
     await hit(ctx, `family-invite:${user._id}`, 20, 3600_000);
     const name = a.name.trim().replace(/\s+/g, " ").slice(0, 40);
     if (!name) throw new ConvexError("Add their name");
     const relation = RELATIONS.includes(a.relation) ? a.relation : "Other";
+    const email = inviteEmail(a.email);
+    if (email && email === (user.email ?? "").toLowerCase()) throw new ConvexError("That's your own email");
     const allowance = cents(a.allowanceMinor, "The allowance");
     const auto = cents(a.autoApproveMinor, "The no-questions amount");
     if (auto > allowance) throw new ConvexError("What's paid without asking can't be more than the monthly allowance");
@@ -111,6 +114,7 @@ export const invite = mutation({
       ownerId: user._id,
       name,
       relation,
+      ...(email ? { email } : {}),
       status: "invited",
       code,
       codeExpiresAt: Date.now() + 7 * DAY,
@@ -173,6 +177,7 @@ export const accept = mutation({
     const link = clean.length === 8 ? await ctx.db.query("familyLinks").withIndex("by_code", (q) => q.eq("code", clean)).unique() : null;
     if (!link || link.status !== "invited" || (link.codeExpiresAt ?? 0) < Date.now()) throw new ConvexError("That invite isn't valid any more. Ask for a new link.");
     if (link.ownerId === user._id) throw new ConvexError("That's your own invite");
+    checkInviteEmail(link.email, user.email);
     const already = (await ctx.db.query("familyLinks").withIndex("by_member", (q) => q.eq("memberId", user._id)).take(20)).find((l) => l.ownerId === link.ownerId && l.status === "active");
     if (already) throw new ConvexError("You're already in their family");
     await ctx.db.patch(link._id, { status: "active", memberId: user._id, code: undefined, codeExpiresAt: undefined, acceptedAt: Date.now() });

@@ -860,3 +860,16 @@ export const provisionAgent = internalAction({
     await ctx.runMutation(internal.vault.onAgentKey, { agentId, address, privateKey: await seal(privateKey, agentId) });
   },
 });
+
+/** Mint test dollars into a vault for a top-up (#116). TestUSD's faucet is open; the relayer pays gas. */
+export const topUpVault = internalAction({
+  args: { walletId: v.id("wallets"), amountMinor: v.number() },
+  handler: async (ctx, { walletId, amountMinor }) => {
+    const w = await ctx.runQuery(internal.vault.walletForChain, { walletId });
+    if (!w?.address || !w.tokenAddress) return;
+    const { pub, wallet } = clients();
+    const hash = await wallet.writeContract({ address: w.tokenAddress as Address, abi: testUsdAbi, functionName: "faucet", args: [w.address as Address, toTokenUnits(amountMinor)] });
+    await pub.waitForTransactionReceipt({ hash, timeout: RECEIPT_TIMEOUT });
+    await readVaultTwice(ctx, pub, walletId);
+  },
+});

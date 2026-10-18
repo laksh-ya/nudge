@@ -211,6 +211,25 @@ export const setupWallet = mutation({
     if (args.perPaymentMinor > args.dailyCeilingMinor) throw new ConvexError("A single payment can't exceed the daily ceiling");
     const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
     if (wallet?.status === "live" && isVaultVersion(wallet.version)) {
+      // Nothing the vault holds changes (the usual case right after making the passkey): save and
+      // move on, no passkey (#122). Per-payment is the app's default for new grants, not a vault rule.
+      const v = wallet.vault;
+      if (v && v.ceilingMinor === args.dailyCeilingMinor && v.protectedMinor === args.protectedMinor) {
+        await ctx.db.patch(wallet._id, { perPaymentMinor: args.perPaymentMinor, dailyCeilingMinor: v.ceilingMinor, protectedMinor: v.protectedMinor });
+        await ownAssistant(ctx, user, user.autonomy ?? "approve", (await ctx.db.get(wallet._id))!);
+        return null;
+      }
+      // The same change already waiting for the passkey: the same link, not a new request.
+      const waiting = wallet.proposedPolicy ? await ctx.db.get(wallet.proposedPolicy.taskId) : null;
+      if (
+        waiting?.state === "awaiting_approval" &&
+        waiting.approvalToken &&
+        wallet.proposedPolicy!.dailyCeilingMinor === args.dailyCeilingMinor &&
+        wallet.proposedPolicy!.protectedMinor === args.protectedMinor
+      ) {
+        await ctx.db.patch(wallet._id, { proposedPolicy: { ...wallet.proposedPolicy!, perPaymentMinor: args.perPaymentMinor } });
+        return waiting.approvalToken;
+      }
       // The vault enforces these. Our gateway takes whichever is stricter right away; the vault
       // changes when the owner signs (and, for looser limits, after its delay).
       const task = await policyTask(ctx, user, wallet, { protectedMinor: args.protectedMinor, dailyCeilingMinor: args.dailyCeilingMinor });

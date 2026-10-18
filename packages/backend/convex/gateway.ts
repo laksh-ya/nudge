@@ -272,7 +272,7 @@ export const bills = internalQuery({
     const list = await ctx.db.query("obligations").withIndex("by_user_due", (q) => q.eq("userId", user._id)).take(100);
     return list
       .filter((b) => b.status === "active")
-      .map((b) => ({ name: b.name, kind: b.kind, amount: formatMoney(b.amountMinor, b.currency), cadence: b.cadence, nextDue: new Date(b.nextDueAt).toISOString().slice(0, 10) }));
+      .map((b) => ({ billId: b._id, name: b.name, kind: b.kind, amount: formatMoney(b.amountMinor, b.currency), cadence: b.cadence, nextDue: new Date(b.nextDueAt).toISOString().slice(0, 10), payWith: b.payWith ?? "manual" }));
   },
 });
 

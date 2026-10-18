@@ -8,7 +8,7 @@ import { approveUrl, load, payeeForAddress } from "./gateway";
 import { computeOverview } from "./lib/overview";
 import { createReminder, goalPlan, telegramLinked, wantsTelegram } from "./lib/assist";
 import { DAY, dateLabel, quietHoursOf, safeTz, zoned } from "./lib/schedule";
-import { DEFAULT_RULES, addContactTask, durationText } from "./lib/actions";
+import { DEFAULT_RULES, addContactTask, durationText, policyTask } from "./lib/actions";
 import { changeLimits } from "./lib/control";
 import { newApprovalToken } from "./lib/seed";
 
@@ -323,5 +323,217 @@ export const requestLimits = internalMutation({
     }
     await ctx.db.insert("activity", { userId: user._id, kind: "agent", title: `${agent.name} asked for new limits`, detail: text, tone: "neutral" });
     return { outcome: "needs_approval", taskId, approvalUrl: approveUrl(token), message: `Give the user this link to approve ${text}.` };
+  },
+});
+
+// ---------------------------------------------------------------- settings an assistant can change (#119)
+
+const MAX_WAIT = 7 * 86_400;
+
+/**
+ * Change the wallet's rules. Tightening a simulated wallet applies at once; anything that loosens, and
+ * any change to a live vault (which only the owner's passkey can sign), comes back as an approval link.
+ */
+export const changeRules = internalMutation({
+  args: {
+    agentId: v.id("agents"),
+    dailyCeiling: v.optional(v.number()),
+    protectedAmount: v.optional(v.number()),
+    holdAbove: v.optional(v.number()),
+    holdMinutes: v.optional(v.number()),
+    newContactWaitMinutes: v.optional(v.number()),
+    changeDelayMinutes: v.optional(v.number()),
+    why: v.string(),
+  },
+  handler: async (ctx, a) => {
+    const { agent, user } = await load(ctx, a.agentId);
+    const w = await walletOf(ctx, user._id);
+    if (!w) throw new ConvexError("The user hasn't set up a Nudge wallet yet");
+    const vault = w.status === "live" && isVaultVersion(w.version) ? w.vault : undefined;
+    const cur = {
+      dailyCeilingMinor: vault ? vault.ceilingMinor : w.dailyCeilingMinor,
+      protectedMinor: vault ? vault.protectedMinor : w.protectedMinor,
+      holdAboveMinor: vault ? vault.holdAboveMinor : (w.rules?.holdAboveMinor ?? DEFAULT_RULES.holdAboveMinor),
+      holdFor: vault ? vault.holdFor : (w.rules?.holdFor ?? DEFAULT_RULES.holdFor),
+      contactDelay: vault ? vault.contactDelay : (w.rules?.contactDelay ?? DEFAULT_RULES.contactDelay),
+      changeDelay: vault ? vault.changeDelay : (w.rules?.changeDelay ?? DEFAULT_RULES.changeDelay),
+    };
+    const dollars = (n: number | undefined, label: string) => {
+      if (n === undefined) return undefined;
+      if (!Number.isFinite(n) || n < 0 || n > 100_000) throw new ConvexError(`${label} must be 0 to 100000 dollars`);
+      return Math.round(n * 100);
+    };
+    const minutes = (n: number | undefined, label: string, min = 0) => {
+      if (n === undefined) return undefined;
+      if (!Number.isFinite(n) || n * 60 < min || n * 60 > MAX_WAIT) throw new ConvexError(`${label} must be ${min ? min / 60 : 0} minutes to 7 days`);
+      return Math.round(n * 60);
+    };
+    const next = {
+      dailyCeilingMinor: dollars(a.dailyCeiling, "dailyCeiling") ?? cur.dailyCeilingMinor,
+      protectedMinor: dollars(a.protectedAmount, "protectedAmount") ?? cur.protectedMinor,
+      holdAboveMinor: dollars(a.holdAbove, "holdAbove") ?? cur.holdAboveMinor,
+      holdFor: minutes(a.holdMinutes, "holdMinutes") ?? cur.holdFor,
+      contactDelay: minutes(a.newContactWaitMinutes, "newContactWaitMinutes") ?? cur.contactDelay,
+      changeDelay: minutes(a.changeDelayMinutes, "changeDelayMinutes", 60) ?? cur.changeDelay,
+    };
+    if ((w.perPaymentMinor ?? 0) > next.dailyCeilingMinor) throw new ConvexError("dailyCeiling can't be below the wallet's biggest single payment");
+    const changed = (Object.keys(next) as (keyof typeof next)[]).filter((k) => next[k] !== cur[k]);
+    if (!changed.length) return { outcome: "unchanged", message: "Those are already the rules." };
+    const looser =
+      next.dailyCeilingMinor > cur.dailyCeilingMinor ||
+      next.protectedMinor < cur.protectedMinor ||
+      next.holdAboveMinor > cur.holdAboveMinor ||
+      next.holdFor < cur.holdFor ||
+      next.contactDelay < cur.contactDelay ||
+      next.changeDelay < cur.changeDelay;
+    const text = describeRules(next);
+    const why = a.why.trim().slice(0, 140);
+    if (vault) {
+      // The vault holds these; only the owner's passkey changes them (tightening applies when signed).
+      const task = await policyTask(ctx, user, w, { ...next });
+      await ctx.db.patch(task.taskId, { agentId: agent._id, channel: "mcp", reason: `${agent.name} asks: ${why}. The vault enforces these rules, so it needs your passkey.` });
+      await ctx.db.patch(w._id, {
+        protectedMinor: Math.max(w.protectedMinor, next.protectedMinor),
+        dailyCeilingMinor: Math.min(w.dailyCeilingMinor, next.dailyCeilingMinor),
+        proposedPolicy: { dailyCeilingMinor: next.dailyCeilingMinor, protectedMinor: next.protectedMinor, perPaymentMinor: w.perPaymentMinor ?? 0, taskId: task.taskId },
+      });
+      await ctx.db.insert("activity", { userId: user._id, kind: "agent", title: `${agent.name} asked to change the wallet rules`, detail: text, tone: "neutral" });
+      return { outcome: "needs_approval", taskId: task.taskId, approvalUrl: approveUrl(task.token), message: `Give the user this link to approve: ${text}.` };
+    }
+    if (!looser) {
+      const { dailyCeilingMinor, protectedMinor, ...rules } = next;
+      await ctx.db.patch(w._id, { dailyCeilingMinor, protectedMinor, rules });
+      await ctx.db.insert("activity", { userId: user._id, kind: "setting", title: `${agent.name} tightened the wallet rules`, detail: text, tone: "neutral" });
+      return { outcome: "applied", message: `Done: ${text}. Stricter rules apply at once.` };
+    }
+    const { taskId, token } = await settingsTask(ctx, user, agent, {
+      title: "Change the wallet rules",
+      reason: `${agent.name} asks: ${why}. ${text}`,
+      effects: { agents: [], payees: [], rules: next },
+    });
+    await ctx.db.insert("activity", { userId: user._id, kind: "agent", title: `${agent.name} asked to change the wallet rules`, detail: text, tone: "neutral" });
+    return { outcome: "needs_approval", taskId, approvalUrl: approveUrl(token), message: `Loosening needs the user. Give them this link: ${text}.` };
+  },
+});
+
+function describeRules(r: { dailyCeilingMinor: number; protectedMinor: number; holdAboveMinor: number; holdFor: number; contactDelay: number; changeDelay: number }) {
+  return [
+    `all agents ${formatMoney(r.dailyCeilingMinor, "USDC")} a day`,
+    `${formatMoney(r.protectedMinor, "USDC")} kept safe`,
+    `agent payments above ${formatMoney(r.holdAboveMinor, "USDC")} held ${r.holdFor ? durationText(r.holdFor) : "not at all"}`,
+    `new contacts payable by agents ${r.contactDelay ? `after ${durationText(r.contactDelay)}` : "at once"}`,
+    `loosening waits ${durationText(r.changeDelay)}`,
+  ].join(", ");
+}
+
+/** Reminder settings: how early, where, and quiet hours. Changes no money, so it applies at once. */
+export const updateReminderSettings = internalMutation({
+  args: {
+    agentId: v.id("agents"),
+    leadDays: v.optional(v.number()),
+    channel: v.optional(v.string()),
+    quietFrom: v.optional(v.string()),
+    quietTo: v.optional(v.string()),
+    quietHours: v.optional(v.string()),
+  },
+  handler: async (ctx, a) => {
+    const { agent, user } = await load(ctx, a.agentId);
+    const patch: Partial<Doc<"users">> = {};
+    if (a.leadDays !== undefined) {
+      if (!Number.isInteger(a.leadDays) || a.leadDays < 0 || a.leadDays > 14) throw new ConvexError("leadDays must be 0 to 14");
+      patch.reminderLeadDays = a.leadDays;
+    }
+    if (a.channel !== undefined) {
+      if (a.channel !== "app" && a.channel !== "telegram") throw new ConvexError('channel must be "app" or "telegram" (app and Telegram)');
+      patch.reminderChannel = a.channel;
+    }
+    if (a.quietHours === "off") {
+      patch.quietFrom = "";
+      patch.quietTo = "";
+    } else if (a.quietFrom !== undefined || a.quietTo !== undefined) {
+      const hhmm = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+      if (!hhmm.test(a.quietFrom ?? "") || !hhmm.test(a.quietTo ?? "")) throw new ConvexError('quietFrom and quietTo are both needed, as HH:MM (or quietHours: "off")');
+      if (a.quietFrom === a.quietTo) throw new ConvexError("Quiet hours need different start and end times");
+      patch.quietFrom = a.quietFrom;
+      patch.quietTo = a.quietTo;
+    }
+    if (!Object.keys(patch).length) return { outcome: "unchanged", message: "Nothing to change." };
+    await ctx.db.patch(user._id, patch);
+    const u = { ...user, ...patch };
+    const lead = u.reminderLeadDays ?? 2;
+    const summary = `${lead === 0 ? "on the day" : `${lead} day${lead === 1 ? "" : "s"} before`}, ${u.reminderChannel === "telegram" ? "in the app and on Telegram" : "in the app"}, ${quietHoursOf(u) ? `quiet ${u.quietFrom}–${u.quietTo}` : "no quiet hours"}`;
+    await ctx.db.insert("activity", { userId: user._id, kind: "setting", title: `${agent.name} changed your reminder settings`, detail: summary, tone: "neutral" });
+    return { outcome: "applied", message: `Reminders now: ${summary}.` };
+  },
+});
+
+/** Change a tracked bill: amount, due date, who it's paid to, how, or pause/resume/cancel it. No money moves. */
+export const updateBill = internalMutation({
+  args: {
+    agentId: v.id("agents"),
+    billId: v.string(),
+    amount: v.optional(v.number()),
+    due: v.optional(v.string()),
+    contactId: v.optional(v.string()),
+    payWith: v.optional(v.string()),
+    status: v.optional(v.string()),
+  },
+  handler: async (ctx, a) => {
+    const { agent, user } = await load(ctx, a.agentId);
+    const id = ctx.db.normalizeId("obligations", a.billId);
+    const bill = id ? await ctx.db.get(id) : null;
+    if (!bill || bill.userId !== user._id) throw new ConvexError("Unknown billId; use list_bills");
+    const patch: Partial<Doc<"obligations">> = {};
+    if (a.amount !== undefined) {
+      const m = Math.round(a.amount * 100);
+      if (!(m > 0) || m > 1e13) throw new ConvexError("amount must be positive");
+      patch.previousAmountMinor = bill.amountMinor;
+      patch.amountMinor = m;
+    }
+    if (a.due !== undefined) {
+      const due = parseAt(a.due, safeTz(user.timezone));
+      if (due === null) throw new ConvexError("due must be a date like 2026-11-01");
+      patch.nextDueAt = due;
+      patch.remindedFor = undefined;
+    }
+    if (a.contactId !== undefined) {
+      const pid = ctx.db.normalizeId("payees", a.contactId);
+      const p = pid ? await ctx.db.get(pid) : null;
+      if (!p || p.userId !== user._id) throw new ConvexError("Unknown contactId; use list_contacts");
+      patch.payeeId = p._id;
+    }
+    if (a.payWith !== undefined) {
+      if (a.payWith !== "wallet" && a.payWith !== "manual") throw new ConvexError("payWith must be wallet or manual");
+      patch.payWith = a.payWith;
+      if (a.payWith === "wallet" && !(patch.payeeId ?? bill.payeeId)) throw new ConvexError("A bill the wallet pays needs contactId (who it's paid to)");
+    }
+    if (a.status !== undefined) {
+      const map: Record<string, Doc<"obligations">["status"]> = { pause: "paused", paused: "paused", resume: "active", active: "active", cancel: "cancelled", cancelled: "cancelled" };
+      const s = map[a.status];
+      if (!s) throw new ConvexError("status must be pause, resume or cancel");
+      patch.status = s;
+    }
+    if (!Object.keys(patch).length) return { outcome: "unchanged", message: "Nothing to change." };
+    await ctx.db.patch(bill._id, patch);
+    const what = Object.keys(patch).filter((k) => k !== "previousAmountMinor" && k !== "remindedFor").join(", ");
+    await ctx.db.insert("activity", { userId: user._id, kind: "setting", title: `${agent.name} updated ${bill.name}`, detail: what, tone: "neutral" });
+    return { outcome: "applied", message: `Updated ${bill.name}.` };
+  },
+});
+
+/** Add a savings goal the plan and reminders can track. No money moves. */
+export const addGoal = internalMutation({
+  args: { agentId: v.id("agents"), name: v.string(), target: v.number(), by: v.optional(v.string()) },
+  handler: async (ctx, a) => {
+    const { agent, user } = await load(ctx, a.agentId);
+    const name = a.name.trim().replace(/\s+/g, " ").slice(0, 60);
+    if (!name) throw new ConvexError("Name the goal");
+    const targetMinor = Math.round(a.target * 100);
+    if (!(targetMinor > 0) || targetMinor > 1e13) throw new ConvexError("target must be positive");
+    const dueAt = a.by ? parseAt(a.by, safeTz(user.timezone)) : null;
+    if (a.by && dueAt === null) throw new ConvexError("by must be a date like 2027-03-01");
+    const goalId = await ctx.db.insert("goals", { userId: user._id, name, icon: "target", targetMinor, savedMinor: 0, currency: user.currency, ...(dueAt ? { dueAt } : {}) });
+    await ctx.db.insert("activity", { userId: user._id, kind: "setting", title: `${agent.name} added a goal: ${name}`, detail: formatMoney(targetMinor, user.currency), tone: "neutral" });
+    return { outcome: "applied", goalId, message: `Added "${name}", ${formatMoney(targetMinor, user.currency)}${dueAt ? ` by ${new Date(dueAt).toISOString().slice(0, 10)}` : ""}.` };
   },
 });

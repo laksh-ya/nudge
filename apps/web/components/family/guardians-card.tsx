@@ -22,6 +22,7 @@ export function GuardiansCard() {
   const remove = useMutation(api.guardians.remove);
   const protectMore = useMutation(api.guardians.protectMore);
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [code, setCode] = useState<string | null>(null);
   const [error, setError] = useState<string>();
   if (!data) return null;
@@ -70,19 +71,28 @@ export function GuardiansCard() {
         </div>
       ) : (
         <form
-          className="mt-3 flex gap-2"
+          className="mt-3 flex flex-wrap gap-2"
           onSubmit={async (e) => {
             e.preventDefault();
             setError(undefined);
             try {
-              setCode(await invite({ name }));
+              setCode(await invite({ name, email: email || undefined }));
               setName("");
+              setEmail("");
             } catch (err) {
               setError(message(err));
             }
           }}
         >
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Their name, e.g. Priya (daughter)" maxLength={40} className="h-11 min-w-0 flex-1 rounded-btn border border-line px-3 text-body" />
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Their email (only they can accept)"
+            maxLength={120}
+            className="h-11 min-w-0 flex-1 basis-56 rounded-btn border border-line px-3 text-body"
+          />
           <Button type="submit" icon={UserPlus} disabled={!name.trim()}>
             Invite
           </Button>

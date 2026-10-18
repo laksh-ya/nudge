@@ -19,6 +19,17 @@ const config: NextConfig = {
   async headers() {
     return [{ source: "/(.*)", headers: security }];
   },
+  // The old address still points at this project: send every visit to the same page on the new one.
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "agent-wallet-nu.vercel.app" }],
+        destination: "https://nudge-wallet.vercel.app/:path*",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default config; 

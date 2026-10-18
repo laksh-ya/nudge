@@ -518,6 +518,10 @@ export default defineSchema({
         contactCap: v.optional(v.object({ payeeId: v.id("payees"), dailyCapMinor: v.number() })),
         policy: v.optional(v.boolean()),
         passkey: v.optional(v.string()),
+        /** Wallet rules an assistant asked for on a simulated wallet; the owner's yes applies them (#119). */
+        rules: v.optional(
+          v.object({ dailyCeilingMinor: v.number(), protectedMinor: v.number(), holdAboveMinor: v.number(), holdFor: v.number(), contactDelay: v.number(), changeDelay: v.number() }),
+        ),
       }),
     ),
     /** Set while a loosening change waits out the vault's delay. */
@@ -603,6 +607,8 @@ export default defineSchema({
     memberId: v.optional(v.id("users")),
     name: v.string(),
     relation: v.string(),
+    /** Who the invite is for (#123): only an account signed in with this email can accept it. */
+    email: v.optional(v.string()),
     status: v.union(v.literal("invited"), v.literal("active"), v.literal("removed")),
     code: v.optional(v.string()),
     codeExpiresAt: v.optional(v.number()),
@@ -649,6 +655,8 @@ export default defineSchema({
     userId: v.id("users"),
     /** What the owner calls them. */
     name: v.string(),
+    /** Who the invite is for (#123): only an account signed in with this email can accept it. */
+    email: v.optional(v.string()),
     /** The guardian's own account, once they accept. */
     guardianId: v.optional(v.id("users")),
     status: v.union(v.literal("invited"), v.literal("active"), v.literal("removed")),

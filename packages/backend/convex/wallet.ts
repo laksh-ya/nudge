@@ -1,10 +1,12 @@
 import { v, ConvexError } from "convex/values";
-import { isVaultVersion } from "@agent-wallet/domain";
+import { convert, formatMoney, isVaultVersion } from "@agent-wallet/domain";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { DEFAULT_RULES, policyTask, unfreezeTask } from "./lib/actions";
 import { relayer } from "./lib/relayer";
 import { requireViewer, viewer } from "./lib/auth";
+import { hit } from "./lib/limits";
+import { latestRates } from "./rates";
 
 export const get = query({
   args: {},
@@ -114,5 +116,51 @@ export const setFrozen = mutation({
       tone: frozen ? "warn" : "neutral",
     });
     return null;
+  },
+});
+
+/** Accounts that can fund the wallet: money you hold, not a loan or a transfer service (#116). */
+const FUNDING_KINDS = new Set(["bank", "card", "crypto", "cash"]);
+/** The most one top-up moves, and in a day: test money, but the same habits as real money. */
+const TOPUP_MAX_MINOR = 50_000;
+
+/**
+ * Top the Nudge wallet up from one of your connected sources: the one wallet agents and you pay from
+ * (#116). The source's balance goes down by the converted amount; the wallet goes up in test dollars.
+ * On an on-chain vault the test tokens are minted into the vault itself.
+ */
+export const topUp = mutation({
+  args: { accountId: v.id("accounts"), amount: v.number() },
+  handler: async (ctx, { accountId, amount }) => {
+    const user = await requireViewer(ctx);
+    const w = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
+    if (!w) throw new ConvexError("Set up your Nudge wallet first");
+    const acct = await ctx.db.get(accountId);
+    if (!acct || acct.userId !== user._id) throw new ConvexError("Account not found");
+    if (!FUNDING_KINDS.has(acct.kind)) throw new ConvexError("Top up from a bank account, card, crypto wallet or cash");
+    const minor = Math.round(amount * 100);
+    if (!Number.isFinite(amount) || minor < 100 || minor > TOPUP_MAX_MINOR) throw new ConvexError("Top up between $1 and $500 at a time");
+    // Test money, real habits: at most 5 top-ups (so $2,500) a day.
+    await hit(ctx, `topup:${user._id}`, 5, 86_400_000, "That's 5 top-ups today. Try again tomorrow.");
+    const rates = await latestRates(ctx);
+    let cost: number;
+    try {
+      cost = acct.currency === "USD" || acct.currency === "USDC" ? minor : convert(minor, "USD", acct.currency, rates.fiat);
+    } catch {
+      throw new ConvexError(`No exchange rate for ${acct.currency} today; pick another source`);
+    }
+    if (acct.kind !== "card" && acct.balanceMinor < cost) throw new ConvexError(`${acct.name} has ${formatMoney(acct.balanceMinor, acct.currency)}; that's not enough`);
+    await ctx.db.patch(acct._id, { balanceMinor: acct.balanceMinor - cost });
+    const live = w.status === "live" && isVaultVersion(w.version);
+    if (live) await relayer.enqueueAction(ctx, internal.chain.topUpVault, { walletId: w._id, amountMinor: minor });
+    else await ctx.db.patch(w._id, { balanceMinor: w.balanceMinor + minor });
+    await ctx.db.insert("activity", {
+      userId: user._id,
+      kind: "payment",
+      title: `Topped up the wallet from ${acct.name}`,
+      detail: `$${(minor / 100).toFixed(2)} test dollars${acct.currency === "USD" || acct.currency === "USDC" ? "" : `, ${formatMoney(cost, acct.currency)} from ${acct.name}`}${live ? ", minted into your vault" : ""}`,
+      tone: "good",
+    });
+    return { amountMinor: minor, costMinor: cost, currency: acct.currency };
   },
 });

@@ -34,6 +34,7 @@ import type * as lib_auth from "../lib/auth.js";
 import type * as lib_circle from "../lib/circle.js";
 import type * as lib_budget from "../lib/budget.js";
 import type * as lib_commerce from "../lib/commerce.js";
+import type * as lib_identity from "../lib/identity.js";
 import type * as lib_links from "../lib/links.js";
 import type * as lib_control from "../lib/control.js";
 import type * as lib_errors from "../lib/errors.js";
@@ -99,6 +100,7 @@ declare const fullApi: ApiFromModules<{
   "lib/circle": typeof lib_circle;
   "lib/budget": typeof lib_budget;
   "lib/commerce": typeof lib_commerce;
+  "lib/identity": typeof lib_identity;
   "lib/links": typeof lib_links;
   "lib/control": typeof lib_control;
   "lib/errors": typeof lib_errors;

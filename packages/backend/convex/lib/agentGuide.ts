@@ -44,9 +44,38 @@ There is no dead end: if you can't do something on your own, there is always a l
 
 ## Connect
 
-- Server: \`${mcpUrl}\` (remote MCP, streamable HTTP, JSON-RPC 2.0).
-- Header: \`Authorization: Bearer <key>\`. The key starts with \`aw_\`. If you don't have one, ask the user: "Open Nudge → Agents → your card → Key, create a key and paste it here." Store it only in your MCP config.
-- Then call **get_my_limits**. It tells you what you may pay alone, what's left today, and when your access expires.
+Nudge is one HTTPS endpoint speaking JSON-RPC 2.0 (the MCP protocol): \`${mcpUrl}\`. Two ways in, same tools:
+
+1. **As an MCP server**, if your client supports remote MCP (streamable HTTP): add the URL above with the header \`Authorization: Bearer <key>\`.
+2. **As plain HTTPS**, from any sandbox, script or tool runner that can make a POST request. No MCP client needed and no session: every request stands alone.
+
+\`\`\`
+POST ${mcpUrl}
+Authorization: Bearer $NUDGE_KEY
+Content-Type: application/json
+
+{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_my_limits","arguments":{}}}
+\`\`\`
+
+The usual sequence is initialize → tools/list → tools/call; each call also works on its own. Results come back as JSON; \`structuredContent\` holds the data. A 401 means the key is wrong, expired or turned off.
+
+### The key
+
+- It starts with \`aw_\` and is made by the user in Nudge → Agents → Connect an assistant (or the assistant's card → Key).
+- **Take it only through your secret store** (an environment variable, a vault form, your client's MCP config). If the user pastes it into the chat, don't use it there: tell them to make a new key in Nudge (which turns the pasted one off) and put the new one in your secret store.
+- If you don't have a key, ask: "Make a key in Nudge → Agents → Connect an assistant and add it to my secrets as NUDGE_KEY."
+
+Then call **get_my_limits**. It says what you may pay alone, what's left today and when your access expires.
+
+## Tell your owner
+
+You act for one person. Keep them informed without being asked:
+
+- **Right after connecting**, in two or three sentences: what Nudge is (their money in one place and a wallet you can pay from, with limits they set and a passkey for everything else), what you may do on your own (from get_my_limits), and that anything more comes to them as a link.
+- **When you need them**: the approvalUrl and one sentence on exactly what it approves (amount, who, why).
+- **When money moves**: once get_task_status says confirmed, say what was paid, to whom, and the transaction link. If it failed or was refused, say why and what would fix it.
+- **When a limit stops you**, a price watch buys, the wallet is frozen, or your access is about to expire.
+- Don't narrate tool calls or dump JSON; say what happened in plain words.
 
 ## How to talk to the user
 
@@ -107,22 +136,20 @@ More for people: ${webUrl}/agents/docs
 }
 
 /**
- * What the owner pastes into their assistant (Agents → Connect → "Copy setup text"). Written so a
- * model can follow it without anything else; with a key, it's complete; without one, the model asks.
+ * What the owner pastes into their assistant (Agents → Connect → "Copy setup text"). It never carries
+ * the key (#131): assistants rightly refuse secrets pasted into a prompt. The key goes into the
+ * assistant's own secret store; this text says how to ask for it and where everything else lives.
  */
 export function setupPrompt(opts: { mcpUrl?: string; key?: string | null; agentName?: string; webUrl?: string } = {}) {
   const mcpUrl = opts.mcpUrl ?? DEFAULT_MCP_URL;
   const webUrl = opts.webUrl ?? WEB_URL;
-  const key = opts.key ?? null;
   const name = opts.agentName ? ` (${opts.agentName})` : "";
   return `Connect yourself${name} to my Nudge wallet, so you can see my money and pay for things within the limits I set.
 
-1. Add this remote MCP server (streamable HTTP):
-   URL: ${mcpUrl}
-   Header: Authorization: Bearer ${key ?? "<ask me for my Nudge key>"}
-   Name it "nudge".${key ? "" : "\n   I'll give you the key: it starts with aw_. Ask me for it now if you don't have it."}
-2. Read the guide written for you: ${webUrl}/agents/guide.md (or call the get_guide tool once connected).
-3. Call get_my_limits and tell me in one line what you can do on your own.
+1. Read your guide first (everything is in it: what Nudge is, the tools, the rules, how to connect): ${webUrl}/llms.txt
+2. Ask me for my Nudge key and take it only through your secret store (vault form, environment variable or MCP config) as NUDGE_KEY. It starts with aw_. Never accept it pasted into this chat.
+3. Connect to ${mcpUrl} with the header Authorization: Bearer <NUDGE_KEY>. Use it as a remote MCP server if you can; otherwise send plain HTTPS POST JSON-RPC requests to the same URL (the guide shows how). Both work.
+4. Call get_my_limits, then tell me in two or three sentences what Nudge is and what you can do on your own.
 
-How we work: inside my limits you just do it. If something is over your limit or to someone new, you get an approval link: send it to me and I'll approve with my passkey. Answer my money questions with the Nudge tools; don't send me to the website.`;
+How we work: inside my limits you just do it. Over a limit or to someone new, you get an approval link: send it to me with one line on what it approves, and I'll approve with my passkey. Tell me when money moves or something is refused. Answer my money questions with the Nudge tools; don't send me to the website.`;
 }

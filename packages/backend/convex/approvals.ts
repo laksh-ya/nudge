@@ -128,6 +128,14 @@ export const decide = mutation({
         const p = await ctx.db.get(payeeId);
         if (p && p.userId === user._id) await ctx.db.patch(p._id, { trusted: true, pendingPasskey: undefined, holdUntil: undefined });
       }
+      if (task.effects.rules) {
+        const w = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
+        // Only a simulated wallet: a live vault's rules change through its own passkey task.
+        if (w && w.status !== "live") {
+          const { dailyCeilingMinor, protectedMinor, ...rules } = task.effects.rules;
+          await ctx.db.patch(w._id, { dailyCeilingMinor: Math.max(dailyCeilingMinor, w.perPaymentMinor ?? 0), protectedMinor, rules });
+        }
+      }
       await ctx.db.patch(task._id, { state: "confirmed", updatedAt: Date.now() });
       await ctx.db.insert("activity", { userId: task.userId, kind: "setting", title: `Approved: ${task.title}`, tone: "good" });
       return "confirmed";

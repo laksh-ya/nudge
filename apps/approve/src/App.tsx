@@ -7,7 +7,13 @@ import { CHAIN_ID, actionDigest, checkApproval, formatMoney, isVaultVersion, pol
 import { createPublicClient, http, type Address, type Hex } from "viem";
 import { createPasskey, inAppBrowser, passkeysSupported, signWithPasskey } from "./passkey";
 
-const WEB_URL = import.meta.env.VITE_WEB_URL ?? "https://nudge-wallet.vercel.app";
+// The app's address. A build env still set to the retired address must not send owners back there.
+const WEB_URL = (() => {
+  const fallback = "https://nudge-wallet.vercel.app";
+  const v = import.meta.env.VITE_WEB_URL?.trim();
+  if (!v || /agent-wallet[a-z0-9-]*\.vercel\.app/i.test(v)) return fallback;
+  return v.replace(/\/+$/, "");
+})();
 
 /** Reads the vault from a public Base Sepolia node, so what the page calls a saved contact doesn't depend on our server. */
 const baseSepolia = createPublicClient({

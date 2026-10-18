@@ -8,10 +8,10 @@ const RULES = [
     title: "Instant, no passkey",
     items: [
       "An agent paying a trusted contact within the limits you signed",
-      "Freezing an agent or everything",
-      "Lowering an agent's limits, or removing a contact",
+      "Connecting a new assistant: it can see your money and ask, but every payment comes to you until you give it limits",
+      "Freezing an agent or everything, lowering an agent's limits, removing a contact",
       "Stopping a held payment, or declining any request",
-      "Reminders, bills, plans and goals",
+      "Reminders, bills, plans, goals and quiet hours",
     ],
   },
   {
@@ -19,18 +19,21 @@ const RULES = [
     tone: "bg-sky text-navy",
     title: "Your passkey, once",
     items: [
-      "Any payment above an agent's limit, or to someone not yet trusted",
-      "Making someone a trusted contact",
-      "Giving an agent limits, or raising them",
+      "A payment above an agent's limit",
+      "Giving an assistant limits to pay on its own, or raising them (also when it asks through a link)",
+      "Making someone a trusted contact, so agents may pay them alone (after your new-contact wait)",
       "Withdrawing from the wallet, or unfreezing",
-      "Changing the wallet's daily ceiling or protected amount",
     ],
   },
   {
     icon: Clock,
     tone: "bg-amber-soft text-amber",
-    title: "Passkey, then a short wait",
-    items: ["On an on-chain wallet, anything that loosens a rule waits the vault's delay (a few minutes), and you can cancel it until then"],
+    title: "Passkey, then your vault's change delay",
+    items: [
+      "Paying someone who isn't saved in your vault: one passkey pays them once (it doesn't make them trusted), and you can cancel it during the delay",
+      "Loosening any rule: a higher daily ceiling, a lower protected amount, shorter waits",
+      "On a simulated wallet there is no delay; set both waits in Wallet → Rules and limits",
+    ],
   },
 ];
 

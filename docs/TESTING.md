@@ -75,7 +75,7 @@ From `packages/domain/src/audit-review.test.ts` in the review checkout: unrelate
 
 | Item | Severity | Detail |
 |---|---|---|
-| Dashboard has no CSP or frame protection | Low | `agent-wallet-nu.vercel.app` sends only HSTS. Money needs the passkey on the separate approval site, but freeze, disconnect and limit screens can be framed. Add `frame-ancestors 'none'` and a CSP in `next.config.ts` headers. |
+| Dashboard has no CSP or frame protection | Low | The dashboard (then at `agent-wallet-nu.vercel.app`, now nudge-wallet.vercel.app) sent only HSTS. Money needs the passkey on the separate approval site, but freeze, disconnect and limit screens can be framed. Add `frame-ancestors 'none'` and a CSP in `next.config.ts` headers. |
 | Race evidence links point at holds | Low | `evals/README.md` says "two paid" and links `0x5ad0b560…` and `0x1ee6ff87…`. Both are `PaymentHeld` ($6 is above the $5 hold). They were released 64 blocks later in `0xbd74ac20e2b5796f61f359f9ff9385b17846b6417544a6a56f7a1d910d72f3da` and `0x3e85527eff8614900bf9c2295de4674f139daf060c124a53ee7dec88b38a6ec6`. Cite both. |
 | `forge test` appends to the committed CSV | Low | `AttacksTest` appends rows to `evals/results/contract-attacks.csv`; only the script writes the header. A plain `forge test` leaves the file with every row twice. Write the header in `setUp` or only from the script. |
 

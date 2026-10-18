@@ -9,6 +9,7 @@ import { freezeAll } from "./lib/control";
 import { hit } from "./lib/limits";
 import { relayer } from "./lib/relayer";
 import { protectMoreTask } from "./lib/actions";
+import { checkInviteEmail, inviteEmail } from "./lib/identity";
 
 /**
  * A family guardian: someone the owner trusts, with their own account, who sees the owner's held
@@ -40,15 +41,17 @@ async function guarding(ctx: QueryCtx, guardian: Doc<"users">, owner: Id<"users"
 // ---------------------------------------------------------------- the owner
 
 export const invite = mutation({
-  args: { name: v.string() },
-  handler: async (ctx, { name }) => {
+  args: { name: v.string(), email: v.optional(v.string()) },
+  handler: async (ctx, { name, email: rawEmail }) => {
     const user = await requireViewer(ctx);
     const label = name.replace(/\s+/g, " ").trim().slice(0, 40);
     if (!label) throw new ConvexError("Add their name");
+    const email = inviteEmail(rawEmail);
+    if (email && email === (user.email ?? "").toLowerCase()) throw new ConvexError("That's your own email");
     await hit(ctx, `guardian-invite:${user._id}`, 10, 3600_000);
     if ((await linksOf(ctx, user._id)).length >= MAX_GUARDIANS) throw new ConvexError(`Up to ${MAX_GUARDIANS} guardians. Remove one first.`);
     const code = inviteCode();
-    await ctx.db.insert("guardians", { userId: user._id, name: label, status: "invited", code, codeExpiresAt: Date.now() + CODE_HOURS * 3600_000, createdAt: Date.now() });
+    await ctx.db.insert("guardians", { userId: user._id, name: label, ...(email ? { email } : {}), status: "invited", code, codeExpiresAt: Date.now() + CODE_HOURS * 3600_000, createdAt: Date.now() });
     await ctx.db.insert("activity", { userId: user._id, kind: "security", title: `Invited ${label} as a guardian`, detail: `Code works once, for ${CODE_HOURS} hours`, tone: "neutral" });
     return code;
   },
@@ -138,6 +141,7 @@ export const accept = mutation({
     const link = clean.length === 8 ? await ctx.db.query("guardians").withIndex("by_code", (q) => q.eq("code", clean)).unique() : null;
     if (!link || link.status !== "invited" || (link.codeExpiresAt ?? 0) < Date.now()) throw new ConvexError("That code isn't valid any more. Ask for a new one.");
     if (link.userId === user._id) throw new ConvexError("You can't be your own guardian");
+    checkInviteEmail(link.email, user.email);
     // One use: the code is gone the moment it's claimed.
     await ctx.db.patch(link._id, { status: "active", guardianId: user._id, code: undefined, codeExpiresAt: undefined, acceptedAt: Date.now() });
     await ctx.db.insert("activity", { userId: link.userId, kind: "security", title: `${link.name} is now your guardian`, detail: "They can cancel held payments and freeze your assistants; they can't pay or change limits", tone: "good" });

@@ -272,3 +272,63 @@ describe("unusable keys and malformed MCP requests", () => {
     expect(MCP_TOOLS.find((t) => t.name === "propose_payment")!.annotations.idempotentHint).toBe(false);
   });
 });
+
+describe("settings an assistant can change over MCP (#119)", () => {
+  it("change_rules: stricter applies at once on a simulated wallet; looser needs the owner's yes", async () => {
+    const w = await world(FULL);
+    const tighter = await w.call("change_rules", { dailyCeiling: 50, newContactWaitMinutes: 2880, why: "be safer" });
+    expect(tighter.structuredContent).toMatchObject({ outcome: "applied" });
+    const wallet = await w.t.run(async (ctx) => (await ctx.db.query("wallets").collect())[0]!);
+    expect(wallet).toMatchObject({ dailyCeilingMinor: 5000, rules: { contactDelay: 172_800 } });
+
+    const looser = await w.call("change_rules", { dailyCeiling: 200, why: "big shopping day" });
+    expect(looser.structuredContent).toMatchObject({ outcome: "needs_approval" });
+    expect((await w.t.run(async (ctx) => (await ctx.db.query("wallets").collect())[0]!)).dailyCeilingMinor).toBe(5000);
+    // The owner's yes in the app applies it.
+    const token = looser.structuredContent.approvalUrl.split("/a/")[1];
+    const owner = w.t.withIdentity({ subject: "alice", issuer: "https://test.local", tokenIdentifier: "https://test.local|alice" });
+    expect(await owner.mutation(api.approvals.decide, { token, approve: true })).toBe("confirmed");
+    expect((await w.t.run(async (ctx) => (await ctx.db.query("wallets").collect())[0]!)).dailyCeilingMinor).toBe(20_000);
+  });
+
+  it("update_reminder_settings, update_bill and add_goal apply without money moving", async () => {
+    const w = await world(FULL);
+    const r = await w.call("update_reminder_settings", { leadDays: 3, quietFrom: "22:30", quietTo: "07:00" });
+    expect(r.structuredContent.message).toMatch(/3 days before, in the app, quiet 22:30–07:00/);
+    expect((await w.call("update_reminder_settings", { quietFrom: "08:00", quietTo: "08:00" })).isError).toBe(true);
+
+    await w.call("add_bill", { name: "Rent", amount: 18000, due: "2026-11-01" });
+    const bills = (await w.call("list_bills")).structuredContent;
+    const rent = (Array.isArray(bills) ? bills : bills.items ?? bills.bills).find((b: { name: string }) => b.name === "Rent");
+    expect(rent.billId).toBeTruthy();
+    const up = await w.call("update_bill", { billId: rent.billId, amount: 19000, status: "pause" });
+    expect(up.structuredContent).toMatchObject({ outcome: "applied" });
+    const row = await w.t.run(async (ctx) => (await ctx.db.query("obligations").collect()).find((o) => o.name === "Rent")!);
+    expect(row).toMatchObject({ amountMinor: 1_900_000, previousAmountMinor: 1_800_000, status: "paused" });
+
+    const g = await w.call("add_goal", { name: "Goa trip", target: 30000, by: "2027-03-01" });
+    expect(g.structuredContent.message).toMatch(/Goa trip/);
+    expect(await w.tasks()).toHaveLength(0);
+  });
+});
+
+describe("top up the wallet from a connected source (#116)", () => {
+  it("moves money from a bank account into the simulated wallet, converted, within the caps", async () => {
+    const w = await world(FULL);
+    const owner = w.t.withIdentity({ subject: "alice", issuer: "https://test.local", tokenIdentifier: "https://test.local|alice" });
+    const bank = await w.t.run((ctx) =>
+      ctx.db.insert("accounts", { userId: w.alice, kind: "bank", name: "HDFC Savings", institution: "HDFC", currency: "INR", balanceMinor: 5_000_000, syncedAt: NOW, source: "sandbox", can: ["read"] }),
+    );
+    const r = await owner.mutation(api.wallet.topUp, { accountId: bank, amount: 20 });
+    expect(r).toMatchObject({ amountMinor: 2000, currency: "INR" });
+    const after = await w.t.run(async (ctx) => ({ wallet: (await ctx.db.query("wallets").collect())[0]!, bank: (await ctx.db.get(bank))! }));
+    expect(after.wallet.balanceMinor).toBe(25_000 + 2000);
+    expect(after.bank.balanceMinor).toBe(5_000_000 - r.costMinor);
+    expect(r.costMinor).toBeGreaterThan(2000); // rupees per dollar
+    await expect(owner.mutation(api.wallet.topUp, { accountId: bank, amount: 600 })).rejects.toThrow(/\$1 and \$500/);
+    const poor = await w.t.run((ctx) =>
+      ctx.db.insert("accounts", { userId: w.alice, kind: "bank", name: "Empty", institution: "X", currency: "USD", balanceMinor: 100, syncedAt: NOW, source: "manual", can: ["read"] }),
+    );
+    await expect(owner.mutation(api.wallet.topUp, { accountId: poor, amount: 5 })).rejects.toThrow(/not enough/);
+  });
+});

@@ -314,7 +314,7 @@ function SupportedBy({ s, myAsks }: { s: Data["supporters"][number]; myAsks: Dat
 
 function InviteSheet({ relations, onClose }: { relations: string[]; onClose: () => void }) {
   const invite = useMutation(api.circle.invite);
-  const [form, setForm] = useState({ name: "", relation: "Child", allowance: "30", auto: "5", protect: false });
+  const [form, setForm] = useState({ name: "", email: "", relation: "Child", allowance: "30", auto: "5", protect: false });
   const [code, setCode] = useState<string>();
   const [error, setError] = useState<string>();
   return (
@@ -323,7 +323,7 @@ function InviteSheet({ relations, onClose }: { relations: string[]; onClose: () 
         <div className="space-y-3 pb-4">
           <p className="text-body text-ink-2">
             They open it, sign in to Nudge with their own account and accept. You'll both see who the other is before anything links. Valid for 7 days, works
-            once.
+            once.{form.email ? ` Only ${form.email} can accept it.` : ""}
           </p>
           <div className="num rounded-btn bg-page p-3 text-label break-all">{inviteUrl(code)}</div>
           <div className="flex items-center justify-between">
@@ -344,6 +344,7 @@ function InviteSheet({ relations, onClose }: { relations: string[]; onClose: () 
               const r = await invite({
                 name: form.name,
                 relation: form.relation,
+                email: form.email || undefined,
                 allowanceMinor: toMinorUnits(form.allowance || "0", "USD") ?? 0,
                 autoApproveMinor: toMinorUnits(form.auto || "0", "USD") ?? 0,
                 canProtect: form.protect,
@@ -366,6 +367,9 @@ function InviteSheet({ relations, onClose }: { relations: string[]; onClose: () 
               </Select>
             </Field>
           </div>
+          <Field label="Their email" hint="Recommended: only the account signed in with this email can accept the invite.">
+            <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="priya@example.com" autoComplete="off" />
+          </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Monthly allowance">
               <MoneyInput currency="USD" value={form.allowance} onChange={(allowance) => setForm({ ...form, allowance })} />

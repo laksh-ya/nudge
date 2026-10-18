@@ -1,5 +1,18 @@
 {
   "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . ../../packages/domain ../../packages/backend ../../pnpm-lock.yaml ../../package.json ':!../../packages/domain/test' ':!../../packages/**/*.test.ts' ':!../../packages/brand/assets'",
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "agent-wallet-approve.vercel.app"
+        }
+      ],
+      "destination": "https://nudge-approve.vercel.app/$1",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/(.*)",

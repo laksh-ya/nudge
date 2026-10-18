@@ -16,6 +16,7 @@ import { ContactLimitForm, PasskeyCard, RulesCard, WaitingCard } from "@/compone
 import { RulesLimitsCard } from "@/components/wallet/rules-limits";
 import { ContactsCard } from "@/components/wallet/contacts-card";
 import { MoveMoneyCard } from "@/components/wallet/move-money-card";
+import { TopUpButton } from "@/components/wallet/top-up";
 
 export default function WalletPage() {
   const data = useQuery(api.wallet.get);
@@ -103,10 +104,12 @@ export default function WalletPage() {
               <a href={`${chain?.wallet?.explorer ?? "https://sepolia.basescan.org"}/address/${wallet.address}`} target="_blank" rel="noopener" className="flex items-center gap-1 font-semibold text-cyan">
                 Explorer <ExternalLink className="size-3" />
               </a>
+              <TopUpButton live />
             </div>
           ) : (
             <div className="mt-2 flex items-center gap-2 text-label text-white/70">
               Simulated until you create a passkey
+              <TopUpButton live={false} />
               <button onClick={() => fund()} className="press rounded-md bg-white/10 px-2 py-0.5 font-semibold text-cyan">
                 + $100 test
               </button>

@@ -15,7 +15,7 @@ import { OAUTH_ONLY_CLIENTS, mcpSnippets } from "@/lib/mcp-snippets";
  */
 export const metadata: Metadata = {
   title: "Connect your AI agent · Nudge",
-  description: "Connect Claude Code, Cursor, Hermes, OpenClaw or any MCP client to Nudge, each with its own key and limits.",
+  description: "Connect Claude Code, Instinct, Cursor, Hermes, OpenClaw or any MCP client to Nudge, each with its own key and limits.",
 };
 
 const SERVER_URL = process.env.NEXT_PUBLIC_CONVEX_SITE_URL ? MCP_URL : "https://ceaseless-raven-960.convex.site/mcp";
@@ -72,7 +72,7 @@ export default function AgentDocsPage() {
         <p className="text-label font-semibold tracking-wide text-cyan-ink uppercase">For agent builders</p>
         <h1 className="mt-1 text-[28px] leading-[34px] font-semibold text-ink">Connect your AI agent</h1>
         <p className="mt-3 max-w-2xl text-title text-ink-2">
-          Let Claude Code, Cursor, Hermes, OpenClaw or any MCP client read the owner's money and pay saved contacts, within limits the owner sets and the vault
+          Let Claude Code, Instinct, Cursor, Hermes, OpenClaw or any MCP client read the owner's money and pay saved contacts, within limits the owner sets and the vault
           enforces on-chain.
         </p>
 
@@ -88,7 +88,8 @@ export default function AgentDocsPage() {
         <div className="space-y-3 text-body text-ink-2">
           <p>
             The quickest way: paste this into your assistant (Claude, Instinct, Hermes, any MCP client). It connects itself, reads the guide written for agents,
-            and asks you for your key. In the app, Agents → Connect copies the same text with your key already in it.
+            and asks you for your key. The text never contains the key: you put the key into the assistant&apos;s own secret store (Instinct&apos;s vault form, an
+            environment variable or its MCP config), never into the chat. In the app, Agents → Connect shows the key separately for that.
           </p>
           <CodeBlock label="Setup text for your assistant" code={setupPrompt({ mcpUrl: SERVER_URL })} />
           <p>

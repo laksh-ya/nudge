@@ -96,3 +96,27 @@ describe("family circle", () => {
     expect(g!.protecting.map((p) => p.ownerName)).toEqual(["Papa"]);
   });
 });
+
+describe("invites bound to a person (#123)", () => {
+  it("a family invite with an email opens only for the account with that email", async () => {
+    const w = await world();
+    const eve = w.t.withIdentity({ subject: "eve", issuer: "https://test.local", tokenIdentifier: "https://test.local|eve", name: "eve", email: "eve@example.com" });
+    await eve.mutation(api.users.ensure, {});
+    const { code } = await w.papa.mutation(api.circle.invite, { name: "Priya", relation: "Child", email: "Priya@Example.com", allowanceMinor: 3000, autoApproveMinor: 500 });
+    await expect(eve.mutation(api.circle.accept, { code })).rejects.toThrow(/This invite is for p•••a@example\.com/);
+    await expect(w.papa.mutation(api.circle.invite, { name: "Me", relation: "Other", email: "papa@example.com", allowanceMinor: 0, autoApproveMinor: 0 })).rejects.toThrow(/your own email/);
+    await expect(w.papa.mutation(api.circle.invite, { name: "X", relation: "Other", email: "not-an-email", allowanceMinor: 0, autoApproveMinor: 0 })).rejects.toThrow(/doesn't look right/);
+    await w.priya.mutation(api.circle.accept, { code });
+    const link = await w.t.run(async (ctx) => (await ctx.db.query("familyLinks").collect()).find((l) => l.name === "Priya")!);
+    expect(link).toMatchObject({ status: "active", memberId: w.priyaId, email: "priya@example.com" });
+  });
+
+  it("a guardian invite with an email opens only for that account", async () => {
+    const w = await world();
+    const eve = w.t.withIdentity({ subject: "eve", issuer: "https://test.local", tokenIdentifier: "https://test.local|eve", name: "eve", email: "eve@example.com" });
+    await eve.mutation(api.users.ensure, {});
+    const code = await w.papa.mutation(api.guardians.invite, { name: "Priya", email: "priya@example.com" });
+    await expect(eve.mutation(api.guardians.accept, { code })).rejects.toThrow(/Sign in to Nudge with that email/);
+    expect(await w.priya.mutation(api.guardians.accept, { code })).toMatchObject({ ownerName: "Papa" });
+  });
+});

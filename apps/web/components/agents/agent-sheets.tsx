@@ -106,11 +106,15 @@ export function ConnectSheet({ agent, onClose }: { agent: AgentView; onClose: ()
         )}
         {token ? (
           <>
-            <SetupText text={setupPrompt({ mcpUrl: MCP_URL, key: token, agentName: agent.name, webUrl: typeof window === "undefined" ? undefined : window.location.origin })} agentName={agent.name} />
-            <p className="flex items-start gap-2 rounded-btn bg-amber-soft p-3 text-label text-amber">
-              <TriangleAlert className="mt-px size-4 shrink-0" />
-              The text includes the key. It won't be shown again; making a new key turns this one off.
-            </p>
+            <SetupText text={setupPrompt({ mcpUrl: MCP_URL, agentName: agent.name, webUrl: typeof window === "undefined" ? undefined : window.location.origin })} agentName={agent.name} />
+            {/* The key travels separately, into the assistant's secret store, never inside the prompt (#131). */}
+            <div className="rounded-btn border border-line p-3">
+              <CopyRow label={`Key for ${agent.name}: put it in its secrets (vault form, env var or MCP config) as NUDGE_KEY`} value={token} secret />
+              <p className="mt-2 flex items-start gap-2 text-label text-amber">
+                <TriangleAlert className="mt-px size-4 shrink-0" />
+                Don&apos;t paste the key into the chat. Shown once; making a new key turns this one off.
+              </p>
+            </div>
             <details className="rounded-btn border border-line p-3" open={showAll} onToggle={(e) => setShowAll((e.target as HTMLDetailsElement).open)}>
               <summary className="cursor-pointer text-label font-semibold text-cyan-ink">Configure by hand instead</summary>
               <div className="mt-3 space-y-3">

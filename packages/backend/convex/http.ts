@@ -113,6 +113,40 @@ async function callTool(ctx: ActionCtx, agentId: Id<"agents">, name: string, arg
         contactId: opt("contactId"),
         payWith: opt("payWith"),
       });
+    case "change_rules": {
+      const n = (k: string) => (args[k] === undefined || args[k] === null || args[k] === "" ? undefined : Number(args[k]));
+      return await ctx.runMutation(internal.agentTools.changeRules, {
+        agentId,
+        dailyCeiling: n("dailyCeiling"),
+        protectedAmount: n("protectedAmount"),
+        holdAbove: n("holdAbove"),
+        holdMinutes: n("holdMinutes"),
+        newContactWaitMinutes: n("newContactWaitMinutes"),
+        changeDelayMinutes: n("changeDelayMinutes"),
+        why: str("why"),
+      });
+    }
+    case "update_reminder_settings":
+      return await ctx.runMutation(internal.agentTools.updateReminderSettings, {
+        agentId,
+        leadDays: args.leadDays === undefined ? undefined : num("leadDays"),
+        channel: opt("channel"),
+        quietFrom: opt("quietFrom"),
+        quietTo: opt("quietTo"),
+        quietHours: opt("quietHours"),
+      });
+    case "update_bill":
+      return await ctx.runMutation(internal.agentTools.updateBill, {
+        agentId,
+        billId: str("billId"),
+        amount: args.amount === undefined ? undefined : num("amount"),
+        due: opt("due"),
+        contactId: opt("contactId"),
+        payWith: opt("payWith"),
+        status: opt("status"),
+      });
+    case "add_goal":
+      return await ctx.runMutation(internal.agentTools.addGoal, { agentId, name: str("name"), target: num("target"), by: opt("by") });
     case "add_to_plan":
       return await ctx.runMutation(internal.agentTools.addPlan, { agentId, kind: str("kind"), name: str("name"), amount: num("amount"), date: str("date"), repeats: opt("repeats") });
     case "list_goals":

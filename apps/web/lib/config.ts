@@ -25,8 +25,8 @@ export const STOLEN_KEY_VAULT = "0x0a130a0cCABA11faA1c653f5ea4D76Adb36194d3";
 
 export const REFERENCE_VAULTS = [
   { address: REFERENCE_VAULT, label: "Full run (v3)", note: "Paid $3 at once, held $6 then released, $12 approved by passkey, a stolen key refused and frozen, unfrozen after the delay. Test passkey, 16 Oct." },
-  { address: JUDGE_VAULT, label: "Judge account", note: "Phone passkey, on the current contract since 16 Oct. Its earlier payments are on the v2 vault." },
-  { address: JUDGE_VAULT_V2, label: "Judge account before the move (v2)", note: "Phone passkey. Claude paid $3 at once, $8 was held, $12 waited for the phone." },
+  { address: JUDGE_VAULT, label: "Reference vault (phone passkey)", note: "A real phone passkey, on the current contract since 16 Oct. Its earlier payments are on the v2 vault." },
+  { address: JUDGE_VAULT_V2, label: "Reference vault before the move (v2)", note: "Phone passkey. Claude paid $3 at once, $8 was held, $12 waited for the phone." },
   { address: STOLEN_KEY_VAULT, label: "Stolen-key test", note: "A stolen agent key, used without our server, refused five times and then frozen by the vault." },
 ];
 

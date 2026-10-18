@@ -1,5 +1,5 @@
 import { v, ConvexError } from "convex/values";
-import { formatMoney } from "@agent-wallet/domain";
+import { convert, formatMoney } from "@agent-wallet/domain";
 import { internalAction, internalMutation, mutation, query } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -7,6 +7,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { requireViewer, viewer } from "./lib/auth";
 import { createReminder, goalPlan, telegramLinked, wantsTelegram } from "./lib/assist";
 import { DAY, MINUTE, afterQuietHours, daysUntil, dateLabel, inQuietHours, nextRepeat, safeTz, whenWords } from "./lib/schedule";
+import { latestRates } from "./rates";
 
 /**
  * Reminders that actually arrive (#12): bills and renewals `reminderLeadDays` ahead, goals whose date
@@ -38,19 +39,40 @@ async function deliver(ctx: MutationCtx, user: Doc<"users">, note: Note, opts: {
   return { telegram: toTelegram };
 }
 
-function billNote(bill: Doc<"obligations">, now: number, tz: string): Note {
+/**
+ * The account a bill is paid from, when it holds less than the bill: what's missing, in its own
+ * currency (#118). Credit cards are left out: their balance is what's owed, not what's there.
+ */
+export function shortfall(bill: Doc<"obligations">, acct: Doc<"accounts"> | null, fiat: Record<string, number>) {
+  if (!acct || (acct.kind === "card" && acct.balanceMinor < 0)) return null;
+  let need: number;
+  try {
+    need = acct.currency === bill.currency ? bill.amountMinor : convert(bill.amountMinor, bill.currency, acct.currency, fiat);
+  } catch {
+    return null;
+  }
+  return acct.balanceMinor < need ? { name: acct.name, has: acct.balanceMinor, short: need - acct.balanceMinor, currency: acct.currency } : null;
+}
+
+function billNote(bill: Doc<"obligations">, now: number, tz: string, low?: ReturnType<typeof shortfall>): Note {
   const when = whenWords(bill.nextDueAt, now, tz);
   const amount = formatMoney(bill.amountMinor, bill.currency);
+  const topUp = low
+    ? ` Heads up: ${low.name} has ${formatMoney(low.has, low.currency)}, ${formatMoney(low.short, low.currency)} short. Top it up before then.`
+    : "";
   if (bill.kind === "subscription") {
     const change = bill.previousAmountMinor && bill.previousAmountMinor !== bill.amountMinor ? ` (was ${formatMoney(bill.previousAmountMinor, bill.currency)})` : "";
-    return { text: `Reminder: ${bill.name} renews ${when} for ${amount}${change}.`, privateText: `Reminder: a subscription renews ${when}. Open the app for details.` };
+    return {
+      text: `Reminder: ${bill.name} renews ${when} for ${amount}${change}.${topUp}`,
+      privateText: `Reminder: a subscription renews ${when}.${low ? " The account it's paid from is short." : ""} Open the app for details.`,
+    };
   }
   // A bill the owner told us how to pay comes with a one-tap "pay it": the same chat order as typing it.
   const payable = bill.payWith === "wallet" || bill.payWith === "account" || bill.payeeId;
   const how = bill.payWith === "wallet" ? " Your wallet can pay it" : bill.payWith === "account" ? " I can open the payment for you" : "";
   return {
-    text: `Reminder: ${bill.name} ${amount} is due ${when}.${payable ? `${how}: tap Pay ${bill.name}.` : ""}`,
-    privateText: `Reminder: a bill is due ${when}. Open the app for details.`,
+    text: `Reminder: ${bill.name} ${amount} is due ${when}.${payable ? `${how}: tap Pay ${bill.name}.` : ""}${topUp}`,
+    privateText: `Reminder: a bill is due ${when}.${low ? " The account it's paid from is short." : ""} Open the app for details.`,
     ...(payable ? { pay: `Pay ${bill.name}` } : {}),
   };
 }
@@ -116,6 +138,7 @@ export const run = internalMutation({
       .query("obligations")
       .withIndex("by_due", (q) => q.gte("nextDueAt", now - STALE_AFTER).lte("nextDueAt", now + 15 * DAY))
       .take(BATCH * 4);
+    const rates = bills.some((b) => b.accountId) ? await latestRates(ctx) : null;
     for (const b of bills) {
       if (b.status !== "active" || b.remindedFor === b.nextDueAt) continue;
       const user = await userOf(b.userId);
@@ -126,7 +149,8 @@ export const run = internalMutation({
         deferred++;
         continue;
       }
-      await deliver(ctx, user, billNote(b, now, tz), { key: `bill:${b._id}:${b.nextDueAt}` });
+      const low = b.accountId && rates ? shortfall(b, await ctx.db.get(b.accountId), rates.fiat) : null;
+      await deliver(ctx, user, billNote(b, now, tz, low), { key: `bill:${b._id}:${b.nextDueAt}` });
       await ctx.db.patch(b._id, { remindedFor: b.nextDueAt });
       sent++;
     }
