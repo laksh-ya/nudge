@@ -85,6 +85,9 @@ export const inbound = internalMutation({
         await ctx.scheduler.runAfter(0, internal.telegram.send, { chatId, text: "Almost there. Confirm this chat in the app (Settings) to finish linking." });
         return;
       }
+      // One chat belongs to one account: linking it here unlinks it from any other account.
+      const others = await ctx.db.query("chatLinks").withIndex("by_external", (q) => q.eq("channel", "telegram").eq("externalId", chatId)).collect();
+      for (const o of others) if (o._id !== link._id) await ctx.db.patch(o._id, { externalId: undefined, linkedAt: undefined });
       await ctx.db.patch(link._id, { code: spent, codeExpiresAt: undefined, externalId: chatId, linkedAt: Date.now(), pendingExternalId: undefined });
       const user = await ctx.db.get(link.userId);
       await ctx.db.insert("activity", { userId: link.userId, kind: "security", title: "Telegram linked", detail: name || undefined, tone: "good" });
@@ -94,7 +97,10 @@ export const inbound = internalMutation({
       });
       return;
     }
-    const link = await ctx.db.query("chatLinks").withIndex("by_external", (q) => q.eq("channel", "telegram").eq("externalId", chatId)).unique();
+    // The most recent link wins if an older account still points at this chat.
+    const link = (await ctx.db.query("chatLinks").withIndex("by_external", (q) => q.eq("channel", "telegram").eq("externalId", chatId)).collect())
+      .filter((l) => l.linkedAt)
+      .sort((a, b) => (b.linkedAt ?? 0) - (a.linkedAt ?? 0))[0];
     if (/^\/help\b/i.test(text)) {
       await ctx.scheduler.runAfter(0, internal.telegram.send, {
         chatId,
