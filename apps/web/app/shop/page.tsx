@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Bot, Check, Copy, ExternalLink, Fingerprint, Package, Receipt, ShoppingBag, Store, Tag, TrendingDown, Zap } from "lucide-react";
 import { api } from "@/lib/api";
 import { approvalLink } from "@/lib/config";
@@ -30,6 +30,12 @@ export default function ShopPage() {
   const catalog = useQuery(api.commerce.catalog);
   const [tab, setTab] = useState<"shop" | "orders" | "seller">("shop");
   const [open, setOpen] = useState<Item | null>(null);
+  // The shop sits outside the app's Gate, so make sure a signed-in or demo visitor has an account here too.
+  const { isAuthenticated } = useConvexAuth();
+  const ensure = useMutation(api.users.ensure);
+  useEffect(() => {
+    if (isAuthenticated) void ensure();
+  }, [isAuthenticated, ensure]);
   return (
     <div className="min-h-dvh bg-[#fbf7f1] text-coal">
       <header className="sticky top-0 z-30 border-b border-black/5 bg-[#fbf7f1]/95 backdrop-blur">

@@ -10,7 +10,7 @@ import { Button, Card, Sheet } from "@/components/ui";
 import { ErrorText, Field, MoneyInput, Select, errorMessage, toMinorUnits } from "@/components/form";
 
 const usd = (n: number) => formatMoney(n, "USDC");
-const dur = (s: number) => (s === 0 ? "no wait" : s < 3600 ? `${Math.round(s / 60)} min` : s < 86_400 ? `${+(s / 3600).toFixed(1)} h` : `${+(s / 86_400).toFixed(1)} days`);
+const dur = (s: number) => (s === 0 ? "no wait" : s < 3600 ? `${Math.round(s / 60)} min` : s < 86_400 ? `${+(s / 3600).toFixed(1)} h` : (s === 86_400 ? "1 day" : `${+(s / 86_400).toFixed(1)} days`));
 
 const HOLDS = [0, 120, 600, 1800, 3600, 6 * 3600];
 const CONTACT = [0, 600, 3600, 6 * 3600, 86_400, 3 * 86_400];
