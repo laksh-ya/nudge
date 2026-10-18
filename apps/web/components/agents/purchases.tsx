@@ -24,6 +24,7 @@ const STATUS: Record<string, { label: string; tone: "green" | "amber" | "neutral
  */
 export function Purchases() {
   const watches = useQuery(api.commerce.myWatches);
+  const bought = useQuery(api.commerce.myPurchases);
   const catalog = useQuery(api.commerce.catalog);
   const cancel = useMutation(api.commerce.ownerCancelWatch);
   const drop = useMutation(api.commerce.dropPrice);
@@ -58,6 +59,32 @@ export function Purchases() {
           ))}
         </Divided>
       )}
+      {bought && bought.length > 0 && (
+        <div className="mt-3">
+          <div className="mb-1 text-label font-semibold text-mute">Recent purchases</div>
+          <Divided>
+            {bought.slice(0, 5).map((b) => (
+              <Row
+                key={b.taskId}
+                leading={<ShoppingBag className="size-5 shrink-0 text-cyan-ink" />}
+                title={b.item}
+                sub={`${b.by} · ${b.kind === "card" ? "one-time card" : b.kind === "watch" ? "bought on a price drop" : "x402"}${b.card ? ` · card ending ${b.card.last4}` : ""}`}
+                trailing={
+                  <span className="flex items-center gap-1.5">
+                    <span className="num text-body font-semibold">{formatMoney(b.amountMinor, "USDC")}</span>
+                    <Chip tone={b.state === "confirmed" ? "green" : b.state === "awaiting_approval" ? "amber" : "neutral"}>
+                      {b.state === "confirmed" ? "Done" : b.state === "awaiting_approval" ? "Needs you" : b.state.replace("_", " ")}
+                    </Chip>
+                  </span>
+                }
+              />
+            ))}
+          </Divided>
+        </div>
+      )}
+      <a href="/shop" className="press mt-3 flex h-10 items-center justify-center gap-1.5 rounded-btn bg-navy text-label font-semibold text-white">
+        <ShoppingBag className="size-4" /> Open the Nudge Test Shop
+      </a>
       <button onClick={() => setShowStore((x) => !x)} className="press mt-3 flex items-center gap-1.5 text-label font-semibold text-cyan-ink">
         <ShoppingBag className="size-3.5" /> {showStore ? "Hide" : "Try it with"} the demo x402 store
       </button>

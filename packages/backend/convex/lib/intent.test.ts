@@ -53,6 +53,11 @@ describe("what each message means", () => {
     ["what bills are due this week", "bills"],
     ["when is rent due?", "bills"],
     ["what subscriptions do I have", "subscriptions"],
+    ["what's pending?", "pending"],
+    ["anything waiting for me", "pending"],
+    ["will I make it to payday?", "plan"],
+    ["what's my plan till payday", "plan"],
+    ["pay rent", "pay"],
     ["stop my Netflix subscription", "subscriptions"],
     ["lock in rent for next year", "bills"],
     // reminders: before payments, so "remind me to pay rent" never makes a payment card

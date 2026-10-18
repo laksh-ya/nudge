@@ -9,6 +9,7 @@ import { currency } from "./schema";
 import { JUDGE, requireViewer, viewer } from "./lib/auth";
 import { wipeUser } from "./lib/wipe";
 import { hit } from "./lib/limits";
+import { seal } from "./lib/secrets";
 
 const DAY = 86_400_000;
 export const STEPS = ["you", "goals", "sources", "history", "review", "assistant", "wallet", "chat", "people", "done"] as const;
@@ -46,6 +47,7 @@ export const state = query({
         reminderLeadDays: user.reminderLeadDays ?? 2,
         privateReminders: user.privateReminders ?? false,
         assistantModel: (user.assistantModel ?? "auto") as "auto" | "basic" | "claude-opus-5-5" | "claude-sonnet-5-5" | "claude-haiku-5-5",
+        ownModelKey: user.modelKeyHint ?? null,
         monthlyBudgetMinor: user.monthlyBudgetMinor,
         emergencyMinor: user.emergencyMinor,
         step: user.onboardingStep ?? (user.onboardedAt ? null : "you"),
@@ -157,6 +159,24 @@ async function ownAssistant(ctx: MutationCtx, user: Doc<"users">, mode: "draft" 
     });
   }
 }
+
+/** Use your own Anthropic API key for the Nudge assistant (app and Telegram). Stored sealed; never shown again. */
+export const setModelKey = mutation({
+  args: { key: v.optional(v.string()) },
+  handler: async (ctx, { key }) => {
+    const user = await requireViewer(ctx);
+    if (!key) {
+      await ctx.db.patch(user._id, { modelKeySealed: undefined, modelKeyHint: undefined });
+      await ctx.db.insert("activity", { userId: user._id, kind: "security", title: "Removed your own Claude API key", tone: "neutral" });
+      return null;
+    }
+    const k = key.trim();
+    if (!/^sk-ant-[A-Za-z0-9_-]{20,200}$/.test(k)) throw new ConvexError("That doesn't look like an Anthropic API key (it starts with sk-ant-)");
+    await ctx.db.patch(user._id, { modelKeySealed: await seal(k, `model:${user._id}`), modelKeyHint: k.slice(-4) });
+    await ctx.db.insert("activity", { userId: user._id, kind: "security", title: "Nudge now uses your own Claude API key", detail: `Ends in ${k.slice(-4)}`, tone: "good" });
+    return k.slice(-4);
+  },
+});
 
 export const saveAssistant = mutation({
   args: {

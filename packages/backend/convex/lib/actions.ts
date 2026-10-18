@@ -125,13 +125,15 @@ export function paymentIdFor(taskId: Id<"tasks">, agentId?: Id<"agents">, reques
   return requestId && agentId ? paymentIdOf(`${agentId}:${requestId}`) : paymentIdOf(taskId);
 }
 
-function policyOf(wallet: Doc<"wallets">, next?: { protectedMinor?: number; dailyCeilingMinor?: number; holdAboveMinor?: number; holdFor?: number }): Policy {
+export type RuleChange = { protectedMinor?: number; dailyCeilingMinor?: number; holdAboveMinor?: number; holdFor?: number; contactDelay?: number; changeDelay?: number };
+
+function policyOf(wallet: Doc<"wallets">, next?: RuleChange): Policy {
   const v = wallet.vault;
   return {
     protectedAmount: toTokenUnits(next?.protectedMinor ?? wallet.protectedMinor),
     dailyCeiling: toTokenUnits(next?.dailyCeilingMinor ?? wallet.dailyCeilingMinor),
-    newContactDelay: BigInt(v?.contactDelay ?? DEFAULT_RULES.contactDelay),
-    changeDelay: BigInt(v && v.changeDelay > 0 ? v.changeDelay : DEFAULT_RULES.changeDelay),
+    newContactDelay: BigInt(next?.contactDelay ?? v?.contactDelay ?? DEFAULT_RULES.contactDelay),
+    changeDelay: BigInt(next?.changeDelay ?? (v && v.changeDelay > 0 ? v.changeDelay : DEFAULT_RULES.changeDelay)),
     holdAbove: toTokenUnits(next?.holdAboveMinor ?? (v && v.holdFor > 0 ? v.holdAboveMinor : DEFAULT_RULES.holdAboveMinor)),
     holdFor: BigInt(next?.holdFor ?? (v && v.holdFor > 0 ? v.holdFor : DEFAULT_RULES.holdFor)),
   };
@@ -177,7 +179,7 @@ export async function setupTask(
 }
 
 /** New wallet limits. Lowering applies when signed; raising waits out the vault's delay. */
-export async function policyTask(ctx: MutationCtx, user: Doc<"users">, wallet: Doc<"wallets">, next: { protectedMinor: number; dailyCeilingMinor: number }) {
+export async function policyTask(ctx: MutationCtx, user: Doc<"users">, wallet: Doc<"wallets">, next: RuleChange) {
   return await ownerTask(ctx, user, {
     title: "Change wallet limits",
     reason: "The vault enforces these limits, so changing them needs your passkey",

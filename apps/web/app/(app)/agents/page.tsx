@@ -253,6 +253,22 @@ function AgentCard({
         ) : (
           <p className="text-label text-mute">Asks you before every payment, with a link you approve by passkey. Set limits to let it pay small amounts alone.</p>
         )}
+        {a.allowedPayees?.length ? <p className="mt-1 text-label text-mute">Pays only {a.allowedPayees.length} chosen {a.allowedPayees.length === 1 ? "contact" : "contacts"} on its own</p> : null}
+        {a.recent && a.recent.length > 0 && (
+          <div className="mt-3 space-y-1 border-t border-line pt-2">
+            {a.recent.map((r) => (
+              <div key={r._id} className="flex items-center justify-between gap-2 text-label">
+                <span className="truncate text-ink-2">{r.title}</span>
+                <span className="flex shrink-0 items-center gap-1.5">
+                  <span className="num font-semibold">{formatMoney(r.amountMinor, "USDC")}</span>
+                  <span className={cn("text-micro", r.state === "confirmed" ? "text-green" : r.state === "awaiting_approval" ? "text-amber" : ["failed", "cancelled", "expired"].includes(r.state) ? "text-red" : "text-mute")}>
+                    {r.state === "confirmed" ? "paid" : r.state === "awaiting_approval" ? "needs you" : r.state.replace("_", " ")}
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="mt-4 flex items-center justify-between gap-2 border-t border-line pt-3">

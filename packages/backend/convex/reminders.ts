@@ -22,15 +22,17 @@ const GOAL_LEAD_DAYS = 7;
 const STALE_AFTER = DAY;
 const BATCH = 500;
 
-type Note = { text: string; privateText: string };
+/** `pay`: the words that pay the bill from the chat ("Pay Rent"), offered as a button and a Telegram reply. */
+type Note = { text: string; privateText: string; pay?: string };
 
 /** Puts a reminder in the owner's chat thread and sends it to Telegram if linked and wanted. */
 async function deliver(ctx: MutationCtx, user: Doc<"users">, note: Note, opts: { telegram?: boolean; key: string }) {
   if (await ctx.db.query("reminderDeliveries").withIndex("by_key", (q) => q.eq("key", opts.key)).unique()) return { telegram: false };
-  await ctx.db.insert("messages", { userId: user._id, role: "assistant", text: note.text, channel: "app", reminder: true });
+  await ctx.db.insert("messages", { userId: user._id, role: "assistant", text: note.text, channel: "app", reminder: true, ...(note.pay ? { suggestions: [note.pay, "Not now"] } : {}) });
   const toTelegram = (opts.telegram ?? wantsTelegram(user)) && (await telegramLinked(ctx, user._id));
   if (toTelegram) {
-    const deliveryId = await ctx.db.insert("reminderDeliveries", { userId: user._id, key: opts.key, text: note.text, privateText: note.privateText, status: "queued", attempts: 0, nextAttemptAt: Date.now() });
+    const text = note.pay ? `${note.text} Reply "${note.pay.toLowerCase()}" and I'll take care of it.` : note.text;
+    const deliveryId = await ctx.db.insert("reminderDeliveries", { userId: user._id, key: opts.key, text, privateText: note.privateText, status: "queued", attempts: 0, nextAttemptAt: Date.now() });
     await ctx.scheduler.runAfter(0, internal.reminders.deliverTelegram, { deliveryId });
   }
   return { telegram: toTelegram };
@@ -43,7 +45,14 @@ function billNote(bill: Doc<"obligations">, now: number, tz: string): Note {
     const change = bill.previousAmountMinor && bill.previousAmountMinor !== bill.amountMinor ? ` (was ${formatMoney(bill.previousAmountMinor, bill.currency)})` : "";
     return { text: `Reminder: ${bill.name} renews ${when} for ${amount}${change}.`, privateText: `Reminder: a subscription renews ${when}. Open the app for details.` };
   }
-  return { text: `Reminder: ${bill.name} ${amount} is due ${when}.`, privateText: `Reminder: a bill is due ${when}. Open the app for details.` };
+  // A bill the owner told us how to pay comes with a one-tap "pay it": the same chat order as typing it.
+  const payable = bill.payWith === "wallet" || bill.payWith === "account" || bill.payeeId;
+  const how = bill.payWith === "wallet" ? " Your wallet can pay it" : bill.payWith === "account" ? " I can open the payment for you" : "";
+  return {
+    text: `Reminder: ${bill.name} ${amount} is due ${when}.${payable ? `${how}: tap Pay ${bill.name}.` : ""}`,
+    privateText: `Reminder: a bill is due ${when}. Open the app for details.`,
+    ...(payable ? { pay: `Pay ${bill.name}` } : {}),
+  };
 }
 
 function goalNote(goal: Doc<"goals">, now: number, tz: string): Note {

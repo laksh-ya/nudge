@@ -20,6 +20,7 @@ import {
   ChartPie,
 } from "lucide-react";
 import { CURRENCIES } from "@agent-wallet/domain";
+import { Character } from "@agent-wallet/brand";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { approvalLink } from "@/lib/config";
@@ -28,6 +29,8 @@ import { AgentMark } from "@/components/brand";
 import { ActivityIcon } from "@/components/activity-icon";
 import { SetupCard } from "@/components/setup-card";
 import { DemoTour } from "@/components/demo-tour";
+import { TaskCard } from "@/components/task-card";
+import { AssistantsStrip, ComingUp, QuickActions } from "@/components/home-extras";
 import { ButtonLink, Card, Chip, Divided, IconTile, Meter, Money, Row, Skeleton, TextLink } from "@/components/ui";
 
 const ACTIONS = [
@@ -76,7 +79,9 @@ export default function Home() {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-6">
       <div className="min-w-0 space-y-4 lg:space-y-6">
-        <h1 className="hidden text-[24px] leading-[30px] font-semibold lg:block">Hi, {data.name}</h1>
+        <h1 className="flex items-center gap-3 text-[28px] leading-[32px] font-black tracking-[-0.04em] [font-stretch:108%] lg:text-[34px] lg:leading-[38px]">
+          <Character of="nudge" mood="happy" size={40} bob /> Hi, {data.name}
+        </h1>
 
         <section className="rise overflow-hidden rounded-card bg-navy text-white shadow-[0_8px_24px_rgba(0,41,112,0.18)]">
           <div className="p-5">
@@ -141,7 +146,7 @@ export default function Home() {
             )}
           </div>
           <Link href="/agents" className="press flex items-center justify-between gap-3 bg-navy-soft px-5 py-3 text-body">
-            <span className="text-white/75">Left today for agents</span>
+            <span className="text-white/75">Agents may still spend today</span>
             <span className="flex items-center gap-2 font-semibold">
               <span className="num">{formatMoney(o.agentAuthority, o.walletCurrency)}</span>
               <Chip tone="cyan" className="bg-white/15 text-white">tUSD · test</Chip>
@@ -153,14 +158,9 @@ export default function Home() {
 
         <SetupCard />
 
-        <section className="card rise grid grid-cols-4 gap-y-4 px-2 py-4">
-          {ACTIONS.map(({ href, label, icon }) => (
-            <Link key={label} href={href} className="press flex flex-col items-center gap-1.5 px-1 text-center">
-              <IconTile icon={icon} size="lg" />
-              <span className="text-label leading-[15px] font-medium text-ink">{label}</span>
-            </Link>
-          ))}
-        </section>
+        <QuickActions />
+
+        <AssistantsStrip />
 
         <Card title={attentionCount ? `Needs you · ${attentionCount}` : "Needs you"}>
           {attentionCount === 0 ? (
@@ -168,22 +168,9 @@ export default function Home() {
           ) : (
             <Divided>
               {attention.approvals.map((t) => (
-                <Row
-                  key={t._id}
-                  leading={t.agentProvider ? <AgentMark provider={t.agentProvider} mood="watch" /> : <IconTile icon={Receipt} />}
-                  title={t.title}
-                  sub={t.sample ? `Sample · ${t.reason ?? ""}` : t.reason}
-                  trailing={
-                    <div className="flex items-center gap-3">
-                      <Money minor={t.amountMinor ?? 0} currency={t.currency ?? "USDC"} className="text-body font-semibold" />
-                      {t.approvalToken && (
-                        <ButtonLink href={approvalLink(t.approvalToken)} size="sm" external>
-                          Review
-                        </ButtonLink>
-                      )}
-                    </div>
-                  }
-                />
+                // The same card as the Wallet screen: passkey requests open the approval site;
+                // simulated ones approve right here (the approval site sends those back to the app).
+                <TaskCard key={t._id} task={t} className="my-2" />
               ))}
               {attention.unknown.map((t) => (
                 <Row
@@ -231,33 +218,7 @@ export default function Home() {
       </div>
 
       <div className="min-w-0 space-y-4 lg:space-y-6 lg:pt-[54px]">
-        <Card title="Coming up" action={<TextLink href="/money?tab=bills">All bills</TextLink>}>
-          {o.upcoming.length === 0 && (
-            <p className="text-body text-mute">
-              No bills found yet.{" "}
-              <Link href="/money?tab=accounts" className="font-semibold text-cyan-ink">
-                Import a statement
-              </Link>{" "}
-              and regular payments show up here.
-            </p>
-          )}
-          <Divided>
-            {o.upcoming.slice(0, 4).map((b) => (
-              <Row
-                key={b._id}
-                leading={<IconTile icon={b.kind === "bill" ? Receipt : Repeat} tone="page" />}
-                title={b.name}
-                sub={dueLabel(b.nextDueAt)}
-                trailing={
-                  <div className="flex flex-col items-end gap-0.5">
-                    <Money minor={b.amountMinor} currency={b.currency} className="text-body font-semibold" hidden={hidden} />
-                    {b.autopayLimitMinor !== undefined && <Chip tone="cyan">Autopay</Chip>}
-                  </div>
-                }
-              />
-            ))}
-          </Divided>
-        </Card>
+        <ComingUp hidden={hidden} />
 
         <Card title="This month" action={<TextLink href="/money">Details</TextLink>}>
           <div className="flex items-baseline justify-between">

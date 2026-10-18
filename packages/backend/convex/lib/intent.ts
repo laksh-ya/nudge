@@ -41,6 +41,12 @@ export type Intent =
       supersedes?: boolean;
     }
   | { kind: "spending" }
+  /** "what's pending", "anything waiting for me": approvals, bills due soon, reminders, watches. */
+  | { kind: "pending" }
+  /** "save 0x… as Ravi", "add Ravi 0x… to my contacts": a new trusted contact (passkey on a live vault). */
+  | { kind: "add_contact"; address: string; name: string | null }
+  /** "will I make it to payday", "what's my plan": the projection from the Plan screen. */
+  | { kind: "plan" }
   | { kind: "bills" }
   | { kind: "subscriptions" }
   | { kind: "safe"; amount: Amount | null }
@@ -285,6 +291,13 @@ export function classify(text: string): Intent {
   if (/\b(status|go(?:ne)? through|went through|get paid|got paid|is it paid|has it been paid|was it paid|did it work|what happened (?:to|with))\b/.test(t) && !/\bbills?\b/.test(t)) return { kind: "status" };
   if (/^(?:please\s+)?(?:cancel|stop|drop)\s+(?:that|it|this|the payment|that payment|the last one|my payment)\b|^cancel[.!]*$/.test(t)) return { kind: "cancel" };
 
+  const addr = text.match(/\b0x[a-fA-F0-9]{40}\b/)?.[0];
+  if (addr && /\b(save|add|trust)\b/.test(t) && !/\b(pay|send|transfer)\b/.test(t)) {
+    const named = text.match(/\bas\s+(?:a\s+contact\s+)?(?:called\s+|named\s+)?["“]?([\p{L}][\p{L}\p{N} .'&-]{0,38}?)["”]?\s*(?:[.!]|$|\bto\b)/iu)?.[1]
+      ?? text.match(/\b(?:add|save|trust)\s+(?!0x)([\p{L}][\p{L}\p{N} .'&-]{0,38}?)\s*(?:'s\s+(?:wallet|address)\s*)?[:,]?\s*0x/iu)?.[1]
+      ?? null;
+    return { kind: "add_contact", address: addr, name: named?.trim() ?? null };
+  }
   if (/\b(save|saving|put aside|set aside|goal)\b/.test(t) && amount && !/\b(spen[dt]|saved on)\b/.test(t)) {
     const name = t.match(/\b(?:for|towards?)\s+(?:a\s+|an\s+|my\s+|the\s+|new\s+)*([a-z][a-z0-9 '&-]{1,30}?)(?=\s+(?:by|before|until|in|within|next|this|over|and)\b|[.?!,]|$)/)?.[1] ?? null;
     return { kind: "goal_set", amount, name, question: /\?|\bcan i\b|\bcould i\b|\bis (?:it|that) (?:possible|doable|realistic)\b|\bshould i\b|\bhow much (?:a|per|each) month\b/.test(t) };
@@ -326,6 +339,8 @@ export function classify(text: string): Intent {
     return { kind: "pay", amount: list.length > 1 ? null : amount, reason: reasonOf(t), direct: isDirectOrder(text) };
   }
 
+  if (/\b(pending|waiting for me|need(?:s)? (?:my|me|to) (?:approv\w*|do)|to-?do|anything (?:due|waiting))\b|^what(?:'s| is) (?:waiting|left to do)\b/.test(t)) return { kind: "pending" };
+  if (/\b(make it (?:to|till|until) (?:payday|salary|the end of the month)|till payday|until payday|by payday|projection|my plan|cash ?flow|salary)\b|\bwill i (?:have|be ok|run out|make it)\b/.test(t)) return { kind: "plan" };
   if (/subscri|\brenew(al|als|s)?\b/.test(t)) return { kind: "subscriptions" };
   if (/\b(bills?|due|upcoming|coming up|rent|emi)\b/.test(t)) return { kind: "bills" };
   if (SAFE_Q.test(t) || /\b(spend|left|money|balance|cash)\b/.test(t)) return { kind: "safe", amount };

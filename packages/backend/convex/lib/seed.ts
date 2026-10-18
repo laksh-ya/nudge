@@ -458,6 +458,18 @@ export async function seedUser(ctx: MutationCtx, userId: Id<"users">) {
     quoteExpiresAt: at(20),
     state: "received",
   });
+  // The family circle (Family screen): a sample member with an allowance and some history.
+  const month = new Date(now).toISOString().slice(0, 7);
+  const sibling = await ctx.db.insert("familyLinks", {
+    ownerId: userId, name: "Ananya", relation: "Sibling", status: "active", allowanceMinor: 3000, autoApproveMinor: 1000,
+    usedMinor: 1200, month, sample: true, createdAt: at(30), acceptedAt: at(29),
+  });
+  await ctx.db.insert("familyAsks", { linkId: sibling, ownerId: userId, kind: "ask", amountMinor: 800, note: "Metro card top-up", state: "paid", auto: true, createdAt: at(6), decidedAt: at(6) });
+  await ctx.db.insert("familyAsks", { linkId: sibling, ownerId: userId, kind: "send", amountMinor: 400, note: "Birthday coffee", state: "paid", createdAt: at(3), decidedAt: at(3) });
+  await ctx.db.insert("familyLinks", {
+    ownerId: userId, name: "Papa", relation: "Parent", status: "invited", code: "SAMPLE42", codeExpiresAt: now + 7 * DAY,
+    allowanceMinor: 0, autoApproveMinor: 0, usedMinor: 0, month, canProtect: true, sample: true, createdAt: at(1),
+  });
 
   const events: Array<["payment" | "security" | "agent" | "import" | "setting", string, string | undefined, "neutral" | "good" | "warn" | "bad"]> = [
     ["agent", "OpenClaw frozen", "Tried to pay an address from a forwarded message", "bad"],

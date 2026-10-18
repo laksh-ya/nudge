@@ -8,6 +8,8 @@ import { HELP } from "./messages";
 const COMMANDS: Record<string, { description: string; says: string }> = {
   balance: { description: "What's safe to spend", says: "how much can I spend" },
   bills: { description: "Bills due soon", says: "what bills are due" },
+  pending: { description: "What's waiting for you", says: "what's pending" },
+  plan: { description: "Will you make it to payday", says: "will I make it to payday" },
   spending: { description: "Spending this month", says: "how much did I spend this month" },
   reminders: { description: "Your reminders", says: "what reminders do I have" },
   goals: { description: "Savings goals", says: "how are my goals" },

@@ -198,6 +198,7 @@ function Bills() {
   const bills = useQuery(api.money.obligations);
   const me = useQuery(api.users.me);
   const review = useMutation(api.money.reviewSuggestion);
+  const addSamples = useMutation(api.money.addSampleBills);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Id<"obligations"> | null>(null);
   if (!bills || !me) return <Skeleton className="h-96 rounded-card" />;
@@ -277,6 +278,9 @@ function Bills() {
       {active.length === 0 && suggested.length === 0 && (
         <Card>
           <p className="py-4 text-center text-body text-mute">No bills yet. Add rent, electricity or a subscription with Add, and choose who it's paid to and how.</p>
+          <Button tone="ghost" className="w-full" onClick={() => void addSamples({})}>
+            Or add a few sample bills to try it
+          </Button>
         </Card>
       )}
       <AddBillSheet open={adding} onOpenChange={setAdding} currency={me.currency as Currency} />

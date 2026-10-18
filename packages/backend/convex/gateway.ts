@@ -65,6 +65,8 @@ export const updateGrant = mutation({
     perPaymentMinor: v.number(),
     hidesBalances: v.boolean(),
     days: v.number(),
+    /** Only these contacts may be paid without asking; an empty list means any trusted contact. */
+    allowedPayees: v.optional(v.array(v.id("payees"))),
   },
   handler: async (ctx, args) => {
     const user = await requireViewer(ctx);
@@ -74,7 +76,9 @@ export const updateGrant = mutation({
     if (!Number.isInteger(args.days) || args.days < 1 || args.days > 365) throw new ConvexError("Pick 1 to 365 days");
     const scopes = [...new Set(args.scopes)];
     if (!scopes.includes("read")) scopes.unshift("read");
-    await ctx.db.patch(agent._id, { hidesBalances: args.hidesBalances });
+    for (const id of args.allowedPayees ?? []) await own(user, await ctx.db.get(id));
+    // Narrowing who it may pay only tightens, so it applies at once (the vault still checks its own limits).
+    await ctx.db.patch(agent._id, { hidesBalances: args.hidesBalances, ...(args.allowedPayees ? { allowedPayees: args.allowedPayees.length ? [...new Set(args.allowedPayees)].slice(0, 50) : undefined } : {}) });
     const approvalToken = await changeLimits(ctx, user, agent, {
       scopes,
       perPaymentMinor: args.perPaymentMinor,
@@ -440,6 +444,7 @@ export async function propose(ctx: MutationCtx, { agentId, contactId, toAddress,
     if (spentToday + minor > ceiling) blockers.push({ code: "2004", why: "Above the wallet's daily ceiling for all agents" });
     if (free - minor < protectedMinor) blockers.push({ code: "2005", why: "Would dip into the protected amount" });
     if (notYet || !payee.trusted || (payee.holdUntil && payee.holdUntil > Date.now())) blockers.push({ code: "2006", why: `${payee.name} isn't a trusted contact yet` });
+    if (agent.allowedPayees?.length && !agent.allowedPayees.includes(payee._id)) blockers.push({ code: "2016", why: `${payee.name} isn't on ${agent.name}'s list of who it may pay alone` });
     if (payee.dailyCapMinor) {
       const toPayee = await agentPaidTo(ctx, payee._id);
       if (toPayee + minor > payee.dailyCapMinor) blockers.push({ code: "2012", why: `Above ${payee.name}'s ${formatMoney(payee.dailyCapMinor, "USDC")} daily limit for all agents` });

@@ -66,6 +66,8 @@ There is no dead end: if you can't do something on your own, there is always a l
 
 **Buy from a website or API that charges with HTTP 402 (x402):** pay_x402 {url, maxPrice}. Inside your limits it pays and, once confirmed, get_task_status includes the bought resource. Only "transfer" offers on base-sepolia in tUSD can be paid; other offers come back refused with what the merchant accepts.
 
+**The Nudge Test Shop** (${webUrl}/shop) sells test products for test dollars. Its catalog is at \`${mcpUrl.replace(/\/mcp$/, "")}/x402/store\`; every item URL there is an x402 resource you can pay_x402 or watch_price.
+
 **Buy when the price drops (AP2 human-not-present):** ask the user for the item and the most they'll pay, then watch_price {url, item, maxPrice, days}. Nudge checks every minute and buys as soon as the price is at or below maxPrice, without asking again if it fits your limits. list_watches shows progress; cancel_watch stops it.
 
 **Card-only checkout:** get_card {amount, merchant, reason}. When confirmed, get_task_status includes a one-time card number loaded with exactly that amount. In this test build the card is simulated (a test number).

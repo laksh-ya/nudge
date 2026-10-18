@@ -14,6 +14,7 @@ import { spendDeploy } from "./lib/budget";
 import { chainReady } from "./chain";
 import { alertGuardians } from "./guardians";
 import { cartFor, intentFor, paymentFor } from "./lib/mandates";
+import { afterTask } from "./lib/circle";
 
 const HEX32 = /^0x[0-9a-fA-F]{64}$/;
 
@@ -659,6 +660,7 @@ export const onOwnerResult = internalMutation({
     const t = await ctx.db.get(taskId);
     if (!t || !(await accepts(ctx, t, { ok, state: ok ? "confirmed" : "failed", txHash, note }))) return;
     await ctx.db.patch(taskId, { state: ok ? "confirmed" : "failed", txHash: txHash ?? t.txHash, reason: ok ? t.reason : `Not done: ${note ?? "rejected"}`, updatedAt: Date.now() });
+    await afterTask(ctx, (await ctx.db.get(taskId))!);
     if (!ok) {
       await ctx.db.insert("activity", { userId: t.userId, kind: "payment", title: `${t.title} failed`, detail: note, tone: "bad" });
       // Nothing changed in the vault, so offer the same setup again with a fresh nonce.

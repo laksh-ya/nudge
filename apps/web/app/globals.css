@@ -21,7 +21,8 @@
   --color-ink-2: #505050;
   --color-mute: #7e7e7e;
   --color-line: #e8edf2;
-  --color-page: #f5f8fa;
+  /* The same warm paper as the marketing site; cards stay white on it. */
+  --color-page: #f4f4f1;
   --color-red: #eb5757;
   --color-red-soft: #fdeeee;
   --color-green: #0f9d58;

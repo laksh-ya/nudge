@@ -11,7 +11,19 @@ export const list = query({
     const user = await viewer(ctx);
     if (!user) return [];
     const agents = await ctx.db.query("agents").withIndex("by_user", (q) => q.eq("userId", user._id)).take(50);
-    return agents.filter((a) => a.status !== "revoked").map(({ tokenHash, ...a }) => ({ ...a, hasKey: Boolean(tokenHash) }));
+    const recent = await ctx.db.query("tasks").withIndex("by_user_updated", (q) => q.eq("userId", user._id)).order("desc").take(150);
+    const payees = new Map((await ctx.db.query("payees").withIndex("by_user", (q) => q.eq("userId", user._id)).take(200)).map((p) => [p._id, p.name]));
+    return agents
+      .filter((a) => a.status !== "revoked")
+      .map(({ tokenHash, ...a }) => ({
+        ...a,
+        hasKey: Boolean(tokenHash),
+        // Its last few payments and requests, for the card.
+        recent: recent
+          .filter((t) => t.agentId === a._id && t.amountMinor !== undefined)
+          .slice(0, 3)
+          .map((t) => ({ _id: t._id, title: t.purchase?.item ?? (t.payeeId ? (payees.get(t.payeeId) ?? t.title) : t.title), amountMinor: t.amountMinor!, state: t.state, at: t._creationTime })),
+      }));
   },
 });
 

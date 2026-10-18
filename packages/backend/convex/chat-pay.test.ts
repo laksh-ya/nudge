@@ -99,6 +99,25 @@ describe("chat payments without a model", () => {
     expect(payee.trusted).toBe(false);
   });
 
+  it("answers what's pending and whether you make it to payday", async () => {
+    const f = await fixture();
+    await f.t.mutation(internal.messages.reply, { userId: f.alice, text: "Pay Blue Tokai $50" });
+    await f.t.mutation(internal.messages.reply, { userId: f.alice, text: "what's pending?" });
+    expect((await lastReply(f)).text).toMatch(/Waiting for you: .*\$50\.00/);
+    await f.t.mutation(internal.messages.reply, { userId: f.alice, text: "will I make it to payday?" });
+    expect((await lastReply(f)).text).toMatch(/safe to spend .*payday is/);
+  });
+
+  it("saves a contact from the chat", async () => {
+    const f = await fixture();
+    await f.t.mutation(internal.messages.reply, { userId: f.alice, text: "save 0x00000000000000000000000000000000000000f6 as Ravi" });
+    expect((await lastReply(f)).text).toMatch(/^Saved Ravi as a trusted contact/);
+    const ravi = await f.t.run(async (ctx) => (await ctx.db.query("payees").collect()).find((p) => p.name === "Ravi"));
+    expect(ravi?.trusted).toBe(true);
+    await f.t.mutation(internal.messages.reply, { userId: f.alice, text: "add 0x00000000000000000000000000000000000000f7" });
+    expect((await lastReply(f)).text).toMatch(/What should I call/);
+  });
+
   it("posts one reply, not a second gateway note", async () => {
     const f = await fixture();
     await f.t.mutation(internal.messages.reply, { userId: f.alice, text: "Pay Blue Tokai $4" });

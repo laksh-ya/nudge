@@ -2,6 +2,7 @@ import { v, type Infer } from "convex/values";
 import { convert, formatMoney, toMinor, type Currency } from "@agent-wallet/domain";
 import { freezeAgent, freezeAll } from "./lib/control";
 import { payeeForAddress, propose } from "./gateway";
+import { addContactFor } from "./contacts";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -400,6 +401,41 @@ async function overviewOf(turn: Turn) {
   return await computeOverview(turn.ctx, turn.user);
 }
 
+/** "What's pending?": approvals waiting, payments on their way, bills due in a week, reminders, watches. */
+async function onPending(turn: Turn) {
+  const { ctx, user, now, tz } = turn;
+  const lines: string[] = [];
+  const waiting = await ctx.db.query("tasks").withIndex("by_user_state", (q) => q.eq("userId", user._id).eq("state", "awaiting_approval")).take(20);
+  for (const t of waiting) lines.push(`Waiting for you: ${t.title}${t.amountMinor !== undefined ? `, ${money(t.amountMinor, t.currency ?? "USDC")}` : ""}`);
+  const held = await ctx.db.query("tasks").withIndex("by_user_state", (q) => q.eq("userId", user._id).eq("state", "held")).take(10);
+  for (const t of held) lines.push(`On hold: ${t.title}${t.amountMinor !== undefined ? `, ${money(t.amountMinor, t.currency ?? "USDC")}` : ""}${t.releaseAt ? `, leaves ${whenWords(t.releaseAt, now, tz)}` : ""}`);
+  const bills = (await ctx.db.query("obligations").withIndex("by_user_due", (q) => q.eq("userId", user._id).gte("nextDueAt", now - DAY).lte("nextDueAt", now + 7 * DAY)).take(20)).filter((b) => b.status === "active");
+  for (const b of bills) lines.push(`Due ${whenWords(b.nextDueAt, now, tz)}: ${b.name}, ${money(b.amountMinor, b.currency)}`);
+  const rem = await ctx.db.query("reminders").withIndex("by_user", (q) => q.eq("userId", user._id).eq("status", "scheduled")).take(5);
+  for (const r of rem.sort((a, b) => a.dueAt - b.dueAt).slice(0, 3)) lines.push(`Reminder ${whenWords(r.dueAt, now, tz)}: ${r.text}`);
+  const watches = (await ctx.db.query("watches").withIndex("by_user", (q) => q.eq("userId", user._id)).take(20)).filter((w) => w.status === "active" || w.status === "waiting");
+  for (const w of watches) lines.push(`Watching: ${w.item} at ${money(w.maxPriceMinor, "USDC")} or less${w.status === "waiting" ? " (waiting for your OK)" : ""}`);
+  if (!lines.length) return say(turn, "Nothing waiting on you, no bills due this week and no reminders coming up.");
+  return say(turn, lines.join("\n"), { suggestions: ["Will I make it to payday?", "What bills are due?"] });
+}
+
+/** "Will I make it to payday?": safe to spend now, then the plan's income and spends until payday. */
+async function onPlan(turn: Turn) {
+  const { ctx, user, now, tz } = turn;
+  const o = await overviewOf(turn);
+  const items = (await ctx.db.query("plans").withIndex("by_user_due", (q) => q.eq("userId", user._id).gte("dueAt", now - DAY).lte("dueAt", now + 45 * DAY)).take(50)).filter((p) => !p.done);
+  const income = items.filter((p) => p.kind === "income" && p.currency === o.currency);
+  const out = items.filter((p) => p.kind === "expense" && p.currency === o.currency && p.dueAt <= user.nextIncomeAt);
+  const outTotal = out.reduce((s, p) => s + p.amountMinor, 0);
+  const left = o.available - outTotal;
+  const parts = [`You have ${money(o.available, o.currency)} safe to spend after bills before payday and your emergency fund; payday is ${whenWords(user.nextIncomeAt, now, tz)}.`];
+  if (out.length) parts.push(`Planned before then: ${out.map((p) => `${p.name} ${money(p.amountMinor, p.currency)}`).join(", ")}, which leaves ${money(left, o.currency)}.`);
+  parts.push(left >= 0 ? `So yes, you make it, with about ${money(Math.floor(Math.max(0, left) / o.daysToIncome), o.currency)} a day to spare.` : `That's ${money(-left, o.currency)} short; move a planned spend or dip into savings.`);
+  if (income.length) parts.push(`Expected in: ${income.slice(0, 3).map((p) => `${p.name} ${money(p.amountMinor, p.currency)} ${whenWords(p.dueAt, now, tz)}`).join(", ")} (not counted until it arrives).`);
+  else parts.push("Add your salary on the Plan screen and I'll count it on its date.");
+  return say(turn, parts.join(" "), { suggestions: ["What's pending?", "How much did I spend this month?"] });
+}
+
 async function onSafe(turn: Turn, amount: Extract<Intent, { kind: "safe" }>["amount"]) {
   const o = await overviewOf(turn);
   const avail = money(o.available, o.currency);
@@ -728,6 +764,23 @@ async function answer(turn: Turn, intent: Intent, allowResume = true): Promise<v
       return onPay(turn, intent);
     case "spending":
       return onSpending(turn);
+    case "pending":
+      return onPending(turn);
+    case "add_contact": {
+      if (!intent.name) return say(turn, `What should I call ${intent.address.slice(0, 6)}…${intent.address.slice(-4)}? Say "save ${intent.address.slice(0, 8)}… as Ravi".`);
+      try {
+        const r = await addContactFor(turn.ctx, turn.user, { name: intent.name, address: intent.address });
+        if (r.token) {
+          const task = await turn.ctx.db.query("tasks").withIndex("by_approval_token", (q) => q.eq("approvalToken", r.token!)).unique();
+          return say(turn, `Saved ${intent.name}. Approve it with your passkey and it becomes a trusted contact; your assistants can pay it within their limits after the vault's waiting period.`, { taskId: task?._id });
+        }
+        return say(turn, `Saved ${intent.name} as a trusted contact. Your assistants can pay it within their limits.`);
+      } catch (e) {
+        return say(turn, e instanceof Error ? e.message.replace(/^.*ConvexError: /, "") : "I couldn't save that contact.");
+      }
+    }
+    case "plan":
+      return onPlan(turn);
     case "bills":
       return onBills(turn, false);
     case "subscriptions":

@@ -279,7 +279,9 @@ http.route({
     if (!proof) return storeJson({ ...paymentRequired(resource, row), error: "X-PAYMENT isn't base64 JSON" }, 402);
     const check = await verifyProof(proof, storeAddress(), row);
     if (!check.ok) return storeJson({ ...paymentRequired(resource, row), error: check.why }, 402);
-    if (!(await ctx.runMutation(internal.commerce.redeem, { proof: check.key, slug: row.slug }))) {
+    const buyer = req.headers.get("x-buyer") ?? undefined;
+    const via = req.headers.get("x-via") ?? undefined;
+    if (!(await ctx.runMutation(internal.commerce.redeem, { proof: check.key, slug: row.slug, buyer, via, tx: check.tx, amountMinor: row.priceMinor }))) {
       return storeJson({ ...paymentRequired(resource, row), error: "That payment was already used for a purchase" }, 402);
     }
     const settlement = b64({ success: true, network: NETWORK, transaction: check.tx ?? null, payer: null });

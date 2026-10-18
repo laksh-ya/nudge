@@ -5,6 +5,7 @@ import { CHAIN_ID, EXPLORER, Op, actionDigest, assertionProblem } from "@agent-w
 import type { Address, Hex } from "viem";
 import { requireViewer } from "./lib/auth";
 import { laneOf, lanePool } from "./lib/relayer";
+import { afterTask } from "./lib/circle";
 
 /**
  * The approval link carries an opaque token. Opening it only reads; nothing is
@@ -104,6 +105,7 @@ export const decide = mutation({
     if (approve && task.action) throw new ConvexError("Approve this with your passkey");
     if (!approve) {
       await ctx.db.patch(task._id, { state: "cancelled", updatedAt: Date.now() });
+      await afterTask(ctx, (await ctx.db.get(task._id))!);
       await ctx.db.insert("activity", { userId: task.userId, kind: "payment", title: `Declined ${task.title}`, tone: "neutral" });
       return "cancelled";
     }
@@ -147,6 +149,7 @@ export const decline = mutation({
     if (!task) throw new ConvexError("This link is no longer valid");
     if (task.state !== "awaiting_approval") return task.state;
     await ctx.db.patch(task._id, { state: "cancelled", reason: "Declined on the approval page", updatedAt: Date.now() });
+    await afterTask(ctx, (await ctx.db.get(task._id))!);
     await ctx.db.insert("activity", { userId: task.userId, kind: task.amountMinor ? "payment" : "setting", title: `Declined ${task.title}`, detail: "Nothing was paid or changed", tone: "neutral" });
     return "cancelled";
   },

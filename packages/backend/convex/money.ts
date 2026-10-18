@@ -207,6 +207,28 @@ export const addObligation = mutation({
   },
 });
 
+/** Only when the owner asks: a few sample bills to try reminders and the plan with. Marked "(sample)". */
+export const addSampleBills = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireViewer(ctx);
+    const existing = await ctx.db.query("obligations").withIndex("by_user_due", (q) => q.eq("userId", user._id)).take(200);
+    if (existing.some((o) => o.name.endsWith("(sample)") && o.status === "active")) throw new ConvexError("Sample bills are already there");
+    const day = 86_400_000;
+    const inr = user.currency === "INR";
+    const samples = [
+      { name: "Rent (sample)", kind: "bill" as const, amountMinor: inr ? 1_800_000 : 120_000, days: 6 },
+      { name: "Electricity (sample)", kind: "bill" as const, amountMinor: inr ? 184_000 : 9_000, days: 3 },
+      { name: "Internet (sample)", kind: "bill" as const, amountMinor: inr ? 79_900 : 5_000, days: 12 },
+      { name: "Music streaming (sample)", kind: "subscription" as const, amountMinor: inr ? 11_900 : 999, days: 9 },
+    ];
+    for (const b of samples) {
+      await ctx.db.insert("obligations", { userId: user._id, name: b.name, kind: b.kind, amountMinor: b.amountMinor, currency: user.currency, cadence: "monthly", nextDueAt: Date.now() + b.days * day, status: "active", merchantKey: merchantKey(b.name), source: "manual", payWith: "manual" });
+    }
+    return samples.length;
+  },
+});
+
 export const addGoal = mutation({
   args: { name: v.string(), targetMinor: v.number(), icon: v.string() },
   handler: async (ctx, { name, targetMinor, icon }) => {

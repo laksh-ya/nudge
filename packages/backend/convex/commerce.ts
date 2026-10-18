@@ -6,7 +6,9 @@ import { internalAction, internalMutation, internalQuery, mutation, query } from
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { load, propose } from "./gateway";
+import { load, payeeForAddress, propose } from "./gateway";
+import { ownerPayTask } from "./lib/actions";
+import { isVaultVersion } from "@agent-wallet/domain";
 import { intentFor } from "./lib/mandates";
 import { requireViewer, viewer } from "./lib/auth";
 import { testUsdAbi } from "@agent-wallet/domain";
@@ -117,6 +119,19 @@ export const payX402 = internalAction({
   },
 });
 
+/** How the buyer's wallet introduces itself to the shop: "Instinct for Aarav", or "Aarav". */
+export const buyerLabel = internalQuery({
+  args: { taskId: v.id("tasks") },
+  handler: async (ctx, { taskId }) => {
+    const task = await ctx.db.get(taskId);
+    if (!task) return "A Nudge wallet";
+    const user = await ctx.db.get(task.userId);
+    const agent = task.agentId ? await ctx.db.get(task.agentId) : null;
+    const name = user?.name || "A Nudge user";
+    return agent && agent.provider !== "own" ? `${agent.name} for ${name}` : name;
+  },
+});
+
 export const taskForDelivery = internalQuery({
   args: { taskId: v.id("tasks") },
   handler: async (ctx, { taskId }) => {
@@ -161,7 +176,11 @@ export const deliver = internalAction({
     const payload = task.txHash ? { txHash: task.txHash } : { receipt: await simulatedReceipt(task._id, payTo ?? "", cents, Math.floor(task._creationTime)) };
     const proof: PaymentProof = { x402Version: X402_VERSION, scheme: SCHEME, network: NETWORK, payload };
     try {
-      const res = await fetch(task.purchase!.url!, { headers: { "X-PAYMENT": b64(proof), accept: "application/json" }, signal: AbortSignal.timeout(20_000) });
+      const buyer = await ctx.runQuery(internal.commerce.buyerLabel, { taskId });
+      const res = await fetch(task.purchase!.url!, {
+        headers: { "X-PAYMENT": b64(proof), "X-BUYER": buyer, "X-VIA": task.purchase!.kind === "watch" ? "watch" : task.agentId ? "x402" : "checkout", accept: "application/json" },
+        signal: AbortSignal.timeout(20_000),
+      });
       const text = await res.text();
       if (res.ok) await ctx.runMutation(internal.commerce.saveDelivery, { taskId, resource: text });
       else if (attempt < 5) await ctx.scheduler.runAfter(15_000, internal.commerce.deliver, { taskId, attempt: attempt + 1 });
@@ -332,11 +351,16 @@ export const getCard = internalMutation({
 
 // ------------------------------------------------------------------------------- the demo store
 
-const ITEMS = [
-  { slug: "shoes", name: "Trail running shoes (size 9)", priceMinor: 1200, content: "Order NDG-SHOES-9: trail running shoes, size 9. Ships in 2 days. (Demo store: nothing is shipped.)" },
-  { slug: "report", name: "Market data report (PDF)", priceMinor: 50, content: "Market data report: BTC 7-day volatility 2.1%, ETH 2.8%; tUSD peg 1.000. (Demo content.)" },
-  { slug: "coffee", name: "Coffee beans, 250 g", priceMinor: 400, content: "Order NDG-COFFEE: 250 g single-origin beans. (Demo store: nothing is shipped.)" },
-  { slug: "api", name: "One API call: weather in Shenzhen", priceMinor: 1, content: '{"city":"Shenzhen","tempC":27,"sky":"partly cloudy","source":"demo"}' },
+/** The test shop's shelf. Physical goods return an order confirmation; digital goods return the thing itself. */
+export const ITEMS = [
+  { slug: "shoes", name: "Trail running shoes (size 9)", priceMinor: 1200, emoji: "👟", category: "Outdoors", blurb: "Grippy, light, waterproof. The classic thing to buy when the price drops.", content: "Order NDG-SHOES-9 confirmed: trail running shoes, size 9. Ships in 2 days. (Test shop: nothing is shipped.)" },
+  { slug: "coffee", name: "Single-origin coffee beans, 250 g", priceMinor: 400, emoji: "☕", category: "Groceries", blurb: "Medium roast from Chikmagalur. A typical small agent purchase.", content: "Order NDG-COFFEE confirmed: 250 g single-origin beans, medium roast. (Test shop: nothing is shipped.)" },
+  { slug: "headphones", name: "Wireless headphones", priceMinor: 4500, emoji: "🎧", category: "Electronics", blurb: "Noise cancelling, 30-hour battery. Above most agents' limits: watch it ask for your passkey.", content: "Order NDG-AUDIO-1 confirmed: wireless headphones, black. (Test shop: nothing is shipped.)" },
+  { slug: "ticket", name: "Concert ticket, Saturday", priceMinor: 1500, emoji: "🎟️", category: "Events", blurb: "General admission. Delivered instantly as an e-ticket code.", content: "E-ticket NDG-TKT-7731, Saturday 8 pm, general admission. Show this code at the gate. (Test shop.)" },
+  { slug: "book", name: "E-book: The Psychology of Money", priceMinor: 300, emoji: "📘", category: "Books", blurb: "Delivered as a download link right after payment.", content: "Download: https://example.com/ebooks/psychology-of-money.epub (Test shop: demo link.)" },
+  { slug: "report", name: "Market data report", priceMinor: 50, emoji: "📊", category: "Data", blurb: "A pay-per-use data product for agents: 50 cents a report.", content: "Market data report: BTC 7-day volatility 2.1%, ETH 2.8%; tUSD peg 1.000. (Demo data.)" },
+  { slug: "api", name: "One API call: weather in Shenzhen", priceMinor: 1, emoji: "🌤️", category: "API", blurb: "One cent a call. What x402 was made for: machines paying machines.", content: '{"city":"Shenzhen","tempC":27,"sky":"partly cloudy","source":"demo"}' },
+  { slug: "plant", name: "Monstera plant, medium", priceMinor: 900, emoji: "🪴", category: "Home", blurb: "Comes in a recycled pot. A good one for a guardian to stop and question.", content: "Order NDG-PLANT-2 confirmed: medium monstera in a recycled pot. (Test shop: nothing is shipped.)" },
 ] as const;
 
 async function itemRow(ctx: MutationCtx, slug: string) {
@@ -379,11 +403,103 @@ export const setStorePrice = internalMutation({
 
 /** Whether this payment proof pays for this item, once. */
 export const redeem = internalMutation({
-  args: { proof: v.string(), slug: v.string() },
-  handler: async (ctx, { proof, slug }) => {
+  args: { proof: v.string(), slug: v.string(), buyer: v.optional(v.string()), via: v.optional(v.string()), tx: v.optional(v.string()), amountMinor: v.optional(v.number()) },
+  handler: async (ctx, { proof, slug, buyer, via, tx, amountMinor }) => {
     if (await ctx.db.query("storeReceipts").withIndex("by_proof", (q) => q.eq("proof", proof)).unique()) return false;
     await ctx.db.insert("storeReceipts", { proof, slug });
+    const row = await ctx.db.query("storeItems").withIndex("by_slug", (q) => q.eq("slug", slug)).unique();
+    await ctx.db.insert("storeOrders", {
+      slug,
+      item: row?.name ?? slug,
+      amountMinor: amountMinor ?? row?.priceMinor ?? 0,
+      buyer: (buyer ?? "A Nudge wallet").slice(0, 60),
+      via: via === "checkout" || via === "watch" ? via : "x402",
+      tx: tx ?? "simulated",
+      at: Date.now(),
+    });
     return true;
+  },
+});
+
+/** The seller's order book (public: buyer names are the labels their wallets sent). */
+export const orders = query({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db.query("storeOrders").withIndex("by_at").order("desc").take(30);
+    return rows.map((o) => ({ ...o, tx: o.tx === "simulated" ? null : o.tx }));
+  },
+});
+
+/** What I (and my assistants) bought, with the delivered goods. */
+export const myPurchases = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await viewer(ctx);
+    if (!user) return [];
+    const tasks = await ctx.db.query("tasks").withIndex("by_user_updated", (q) => q.eq("userId", user._id)).order("desc").take(200);
+    const agents = new Map((await ctx.db.query("agents").withIndex("by_user", (q) => q.eq("userId", user._id)).take(50)).map((a) => [a._id, a.name]));
+    return tasks
+      .filter((t) => t.purchase)
+      .slice(0, 30)
+      .map((t) => ({
+        taskId: t._id,
+        item: t.purchase!.item ?? t.title,
+        kind: t.purchase!.kind,
+        merchant: t.purchase!.merchant ?? null,
+        amountMinor: t.amountMinor ?? 0,
+        state: t.state,
+        by: t.agentId ? (agents.get(t.agentId) ?? "An assistant") : "You",
+        resource: t.state === "confirmed" ? (t.purchase!.resource ?? null) : null,
+        card: t.state === "confirmed" && t.purchase!.card ? t.purchase!.card : null,
+        approvalToken: t.state === "awaiting_approval" ? (t.approvalToken ?? null) : null,
+        live: Boolean(t.action),
+        txHash: t.txHash ?? null,
+        at: t._creationTime,
+      }));
+  },
+});
+
+/**
+ * Buy from the test shop yourself. Your own order: on a simulated wallet it's paid at once; on an
+ * on-chain wallet it's a payment you approve with your passkey (the vault pays the shop directly).
+ */
+export const buyNow = mutation({
+  args: { slug: v.string() },
+  handler: async (ctx, { slug }) => {
+    const user = await requireViewer(ctx);
+    const row = await itemRow(ctx, slug);
+    if (!row) throw new ConvexError("That item isn't in the shop");
+    const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
+    if (!wallet) throw new ConvexError("Set up your Nudge wallet first (Wallet screen)");
+    if (wallet.frozen || wallet.vault?.frozen) throw new ConvexError("Your wallet is frozen");
+    const live = wallet.status === "live" && isVaultVersion(wallet.version);
+    const free = live && wallet.vault ? wallet.vault.balanceMinor - wallet.vault.heldMinor : wallet.balanceMinor;
+    if (free < row.priceMinor) throw new ConvexError("Not enough in your Nudge wallet");
+    const payee = (await payeeForAddress(ctx, user, storeAddress(), "Nudge test shop", "merchant"))!;
+    const site = process.env.CONVEX_SITE_URL ?? "";
+    const purchase = { kind: "x402" as const, url: `${site}/x402/store/item?slug=${row.slug}`, item: row.name, merchant: "Nudge test shop" };
+    if (live) {
+      const { taskId, token } = await ownerPayTask(ctx, { user, payee, amountMinor: row.priceMinor, title: `Buy ${row.name}`, channel: "app", purpose: row.name, reason: "You're buying from the test shop with your wallet" });
+      await ctx.db.patch(taskId, { purchase });
+      await ctx.scheduler.runAfter(5_000, internal.commerce.deliver, { taskId, attempt: 0 });
+      return { state: "approval" as const, token };
+    }
+    const taskId = await ctx.db.insert("tasks", {
+      userId: user._id,
+      title: `Buy ${row.name}`,
+      channel: "app",
+      payeeId: payee._id,
+      amountMinor: row.priceMinor,
+      currency: "USDC",
+      purpose: row.name,
+      state: "submitted",
+      rail: "simulator",
+      updatedAt: Date.now(),
+      purchase,
+    });
+    await ctx.scheduler.runAfter(800, internal.tasks.settle, { taskId });
+    await ctx.scheduler.runAfter(2_000, internal.commerce.deliver, { taskId, attempt: 0 });
+    return { state: "paid" as const, token: null };
   },
 });
 
@@ -452,7 +568,7 @@ export const catalog = query({
     const by = new Map(rows.map((r) => [r.slug, r]));
     return ITEMS.map((i) => {
       const r = by.get(i.slug);
-      return { slug: i.slug, name: i.name, priceMinor: r?.priceMinor ?? i.priceMinor, basePriceMinor: i.priceMinor };
+      return { slug: i.slug, name: i.name, emoji: i.emoji, category: i.category, blurb: i.blurb, priceMinor: r?.priceMinor ?? i.priceMinor, basePriceMinor: i.priceMinor };
     });
   },
 });

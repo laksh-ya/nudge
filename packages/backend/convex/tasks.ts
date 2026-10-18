@@ -4,6 +4,7 @@ import type { Doc } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { own, requireViewer, viewer } from "./lib/auth";
 import { formatMoney } from "@agent-wallet/domain";
+import { afterTask } from "./lib/circle";
 
 export async function withNames(ctx: QueryCtx, task: Doc<"tasks">) {
   const payee = task.payeeId ? await ctx.db.get(task.payeeId) : null;
@@ -34,6 +35,7 @@ export const cancel = mutation({
       throw new ConvexError("This payment has already been sent");
     }
     await ctx.db.patch(taskId, { state: "cancelled", approvalToken: undefined, updatedAt: Date.now() });
+    await afterTask(ctx, (await ctx.db.get(taskId))!);
   },
 });
 
@@ -45,7 +47,10 @@ export const expireStale = internalMutation({
       .query("tasks")
       .withIndex("by_state_expires", (q) => q.eq("state", "awaiting_approval").gt("expiresAt", 0).lt("expiresAt", Date.now()))
       .take(200);
-    for (const t of stale) await ctx.db.patch(t._id, { state: "expired", updatedAt: Date.now() });
+    for (const t of stale) {
+      await ctx.db.patch(t._id, { state: "expired", updatedAt: Date.now() });
+      await afterTask(ctx, { ...t, state: "expired" });
+    }
     return stale.length;
   },
 });
@@ -68,6 +73,7 @@ export const settle = internalMutation({
       const wallet = await ctx.db.query("wallets").withIndex("by_user", (q) => q.eq("userId", task.userId)).unique();
       if (wallet) await ctx.db.patch(wallet._id, { balanceMinor: wallet.balanceMinor - task.amountMinor });
     }
+    await afterTask(ctx, (await ctx.db.get(taskId))!);
     if (task.payeeId && task.currency && task.currency !== "USDC") {
       const bill = (
         await ctx.db

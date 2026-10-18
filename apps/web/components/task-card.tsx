@@ -98,10 +98,11 @@ export function TaskCard({ task, className }: { task: TaskView; className?: stri
           {task.purpose}
         </p>
       )}
-      <Sheet open={confirming} onOpenChange={setConfirming} title={`Approve ${amount} to ${task.payee ?? task.title}?`}>
+      <Sheet open={confirming} onOpenChange={setConfirming} title={amount ? `Approve ${amount} to ${task.payee ?? task.title}?` : `${task.title}?`}>
         <p className="text-body text-ink-2">
-          Simulated approval: this wallet has no passkey yet, so nothing on-chain checks it. Put the wallet on-chain (Wallet screen) to approve with your
-          passkey instead.
+          {amount
+            ? "Simulated approval: this wallet has no passkey yet, so nothing on-chain checks it. Put the wallet on-chain (Wallet screen) to approve with your passkey instead."
+            : `${task.agent ? `${task.agent} asked for this. ` : ""}Approving changes what it may do on its own. Your wallet is simulated, so this is your yes instead of a passkey.`}
         </p>
         <div className="mt-5 mb-4 grid grid-cols-2 gap-2">
           <Button tone="outline" size="lg" onClick={() => setConfirming(false)}>

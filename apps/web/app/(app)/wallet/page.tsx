@@ -13,6 +13,7 @@ import { formatMoney, shortAddress } from "@/lib/format";
 import { TaskCard } from "@/components/task-card";
 import { Button, Card, Chip, Meter, PageTitle, Skeleton } from "@/components/ui";
 import { ContactLimitForm, PasskeyCard, RulesCard, WaitingCard } from "@/components/wallet/vault-cards";
+import { RulesLimitsCard } from "@/components/wallet/rules-limits";
 import { ContactsCard } from "@/components/wallet/contacts-card";
 import { MoveMoneyCard } from "@/components/wallet/move-money-card";
 
@@ -173,6 +174,7 @@ export default function WalletPage() {
         />
       )}
 
+      <RulesLimitsCard />
       {chain && <RulesCard chain={chain} />}
 
       <ContactsCard payees={payees} live={chain?.wallet?.status === "live"} contactDelay={v?.contactDelay}>

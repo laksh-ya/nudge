@@ -157,7 +157,8 @@ export function AddSourceSheet({
       provider: p ?? undefined,
       institution: p?.name ?? institution ?? "",
       name: p?.name ?? institution ?? "",
-      method: p?.methods[0] ?? "statement",
+      // Real numbers first; sample data only when the owner picks it.
+      method: p?.methods.find((m) => m !== "sandbox") ?? p?.methods[0] ?? "statement",
       cryptoMode: draft.kind === "crypto" ? "exchange" : draft.cryptoMode,
       currency: draft.kind === "crypto" ? "USD" : draft.currency,
     });
@@ -338,7 +339,7 @@ export function AddSourceSheet({
                   <div className="truncate text-body font-semibold">{p.name}</div>
                   {p.note && <div className="truncate text-label text-mute">{p.note}</div>}
                 </div>
-                {p.methods.includes("sandbox") && <Chip tone="cyan">Connect</Chip>}
+                {p.methods.includes("sandbox") && <Chip>Sample data</Chip>}
                 <ChevronRight className="size-4 text-mute" />
               </button>
             ))}
@@ -538,14 +539,14 @@ function addressHint(address: string) {
 }
 
 function methodTitle(m: Method, d: Draft) {
-  if (m === "sandbox") return d.kind === "transfer" ? `Connect ${d.institution}` : `Connect with ${countryInfo(d.country).bankNetwork ?? "open banking"}`;
+  if (m === "sandbox") return `Sample data (simulated ${countryInfo(d.country).bankNetwork ?? "bank"} connection)`;
   if (m === "statement") return "Upload statements";
   if (m === "manual") return "Enter by hand";
   return "On-chain";
 }
 
 function methodHint(m: Method, d: Draft) {
-  if (m === "sandbox") return "Sandbox connection. Brings balance and about three months of history.";
+  if (m === "sandbox") return "Not your real account: fills in a sample balance and about three months of made-up history, so you can try Nudge. For your real numbers, upload statements or enter by hand.";
   if (m === "statement") return d.kind === "payment_app" ? "Export your bill or activity as CSV or Excel" : "CSV, Excel or PDF from your bank";
   return "Start with today's balance";
 }

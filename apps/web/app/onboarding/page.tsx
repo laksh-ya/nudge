@@ -847,19 +847,21 @@ const ASSISTANTS = [
   { id: "openclaw" as const, name: "OpenClaw" },
   { id: "hermes" as const, name: "Hermes" },
   { id: "poke" as const, name: "Poke" },
+  { id: "instinct" as const, name: "Instinct" },
 ];
 
 function People({ state, onNext }: { state: State; onNext: () => void }) {
   const add = useMutation(api.onboarding.addAssistant);
   const remove = useMutation(api.onboarding.removeAssistant);
-  const invite = useMutation(api.onboarding.inviteFamily);
-  const [form, setForm] = useState({ name: "", relation: "", country: state.user.country });
+  const invite = useMutation(api.circle.invite);
+  const [form, setForm] = useState({ name: "", relation: "Child", allowance: "20" });
+  const [links, setLinks] = useState<{ name: string; code: string }[]>([]);
   const [error, setError] = useState<string>();
   return (
     <>
       <div className="card p-4">
         <h2 className="text-title font-semibold">Outside assistants</h2>
-        <p className="mb-3 text-label text-mute">Each gets its own access, starting read-only. You choose what each one may do later.</p>
+        <p className="mb-3 text-label text-mute">Each gets its own key. It can see your money and ask for anything; you set what it may pay on its own later.</p>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {ASSISTANTS.map((a) => {
             const found = state.agents.find((x) => x.provider === a.id);
@@ -880,17 +882,20 @@ function People({ state, onNext }: { state: State; onNext: () => void }) {
       <div className="card mt-4 p-4">
         <h2 className="text-title font-semibold">Family</h2>
         <p className="mb-3 text-label text-mute">
-          They keep their own accounts. They can ask you for money; nothing moves without your approval. Requests and quotes are simulated in this
-          prototype.
+          Invite someone you support. They join with their own Nudge account from a link, get a monthly allowance you set, and ask you for more from their
+          phone. Anything above what you allow comes to you.
         </p>
-        {state.family.length > 0 && (
+        {links.length > 0 && (
           <Divided className="mb-3">
-            {state.family.map((f) => (
-              <div key={f._id} className="flex items-center justify-between py-2.5">
-                <span className="text-body font-medium">{f.name}</span>
-                <span className="text-label text-mute">
-                  {f.relation} · {f.status === "invited" ? "Invited" : "Paired"}
-                </span>
+            {links.map((l) => (
+              <div key={l.name + l.code} className="flex items-center justify-between gap-3 py-2.5">
+                <span className="text-body font-medium">{l.name}</span>
+                <button
+                  className="press num text-label font-semibold text-cyan-ink"
+                  onClick={() => void navigator.clipboard?.writeText(`Join my family on Nudge: ${window.location.origin}/family/join?code=${l.code}`)}
+                >
+                  Copy link · {l.code}
+                </button>
               </div>
             ))}
           </Divided>
@@ -901,26 +906,26 @@ function People({ state, onNext }: { state: State; onNext: () => void }) {
             e.preventDefault();
             setError(undefined);
             try {
-              await invite(form);
-              setForm({ ...form, name: "", relation: "" });
+              const r = await invite({ name: form.name, relation: form.relation, allowanceMinor: toMinorUnits(form.allowance || "0", "USD") ?? 0, autoApproveMinor: 0 });
+              setLinks([...links, { name: form.name, code: r.code }]);
+              setForm({ ...form, name: "" });
             } catch (err) {
               setError(errorMessage(err));
             }
           }}
         >
           <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Name" />
-          <Input value={form.relation} onChange={(e) => setForm({ ...form, relation: e.target.value })} placeholder="Relation" />
-          <Select value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })}>
-            {COUNTRIES.map((c) => (
-              <option key={c.code} value={c.code}>
-                {c.name}
-              </option>
+          <Select value={form.relation} onChange={(e) => setForm({ ...form, relation: e.target.value })}>
+            {["Child", "Partner", "Parent", "Sibling", "Grandparent", "Friend", "Other"].map((r) => (
+              <option key={r}>{r}</option>
             ))}
           </Select>
+          <MoneyInput currency="USD" value={form.allowance} onChange={(allowance) => setForm({ ...form, allowance })} />
           <Button type="submit" tone="outline" icon={UserPlus} disabled={!form.name.trim()}>
-            Invite
+            Create invite link
           </Button>
         </form>
+        <p className="mt-2 text-label text-mute">Monthly allowance in test dollars. Set what's paid without asking later in Family.</p>
         <ErrorText>{error}</ErrorText>
       </div>
       <Footer>

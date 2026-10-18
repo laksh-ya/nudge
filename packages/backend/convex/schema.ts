@@ -164,6 +164,19 @@ export default defineSchema({
     content: v.string(),
   }).index("by_slug", ["slug"]),
 
+  /** What the test shop sold: the seller's order book. */
+  storeOrders: defineTable({
+    slug: v.string(),
+    item: v.string(),
+    amountMinor: v.number(),
+    /** Who bought, as the buyer's wallet said ("Instinct for Aarav", "Aarav"). */
+    buyer: v.string(),
+    via: v.union(v.literal("x402"), v.literal("checkout"), v.literal("watch")),
+    /** The payment proof: a Base Sepolia transaction, or "simulated". */
+    tx: v.optional(v.string()),
+    at: v.number(),
+  }).index("by_at", ["at"]),
+
   /** Payment proofs the demo store already accepted, so one payment unlocks one purchase. */
   storeReceipts: defineTable({ proof: v.string(), slug: v.string() }).index("by_proof", ["proof"]),
 
@@ -192,6 +205,9 @@ export default defineSchema({
     onboardedAt: v.optional(v.number()),
     /** Which model the Nudge assistant (app and Telegram) uses; "basic" means no model, rules only. */
     assistantModel: v.optional(v.string()),
+    /** The owner's own Anthropic API key for the Nudge assistant, sealed (lib/secrets); only its last 4 are shown. */
+    modelKeySealed: v.optional(v.string()),
+    modelKeyHint: v.optional(v.string()),
     lastSeenAt: v.optional(v.number()),
   }).index("by_token", ["tokenIdentifier"]),
 
@@ -347,6 +363,12 @@ export default defineSchema({
   }).index("by_key", ["key"]),
 
   wallets: defineTable({
+    /**
+     * The owner's rules for a simulated wallet (an on-chain wallet's live in its vault): hold agent
+     * payments above an amount for a while, how long a new contact waits before agents may pay it,
+     * and how long a loosening waits.
+     */
+    rules: v.optional(v.object({ holdAboveMinor: v.number(), holdFor: v.number(), contactDelay: v.number(), changeDelay: v.number() })),
     userId: v.id("users"),
     /** Empty until the vault contract is deployed for this user. */
     address: v.string(),
@@ -426,6 +448,8 @@ export default defineSchema({
     perPaymentMinor: v.number(),
     spentTodayMinor: v.number(),
     hidesBalances: v.boolean(),
+    /** If set, the only contacts this agent may pay on its own; anyone else goes to the owner. */
+    allowedPayees: v.optional(v.array(v.id("payees"))),
     connectedAt: v.number(),
     lastUsedAt: v.optional(v.number()),
     expiresAt: v.number(),
@@ -560,6 +584,57 @@ export default defineSchema({
     status: v.union(v.literal("paired"), v.literal("invited")),
     monthlyAllowanceMinor: v.optional(v.number()),
   }).index("by_user", ["userId"]),
+
+  /**
+   * The family circle: a real link between two accounts. The owner invites by link; the member
+   * accepts with their own account. The owner gives them a monthly allowance from the Nudge wallet
+   * (test dollars) and an amount that's paid without asking; anything more needs the owner.
+   */
+  familyLinks: defineTable({
+    ownerId: v.id("users"),
+    /** The member's own account, once they accept. Absent for an open invite or a demo sample. */
+    memberId: v.optional(v.id("users")),
+    name: v.string(),
+    relation: v.string(),
+    status: v.union(v.literal("invited"), v.literal("active"), v.literal("removed")),
+    code: v.optional(v.string()),
+    codeExpiresAt: v.optional(v.number()),
+    /** Monthly allowance, US cents (wallet test dollars). 0 = none: every ask goes to the owner. */
+    allowanceMinor: v.number(),
+    /** Asks up to this are paid at once, inside the allowance. */
+    autoApproveMinor: v.number(),
+    /** What was paid this month, and which month ("2026-10"). */
+    usedMinor: v.number(),
+    month: v.string(),
+    /** The member may also stop held payments and freeze the owner's assistants (a guardian). */
+    canProtect: v.optional(v.boolean()),
+    sample: v.optional(v.boolean()),
+    createdAt: v.number(),
+    acceptedAt: v.optional(v.number()),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_member", ["memberId"])
+    .index("by_code", ["code"]),
+
+  /** Money asked for (by a member) or sent (by the owner) within a family link. */
+  familyAsks: defineTable({
+    linkId: v.id("familyLinks"),
+    ownerId: v.id("users"),
+    memberId: v.optional(v.id("users")),
+    kind: v.union(v.literal("ask"), v.literal("send")),
+    amountMinor: v.number(),
+    note: v.string(),
+    state: v.union(v.literal("waiting"), v.literal("paid"), v.literal("declined"), v.literal("approval")),
+    /** The owner's approval task when it needs one. */
+    taskId: v.optional(v.id("tasks")),
+    auto: v.optional(v.boolean()),
+    createdAt: v.number(),
+    decidedAt: v.optional(v.number()),
+  })
+    .index("by_link", ["linkId"])
+    .index("by_owner", ["ownerId"])
+    .index("by_member", ["memberId"])
+    .index("by_task", ["taskId"]),
 
   /** Someone the owner trusts to watch held payments and stop them; they can only tighten. */
   guardians: defineTable({

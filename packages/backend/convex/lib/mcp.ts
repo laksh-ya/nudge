@@ -426,6 +426,7 @@ export const REASON_CODES = [
   { code: "2013", meaning: "The requestId was already used for a different contact or amount. Use a new requestId." },
   { code: "2014", meaning: "Not a valid Base Sepolia address." },
   { code: "2015", meaning: "The x402 offer can't be paid: wrong network or asset, above maxPrice, or no 402 answer." },
+  { code: "2016", meaning: "Approval reason: the owner limited which contacts this assistant may pay on its own, and this isn't one of them." },
 ] as const;
 
 export const MCP_INSTRUCTIONS = [

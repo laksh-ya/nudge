@@ -9,6 +9,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { freezeAll } from "./lib/control";
 import { isSandbox } from "./lib/auth";
+import { open } from "./lib/secrets";
 import { createReminder, findGoal, goalLine, matchBill, saveGoal, spendingSentence, spendingSummary } from "./lib/assist";
 import { dateLabel, parseDeadline, parseRepeat, parseWhen, safeTz } from "./lib/schedule";
 import { toMinor } from "@agent-wallet/domain";
@@ -30,7 +31,7 @@ const MAX_STEPS = 8;
 
 const SYSTEM = `You are Nudge, the assistant inside a personal-finance app with a wallet AI assistants can pay from. You act for one person, the owner, who is talking to you now.
 
-What you can do: read their money (get_overview, can_afford, list_bills, spending_this_month, spending_by_period), track savings goals (list_goals, save_goal), set reminders (set_reminder, list_reminders), list saved contacts, propose payments from the agent wallet to saved contacts in test US dollars, check or cancel payments you proposed, and freeze every agent when the owner asks you to.
+What you can do: read their money (get_overview, can_afford, list_bills, spending_this_month, spending_by_period), see what's pending (list_pending: approvals waiting, payments on their way, bills due soon, reminders, price watches), use their plan (get_plan: expected salary and other income, planned spends, goals, and where that leaves them by payday; use it for "will I make it to payday", "can I afford the trip in December"), track savings goals (list_goals, save_goal), set reminders (set_reminder, list_reminders), list saved contacts, propose payments from the agent wallet to saved contacts in test US dollars, check or cancel payments you proposed, and freeze every agent when the owner asks you to.
 
 How payments work: propose_payment never moves money by itself deciding anything. The wallet's own rules decide: small payments inside your limits are submitted and then confirmed (larger ones are held a few minutes so the owner can cancel), anything above your limits goes to the owner, who approves it with their passkey (you never get a link), and some requests are refused with a reason. Report exactly what the tool returned. Never say a payment is done unless get_task_status says it was confirmed. If an approval is needed, say so in one sentence; the app shows the approval card under your message.
 
@@ -108,6 +109,9 @@ const tools: Anthropic.Beta.BetaTool[] = [
     },
   },
   { name: "list_reminders", description: "Reminders the owner has asked for.", input_schema: { type: "object", properties: {}, additionalProperties: false } },
+  { name: "get_plan", description: "The owner's plan: expected income (salary) and planned spends with dates, safe to spend until payday, and goals. Expected income is not received until the owner marks it.", input_schema: { type: "object", properties: {}, additionalProperties: false } },
+  { name: "list_pending", description: "Everything waiting: approvals, payments on their way, bills due in 14 days, reminders, price watches.", input_schema: { type: "object", properties: {}, additionalProperties: false } },
+  { name: "list_watches", description: "Price watches assistants set to buy something when its price drops.", input_schema: { type: "object", properties: {}, additionalProperties: false } },
   {
     name: "freeze_all_agents",
     description: "Freeze every agent, in the app and in the vault. Only when the owner asks for it in their own words.",
@@ -128,6 +132,7 @@ export const context = internalQuery({
       ownAgentId: own?._id ?? null,
       sandbox: user ? isSandbox(user) : true,
       model: user?.assistantModel ?? null,
+      ownKey: user?.modelKeySealed ?? null,
       pending: recent.find((m) => m.role === "assistant")?.pending !== undefined,
       history: recent.reverse().map((m) => ({ role: m.role, text: m.text })),
     };
@@ -260,6 +265,12 @@ async function runTool(ctx: ActionCtx, userId: Id<"users">, agentId: Id<"agents"
       return await ctx.runMutation(internal.assistant.goalSave, { userId, name: str("name"), target: Number(input.target), by: input.by === undefined ? undefined : str("by") });
     case "set_reminder":
       return await ctx.runMutation(internal.assistant.reminderSet, { userId, what: str("what"), when: str("when") });
+    case "get_plan":
+      return await ctx.runQuery(internal.agentTools.plan, { agentId });
+    case "list_pending":
+      return await ctx.runQuery(internal.agentTools.pending, { agentId });
+    case "list_watches":
+      return await ctx.runQuery(internal.commerce.listWatches, { agentId });
     case "list_reminders":
       return await ctx.runQuery(internal.assistant.reminderList, { userId });
     default:
@@ -276,7 +287,7 @@ export const respond = internalAction({
     useModel: v.optional(v.boolean()),
   },
   handler: async (ctx, { userId, text, channel = "app", useModel = true }): Promise<void> => {
-    const c: { name: string; currency: string; ownAgentId: Id<"agents"> | null; sandbox: boolean; model: string | null; pending: boolean; history: { role: "user" | "assistant"; text: string }[] } = await ctx.runQuery(
+    const c: { name: string; currency: string; ownAgentId: Id<"agents"> | null; sandbox: boolean; model: string | null; ownKey: string | null; pending: boolean; history: { role: "user" | "assistant"; text: string }[] } = await ctx.runQuery(
       internal.assistant.context,
       { userId },
     );
@@ -287,13 +298,22 @@ export const respond = internalAction({
       return;
     }
     // The basic assistant answers when the model can't, and the reply records why, so it is never silent.
-    const basic = c.model === "basic" ? "owner_chose_basic" : !process.env.ANTHROPIC_API_KEY ? "missing_key" : !c.ownAgentId ? "no_own_agent" : !useModel ? "quota" : null;
+    // The owner's own key: their model, their quota.
+    let ownKey: string | null = null;
+    if (c.ownKey) {
+      try {
+        ownKey = await open(c.ownKey, `model:${userId}`);
+      } catch {
+        ownKey = null;
+      }
+    }
+    const basic = c.model === "basic" ? "owner_chose_basic" : !ownKey && !process.env.ANTHROPIC_API_KEY ? "missing_key" : !c.ownAgentId ? "no_own_agent" : !useModel && !ownKey ? "quota" : null;
     if (basic || !c.ownAgentId) {
       console.info("assistant: basic mode", { userId, reason: basic });
       await ctx.runMutation(internal.messages.reply, { userId, text, channel, fallback: basic ?? "no_own_agent" });
       return;
     }
-    const client = new Anthropic();
+    const client = ownKey ? new Anthropic({ apiKey: ownKey }) : new Anthropic();
     // Prior turns as plain text; the newest user message is already the last entry.
     const messages: Anthropic.Beta.BetaMessageParam[] = [];
     for (const m of c.history) {
@@ -305,7 +325,7 @@ export const respond = internalAction({
     if (!messages.length) messages.push({ role: "user", content: text });
 
     const provenance = [text];
-    const readTools = new Set(["get_overview", "can_afford", "list_bills", "spending_this_month", "list_contacts", "get_task_status", "spending_by_period", "list_goals", "list_reminders"]);
+    const readTools = new Set(["get_overview", "can_afford", "list_bills", "spending_this_month", "list_contacts", "get_task_status", "spending_by_period", "list_goals", "list_reminders", "get_plan", "list_pending", "list_watches"]);
     let taskId: Id<"tasks"> | undefined;
     let reply = "";
     /** Set once a tool that changes something has run; after that, a failure must not re-run the request. */

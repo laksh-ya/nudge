@@ -37,6 +37,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllEnvs();
   globalThis.fetch = realFetch;
 });
 
@@ -104,6 +105,31 @@ describe("x402: buying from a site that answers 402", () => {
     expect(offer).toMatchObject({ scheme: "transfer", network: "base-sepolia", maxAmountRequired: "10000" });
     const forged = btoa(JSON.stringify({ x402Version: 1, scheme: "transfer", network: "base-sepolia", payload: { receipt: "x.1.1.deadbeef" } }));
     expect((await t.fetch("/x402/store/item?slug=api", { headers: { "X-PAYMENT": forged } })).status).toBe(402);
+  });
+});
+
+describe("the test shop", () => {
+  it("a person buys with checkout; the shop's order book shows the order, the buyer gets the goods", async () => {
+    vi.stubEnv("CONVEX_SITE_URL", STORE);
+    const w = await world();
+    await t.run((ctx) => ctx.db.patch(w.alice, { name: "Aarav" }));
+    const r = await w.owner.mutation(api.commerce.buyNow, { slug: "ticket" });
+    expect(r.state).toBe("paid");
+    await w.settle();
+    const mine = await w.owner.query(api.commerce.myPurchases, {});
+    expect(mine[0]).toMatchObject({ item: "Concert ticket, Saturday", state: "confirmed", by: "You" });
+    expect(mine[0]!.resource).toContain("NDG-TKT");
+    const book = await t.query(api.commerce.orders, {});
+    expect(book[0]).toMatchObject({ slug: "ticket", buyer: "Aarav", via: "checkout", amountMinor: 1500 });
+  });
+
+  it("an agent's purchase is booked under the agent's name", async () => {
+    const w = await world();
+    await t.run((ctx) => ctx.db.patch(w.alice, { name: "Aarav" }));
+    await t.action(internal.commerce.payX402, { agentId: w.agent, url: `${STORE}/x402/store/item?slug=book`, maxPrice: 5 });
+    await w.settle();
+    const book = await t.query(api.commerce.orders, {});
+    expect(book[0]).toMatchObject({ slug: "book", buyer: "Instinct for Aarav", via: "x402" });
   });
 });
 

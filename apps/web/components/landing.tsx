@@ -114,7 +114,8 @@ export function Landing() {
         <nav className="flex items-center gap-1 text-[15px] font-semibold sm:gap-2">
           <a href="#features" className="hidden rounded-full px-3 py-2 text-ink-2 hover:text-coal sm:block">Features</a>
           <a href="#how" className="hidden rounded-full px-3 py-2 text-ink-2 hover:text-coal lg:block">How it works</a>
-          <Link href="/proof" className="hidden rounded-full px-3 py-2 text-ink-2 hover:text-coal sm:block">Proof</Link>
+          <Link href="/shop" className="hidden rounded-full px-3 py-2 text-ink-2 hover:text-coal sm:block">Test shop</Link>
+          <Link href="/proof" className="hidden rounded-full px-3 py-2 text-ink-2 hover:text-coal md:block">Proof</Link>
           <Link href="/agents/docs" className="hidden rounded-full px-3 py-2 text-ink-2 hover:text-coal md:block">For developers</Link>
           <Link href="/sign-in" className="rounded-full px-3 py-2 text-ink-2 hover:text-coal">Sign in</Link>
           <button onClick={tryDemo} className="press rounded-full bg-coal px-4 py-2 text-white">Try it</button>

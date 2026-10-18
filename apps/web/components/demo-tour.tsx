@@ -32,9 +32,9 @@ const STEPS = [
   {
     icon: ShoppingBag,
     title: "Agents can shop: x402 and price drops",
-    text: 'Ask your agent to "buy the trail shoes from the demo store when they\'re under $6". It watches the price and buys within its limits (AP2 human-not-present). Agents → Purchases lets you drop the price and watch.',
-    href: "/agents",
-    cta: "Open Purchases",
+    text: 'The Nudge Test Shop takes test dollars. Buy something yourself, or copy the line for your agent ("buy the trail shoes when they\'re under $6"): it watches the price and buys within its limits. In Seller view, run a sale and watch the order arrive.',
+    href: "/shop",
+    cta: "Open the test shop",
   },
   {
     icon: CalendarRange,

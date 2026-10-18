@@ -368,6 +368,7 @@ function AssistantSheet({ state, onClose }: { state: State; onClose: () => void 
             ))}
           </Select>
         </Field>
+        <OwnModelKey hint={u.ownModelKey} />
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-body font-semibold">Quiet hours</div>
@@ -434,5 +435,49 @@ function AssistantSheet({ state, onClose }: { state: State; onClose: () => void 
         </div>
       </div>
     </Sheet>
+  );
+}
+
+/** Your own Anthropic key: the Nudge assistant (app and Telegram) then runs on your model and quota. */
+function OwnModelKey({ hint }: { hint: string | null }) {
+  const setKey = useMutation(api.onboarding.setModelKey);
+  const [key, setKeyText] = useState("");
+  const [error, setError] = useState<string>();
+  return (
+    <div className="rounded-btn border border-line p-3">
+      <div className="text-body font-semibold">Your own Claude</div>
+      <p className="text-label text-mute">
+        Paste an Anthropic API key and Nudge (here and on Telegram) runs on your own model and quota. It's stored encrypted and never shown again.
+        Payments still follow your limits and passkey.
+      </p>
+      {hint ? (
+        <div className="mt-2 flex items-center justify-between">
+          <span className="num text-label text-green">Connected · key ending {hint}</span>
+          <button className="press text-label font-semibold text-red" onClick={() => setKey({}).catch((e) => setError(errorMessage(e)))}>
+            Remove
+          </button>
+        </div>
+      ) : (
+        <div className="mt-2 flex gap-2">
+          <Input type="password" value={key} onChange={(e) => setKeyText(e.target.value)} placeholder="sk-ant-…" autoComplete="off" />
+          <Button
+            tone="outline"
+            disabled={!key.trim()}
+            onClick={async () => {
+              setError(undefined);
+              try {
+                await setKey({ key });
+                setKeyText("");
+              } catch (e) {
+                setError(errorMessage(e));
+              }
+            }}
+          >
+            Connect
+          </Button>
+        </div>
+      )}
+      <ErrorText>{error}</ErrorText>
+    </div>
   );
 }

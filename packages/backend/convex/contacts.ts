@@ -44,8 +44,11 @@ async function pendingAdd(ctx: MutationCtx, user: Doc<"users">, payeeId: Id<"pay
 
 export const add = mutation({
   args: { name: v.string(), address: v.string(), kind: v.optional(v.union(v.literal("person"), v.literal("merchant"))) },
-  handler: async (ctx, args) => {
-    const user = await requireViewer(ctx);
+  handler: async (ctx, args) => await addContactFor(ctx, await requireViewer(ctx), args),
+});
+
+/** The owner adds a contact: from the Wallet screen or the chat. On a live vault it ends in a passkey approval. */
+export async function addContactFor(ctx: MutationCtx, user: Doc<"users">, args: { name: string; address: string; kind?: "person" | "merchant" }) {
     await hit(ctx, `contact-add:${user._id}`, 10, 60_000);
     const name = args.name.trim().replace(/\s+/g, " ");
     if (!name || name.length > 40) throw new ConvexError("Give the contact a name, up to 40 characters");
@@ -67,6 +70,7 @@ export const add = mutation({
     if (sameAddress) throw new ConvexError(`That address is already saved as ${sameAddress.name}`);
     if (payees.some((p) => p.name.toLowerCase() === name.toLowerCase())) throw new ConvexError(`You already have a contact called ${name}`);
 
+    const simDelay = w?.rules?.contactDelay ?? 0;
     const live = isLive(w);
     const payeeId = await ctx.db.insert("payees", {
       userId: user._id,
@@ -79,7 +83,8 @@ export const add = mutation({
       address,
       onchain: false,
       addedAt: Date.now(),
-      ...(live ? { pendingPasskey: true } : {}),
+      // A simulated wallet honours the owner's own new-contact wait (Wallet → Rules and limits).
+      ...(live ? { pendingPasskey: true } : simDelay ? { activeAt: Date.now() + simDelay * 1000 } : {}),
     });
     await ctx.db.insert("activity", {
       userId: user._id,
@@ -91,8 +96,7 @@ export const add = mutation({
     if (!live) return { payeeId, token: null };
     const { token } = await addContactTask(ctx, user, (await ctx.db.get(payeeId))!, w);
     return { payeeId, token };
-  },
-});
+}
 
 /** The passkey link for a contact still waiting to be added to the vault; a fresh one if the last expired or was declined. */
 export const approveAdd = mutation({

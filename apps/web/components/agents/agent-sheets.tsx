@@ -1,15 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { BookOpen, Check, Copy, Info, KeyRound, TriangleAlert } from "lucide-react";
-import { api, type Doc } from "@/lib/api";
+import { api, type Doc, type Id } from "@/lib/api";
 import { MCP_URL, approvalLink } from "@/lib/config";
 import { mcpSnippets } from "@/lib/mcp-snippets";
 import { setupPrompt } from "@agent-wallet/backend/guide";
 
-export type AgentView = Omit<Doc<"agents">, "tokenHash"> & { hasKey: boolean };
+export type AgentView = Omit<Doc<"agents">, "tokenHash"> & {
+  hasKey: boolean;
+  recent?: { _id: string; title: string; amountMinor: number; state: string; at: number }[];
+};
 import { Button, Sheet } from "../ui";
 import { ErrorText, Field, MoneyInput, Select, Toggle, errorMessage, toMinorUnits } from "../form";
 
@@ -165,6 +168,10 @@ export function PermissionsSheet({ agent, onClose }: { agent: AgentView; onClose
   const [hide, setHide] = useState(agent.hidesBalances);
   const [days, setDays] = useState(String(Math.max(1, Math.round((agent.expiresAt - Date.now()) / 86_400_000)) || 30));
   const [error, setError] = useState<string>();
+  const wallet = useQuery(api.wallet.get);
+  const contacts = (wallet?.payees ?? []).filter((p) => p.trusted);
+  const [only, setOnly] = useState<string[]>((agent.allowedPayees ?? []) as string[]);
+  const [limitWho, setLimitWho] = useState(Boolean(agent.allowedPayees?.length));
   const spend = alone;
   const scopes: AgentView["scopes"] = alone ? ["read", "prepare", "spend", "request"] : ["read", "prepare", "request"];
   return (
@@ -192,6 +199,28 @@ export function PermissionsSheet({ agent, onClose }: { agent: AgentView; onClose
           </div>
         )}
         <p className="text-label text-mute">Raising a limit needs your passkey once; lowering it applies at once. On-chain, the vault enforces these amounts itself.</p>
+        {spend && (
+          <div className="rounded-btn border border-line p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-body font-semibold">Only certain contacts</div>
+                <div className="text-label text-mute">{limitWho ? "It pays these alone; anyone else comes to you" : "Off: any trusted contact"}</div>
+              </div>
+              <Toggle checked={limitWho} onChange={setLimitWho} label="Only certain contacts" />
+            </div>
+            {limitWho && (
+              <div className="mt-2 grid max-h-44 gap-1 overflow-y-auto">
+                {contacts.length === 0 && <p className="text-label text-mute">No trusted contacts yet. Add some on the Wallet screen.</p>}
+                {contacts.map((p) => (
+                  <label key={p._id} className="flex items-center gap-2 rounded-btn px-1 py-1.5 text-body hover:bg-page">
+                    <input type="checkbox" checked={only.includes(p._id)} onChange={(e) => setOnly((x) => (e.target.checked ? [...x, p._id] : x.filter((y) => y !== p._id)))} />
+                    {p.name}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <div className="flex items-center justify-between gap-3 rounded-btn border border-line px-3 py-2.5">
           <div>
             <div className="text-body font-semibold">Hide balances</div>
@@ -223,6 +252,7 @@ export function PermissionsSheet({ agent, onClose }: { agent: AgentView; onClose
                 perPaymentMinor: spend ? (toMinorUnits(per, "USD") ?? 0) : 0,
                 hidesBalances: hide,
                 days: Number(days),
+                allowedPayees: (limitWho && spend ? only : []) as Id<"payees">[],
               });
               onClose();
               if (token) window.location.assign(approvalLink(token));

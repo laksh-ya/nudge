@@ -352,7 +352,8 @@ export function Sheet({
 export function PageTitle({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="mb-4 flex items-center justify-between gap-3">
-      <h1 className="text-head font-semibold text-ink lg:text-[24px] lg:leading-[30px]">{children}</h1>
+      {/* The marketing site's headline voice, so the app and the site read as one product (docs/BRAND.md). */}
+      <h1 className="text-[26px] leading-[30px] font-black tracking-[-0.04em] text-ink [font-stretch:108%] lg:text-[32px] lg:leading-[36px]">{children}</h1>
       {action}
     </div>
   );
