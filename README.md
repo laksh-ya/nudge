@@ -11,7 +11,7 @@ Nudge is a wallet your AI assistants can pay from, on a leash you set. Small pay
 ![Chain](https://img.shields.io/badge/chain-Base%20Sepolia-0052FF)
 ![Money](https://img.shields.io/badge/money-test%20dollars%20only-orange)
 
-[**Live app**](https://www.heynudge.live) · [**Proof on-chain**](https://www.heynudge.live/proof) · [**Connect your agent**](https://www.heynudge.live/agents/docs) · [**Telegram**](https://t.me/heynudge_bot) · [Docs](docs/README.md)
+[**Live app**](https://www.heynudge.live) · [**Proof on-chain**](https://www.heynudge.live/proof) · [**Connect your agent**](https://www.heynudge.live/agents/docs) · [**Telegram**](https://t.me/heynudge_bot) · [Approval site](https://approve.heynudge.live) · [Brand](https://www.heynudge.live/brand) · [Docs](docs/README.md)
 
 <img src="docs/images/hero.jpg" alt="Nudge: Let your AI pay. Only within your rules." width="820">
 
@@ -21,7 +21,8 @@ Nudge is a wallet your AI assistants can pay from, on a leash you set. Small pay
 
 </div>
 
-> FinTechathon 2026, Topic F (Agent Wallet). Testnet prototype: wallet payments use test dollars (tUSD) with no value. Bank feeds and family transfers are simulated and labelled as such in the app.
+> **FinTechathon 2026, International AI Track, Topic F (Agent Wallet). Team Rocket:** Harsh Tripathi (lead) and Lakshya Rathi.
+> Runs on Base Sepolia with test dollars (tUSD). Bank feeds and the family circle are simulated and labelled as such in the app.
 
 ## Why
 
@@ -100,13 +101,24 @@ flowchart LR
 | **Security** | A stolen agent key can't drain the wallet | Limits, contacts and holds are enforced by the vault itself; five refusals freeze the key on-chain |
 | | Only you can loosen a rule | Your passkey (P-256, verified by the contract) signs the exact action; loosening then waits a delay you can cancel |
 | | Our servers can only tighten | The relayer and guardian keys can freeze and cancel holds, never pay or raise a limit; no upgradeable proxy, no admin key |
-| | Keys and approvals stay narrow | Agent keys sealed with AES-256-GCM; approvals signed on a separate origin with a strict CSP; MCP tools filtered by each key's permissions, 60 calls a minute |
+| | Keys and approvals stay narrow | Agent keys sealed with AES-256-GCM; approvals signed on a separate origin with a strict CSP; a key per assistant, 60 MCP calls a minute |
 | **Reliability** | Nothing is paid twice | Idempotent request IDs; one transaction at a time per key; lost receipts reconciled from the chain |
 | | Limits hold under load | Concurrent requests against one limit never exceed it (race tests on Base Sepolia) |
 | | Every outcome is explained | Each refusal has a code and a plain reason, in the app, in chat and over MCP |
-| **Contract** | PolicyVault v3 | Per-agent and per-contact caps, holds with a cancel window, protected amount, delayed loosening, revocations that void older approvals, AP2 mandates |
+| **Contract** | PolicyVault v3 | Per-agent and per-contact caps, holds with a cancel window, protected amount, delayed loosening, revocations that void older approvals, AP2-style mandates |
 
-Full model, risks and what isn't covered: [docs/SECURITY.md](docs/SECURITY.md) · architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+### Permission tiers
+
+| Tier | What it allows | Who |
+|---|---|---|
+| Spending limits | Pay a saved contact inside per-payment and daily limits; a protected amount agents never touch | The agent's own key |
+| Hold | Agent payments above $5 wait 2 minutes, and can be stopped | Owner or guardian |
+| Passkey | More authority: over a limit, a new payee, a higher limit, a new agent, unfreezing; loosening then waits a delay you can cancel | Owner only |
+| New payee wait | A newly saved contact is payable by agents after 1 day | Set by the vault |
+| Guardian | Stop a held payment or freeze agents; never pay or grant authority | A family member, or our service key |
+| Emergency freeze | Freeze an agent or the whole vault at once; five refusals freeze a key by themselves | Owner, guardian or the vault |
+
+Full model and controls: [docs/SECURITY.md](docs/SECURITY.md) · architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Tests and evidence
 
@@ -131,6 +143,16 @@ Every on-chain claim links to its transaction in [docs/EVIDENCE.md](docs/EVIDENC
 |---|---|
 | VaultFactory v3 | [`0xF0D906bd…DA95e`](https://sepolia.basescan.org/address/0xF0D906bdec522087992EA711710Ee60F2a8DA95e) |
 | TestUSD (tUSD) | [`0xB0ee0123…7D932`](https://sepolia.basescan.org/address/0xB0ee01235A8e7903519B029c1530332f5847D932) |
+
+### Three payments from the live app
+
+One vault, [`0x8FcA1A59…47D3`](https://sepolia.basescan.org/address/0x8FcA1A598b31cD6c0363541867BDa17F164147D3), and the Nudge Test Shop, on 18 October 2026:
+
+| Time (UTC) | What happened | Decoded on-chain | Transaction |
+|---|---|---|---|
+| 12:35:00 | Owner buys $45 headphones, approved with the passkey | `ChangeApplied`, `OwnerPaid` 45.00 tUSD | [`0x40e0e15e…c830`](https://sepolia.basescan.org/tx/0x40e0e15e3f8707cb0658f3169b771d59a700277fac479ebe70ff767b3c46c830) |
+| 12:38:08 | Owner saves the shop as a trusted contact | `ContactAdded`, payable by agents 24 hours later | [`0x41821685…95d0`](https://sepolia.basescan.org/tx/0x418216859f28fe7853a5ed8bd10f12b80fa705c2f5b61c915fd796c51a0395d0) |
+| 12:51:20 | An agent buys weather data over x402, inside its limits | `PaymentExecuted` 0.01 tUSD by the agent's own key | [`0x47d52fa6…f178`](https://sepolia.basescan.org/tx/0x47d52fa6482e4094422f9f9962c3030b60e295dc06af68ceb85473ba5ac4f178) |
 
 ## Judge's tour, three minutes
 
