@@ -1,10 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
+import { DemoFilmPlayer } from "@/components/demo-film-player";
 import {
   ArrowRight,
-  Play,
   ArrowUpRight,
   Bell,
   Bitcoin,
@@ -262,12 +262,6 @@ const CHAPTERS: Chapter[] = [
 ];
 
 function DemoFilm() {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [playing, setPlaying] = useState(false);
-  const play = () => {
-    setPlaying(true);
-    void videoRef.current?.play();
-  };
   return (
     <section id="demo" className="mx-auto max-w-6xl scroll-mt-10 px-5 py-10">
       <div className="relative overflow-hidden rounded-[32px] bg-white/60 px-6 py-12 text-center sm:px-10">
@@ -284,25 +278,7 @@ function DemoFilm() {
             <span className="size-3 shrink-0 rounded-full bg-[#28C840]" />
             <span className="ml-2 truncate text-[12px] font-semibold text-mute">nudge-demo.mp4</span>
           </div>
-          <div className="relative">
-            <video
-              ref={videoRef}
-              src="/demo.mp4"
-              poster="/demo-poster.jpg"
-              controls={playing}
-              preload="metadata"
-              playsInline
-              className="aspect-video w-full bg-paper"
-              onClick={play}
-            />
-            {!playing && (
-              <button onClick={play} aria-label="Play the demo video" className="absolute inset-0 grid cursor-pointer place-items-center">
-                <span className="press inline-flex h-14 items-center gap-2 rounded-full bg-coal px-7 text-[17px] font-bold text-white shadow-[0_12px_32px_rgba(0,0,0,0.25)]">
-                  <Play className="size-5" fill="currentColor" strokeWidth={0} /> play video
-                </span>
-              </button>
-            )}
-          </div>
+          <DemoFilmPlayer />
         </div>
         <p className="mt-4 text-[13px] text-mute">FinTechathon 2026, International AI Track &middot; Team Rocket &middot; 4:53</p>
       </div>

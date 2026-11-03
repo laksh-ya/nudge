@@ -13,6 +13,7 @@
     "@agent-wallet/brand": "workspace:*",
     "@agent-wallet/domain": "workspace:*",
     "@clerk/nextjs": "7.9.15",
+    "@samasante/liquid-glass": "^0.1.1",
     "clsx": "2.1.1",
     "convex": "1.46.0",
     "lucide-react": "1.57.0",
