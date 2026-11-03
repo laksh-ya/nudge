@@ -26,7 +26,7 @@ Nudge is a wallet your AI assistants can pay from, on a leash you set. Small pay
 
 ## Watch the demo
 
-<video src="https://github.com/laksh-ya/nudge/raw/demo-video/apps/web/public/demo.mp4" controls width="820"></video>
+https://github.com/user-attachments/assets/3ef234d2-7659-4218-ba7d-b27e027341f8
 
 _The FinTechathon 2026 submission film, International AI Track, Topic F — Team Rocket (Harsh Tripathi and Lakshya Rathi). 4:53._
 
