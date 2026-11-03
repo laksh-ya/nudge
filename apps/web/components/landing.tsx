@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
+import { DemoFilmPlayer } from "@/components/demo-film-player";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -259,6 +261,31 @@ const CHAPTERS: Chapter[] = [
   },
 ];
 
+function DemoFilm() {
+  return (
+    <section id="demo" className="mx-auto max-w-6xl scroll-mt-10 px-5 py-10">
+      <div className="relative overflow-hidden rounded-[32px] bg-white/60 px-6 py-12 text-center sm:px-10">
+        <Floater of="nudge" mood="happy" size={64} className="top-6 left-[3%] hidden rotate-[-10deg] lg:block" />
+        <Floater of="claude" mood="watch" size={56} className="right-[4%] bottom-8 hidden rotate-[8deg] lg:block" delay={0.6} />
+        <div className="text-[13px] font-bold tracking-wide text-mute uppercase">Watch the demo</div>
+        <h2 className="mx-auto mt-2 max-w-[22ch] text-[30px] leading-[1.04] font-black tracking-[-0.04em] [font-stretch:108%] sm:text-[40px]">
+          The whole film, <span className="font-serif font-normal italic tracking-[-0.02em]">in five minutes.</span>
+        </h2>
+        <div className="mx-auto mt-8 max-w-3xl overflow-hidden rounded-[24px] shadow-[0_1px_0_rgba(0,0,0,0.04),0_24px_64px_rgba(0,0,0,0.12)]">
+          <div className="flex items-center gap-1.5 bg-white px-4 py-2.5 text-left">
+            <span className="size-3 shrink-0 rounded-full bg-[#FF5F57]" />
+            <span className="size-3 shrink-0 rounded-full bg-[#FEBC2E]" />
+            <span className="size-3 shrink-0 rounded-full bg-[#28C840]" />
+            <span className="ml-2 truncate text-[12px] font-semibold text-mute">nudge-demo.mp4</span>
+          </div>
+          <DemoFilmPlayer />
+        </div>
+        <p className="mt-4 text-[13px] text-mute">FinTechathon 2026, International AI Track &middot; Team Rocket &middot; 4:53</p>
+      </div>
+    </section>
+  );
+}
+
 const RULES: { icon: LucideIcon; tone: string; title: string; body: string }[] = [
   { icon: Zap, tone: "bg-green-soft text-green", title: "Just happens", body: "An assistant paying someone you trust, inside the limits you signed. Freezing anything. Reminders, bills and plans." },
   { icon: Fingerprint, tone: "bg-sky text-navy", title: "Your passkey, once", body: "Over a limit. Someone new. Giving an assistant more room. Face ID or a fingerprint on your phone, over the exact amount." },
@@ -313,6 +340,9 @@ export function Landing() {
           <HomeMock />
         </div>
       </section>
+
+      {/* The film */}
+      <DemoFilm />
 
       {/* The tour */}
       <section id="tour" className="mx-auto max-w-6xl scroll-mt-10 space-y-4 px-5 py-10">

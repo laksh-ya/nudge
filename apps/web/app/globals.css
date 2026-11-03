@@ -107,6 +107,66 @@
   }
 }
 
+/* The demo film frame (heyclicky, via Shelf): soft outer shadow + inset specular rim. */
+.vid-frame {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 12px 28px -10px rgba(0, 0, 0, 0.55);
+}
+.vid-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+  z-index: 30;
+}
+
+/* The play pill (heyclicky): clear light glass, thin grey edge, a gloss strip, soft shadow. */
+.play-glass {
+  position: relative;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 20px 1px 16px;
+  border-radius: 999px;
+  overflow: hidden;
+  white-space: nowrap;
+  color: #fff;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.3), rgba(231, 231, 231, 0.3) 42%, rgba(251, 251, 251, 0.3)),
+    rgba(0, 0, 0, 0.34);
+  border: 1px solid rgb(98, 98, 98);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+}
+.play-glass::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 14%;
+  right: 14%;
+  height: 11px;
+  border-radius: 999px;
+  background: radial-gradient(ellipse 50% 100% at 50% 0%, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0) 100%);
+  pointer-events: none;
+  z-index: 5;
+}
+.play-glass--flat {
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.play-follow {
+  left: 0;
+  top: 0;
+  transform: translate(var(--gx, 0px), var(--gy, 0px)) translate(-50%, -50%);
+}
+
 @utility card {
   background: white;
   border-radius: var(--radius-card);

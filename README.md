@@ -24,6 +24,12 @@ Nudge is a wallet your AI assistants can pay from, on a leash you set. Small pay
 > **FinTechathon 2026, International AI Track, Topic F (Agent Wallet). Team Rocket:** Harsh Tripathi (lead) and Lakshya Rathi.
 > Runs on Base Sepolia with test dollars (tUSD). Bank feeds and the family circle are simulated and labelled as such in the app.
 
+## Watch the demo
+
+https://github.com/user-attachments/assets/3ef234d2-7659-4218-ba7d-b27e027341f8
+
+_The FinTechathon 2026 submission film, International AI Track, Topic F — Team Rocket (Harsh Tripathi and Lakshya Rathi). 4:53._
+
 ## Why
 
 Giving an AI assistant your card is all or nothing. One prompt injection, one confused model or one leaked API key can spend everything. Nudge gives each assistant an **allowance instead of your card**: its own key, its own limits, and a list of people it may pay. The rules live in a contract, not in a prompt, so they hold even when the model or our server doesn't.
